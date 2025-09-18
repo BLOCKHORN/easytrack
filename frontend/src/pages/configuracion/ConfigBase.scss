@@ -1,0 +1,167 @@
+/* ======================== */
+/*  Keyframes (global root) */
+/* ======================== */
+@keyframes conf-bg-float { 0%{transform:translate3d(0,0,0) scale(1);} 50%{transform:translate3d(-2%,-1%,0) scale(1.02);} 100%{transform:translate3d(0,0,0) scale(1);} }
+@keyframes conf-shine { 0%,100%{background-position:0% 50%;} 50%{background-position:100% 50%;} }
+@keyframes conf-skel { 0%{background-position:200% 0;} 100%{background-position:-200% 0;} }
+@keyframes conf-pulse { 0%,100%{opacity:.45;} 50%{opacity:1;} }
+
+/* ===================================================================== */
+/*                          CONFIGURACIÓN (UI)                            */
+/* ===================================================================== */
+.configuracion{
+  /* Tokens */
+  --container-max: 1320px;               /* ancho XL; se sube a 1440 más abajo */
+  --pad-x: clamp(16px,3.5vw,36px);
+  --stack-gap: clamp(14px,2vw,22px);
+
+  --bg:#f7f9fc; --surface:#fff; --bg-elev:rgba(255,255,255,.88);
+  --border:#e6e9ef; --border-strong:#d5dae3;
+  --ink:#0f172a; --muted:#64748b; --brand:#635bff;
+  --success:#10b981; --error:#ef4444; --ring:rgba(99,91,255,.35);
+  --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+  --shadow-md:0 6px 18px rgba(15,23,42,.08);
+
+  color:var(--ink);
+  min-height:100dvh;
+  padding-bottom:110px; /* hueco sticky mobile */
+
+  background:
+    radial-gradient(900px 600px at 8% -6%, rgba(120,130,255,.08), transparent 60%),
+    radial-gradient(700px 500px at 110% 12%, rgba(34,211,238,.08), transparent 60%),
+    radial-gradient(900px 700px at 40% 120%, rgba(251,146,60,.07), transparent 60%),
+    var(--bg);
+
+  *{ box-sizing:border-box; min-width:0; } /* <- evita overflows por grid */
+
+  /* Contenedor único */
+  .config__container{
+    width:min(100%, var(--container-max));
+    max-width: min(var(--container-max), 96vw);
+    margin-inline:auto;
+    padding-inline:var(--pad-x);
+    padding-block:clamp(12px,2vw,20px);
+  }
+
+  /* HERO (mismo ancho que tarjetas) – el estilo fino vive en Hero.scss */
+  .hero{ margin:0 auto var(--stack-gap); }
+
+  /* STACK EN COLUMNA (una sola columna) */
+  .config__grid{
+    display:grid; grid-template-columns:1fr;
+    gap:var(--stack-gap);
+    margin:0 auto var(--stack-gap);
+  }
+
+  /* Tarjeta base */
+  .card{
+    position:relative;
+    border-radius:16px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    box-shadow:var(--shadow-sm);
+    overflow:clip;
+  }
+
+  .card__header,.card-head{
+    padding:clamp(14px,1.8vw,18px) clamp(14px,2vw,20px);
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    h2,h3{ margin:0; font-weight:700; letter-spacing:.2px; }
+  }
+  .card-body{ padding:clamp(14px,2vw,20px); }
+
+  /* Estado “cambios sin guardar” */
+  .config__status{
+    margin:6px 0 10px; display:flex; justify-content:flex-end;
+    .chip{
+      display:inline-flex; align-items:center; gap:8px; white-space:nowrap;
+      font-size:.85rem; padding:8px 12px; border-radius:999px;
+      border:1px solid rgba(0,0,0,.08);
+      background:linear-gradient(180deg, rgba(17,24,39,.04), rgba(17,24,39,.02));
+      color:#334155;
+    }
+  }
+
+  /* Footer sticky (solo mobile/tablet) */
+  .config__footer{
+    position:sticky; bottom:env(safe-area-inset-bottom);
+    padding-bottom:env(safe-area-inset-bottom);
+    background:linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.85) 30%, #fff 100%);
+    backdrop-filter:saturate(140%) blur(6px);
+    border-top:1px solid rgba(0,0,0,.06);
+    margin-top:var(--stack-gap); padding-top:clamp(8px,1.2vw,12px);
+    @media (min-width:1024px){ position:static; background:none; backdrop-filter:none; border-top:0; padding-top:0; }
+  }
+
+  /* Formularios */
+  .card-body,.card__header,.config__grid{
+    label{ display:inline-block; font-size:.95rem; color:var(--muted); margin-bottom:6px; }
+    input[type="text"],input[type="number"],input[type="email"],input[type="password"],select,textarea{
+      width:100%; height:40px; appearance:none; background:var(--surface); color:var(--ink);
+      border:1px solid var(--border); border-radius:10px; padding:0 12px; line-height:1.35; outline:none;
+      transition:border-color .18s ease, box-shadow .18s ease;
+    }
+    textarea{ min-height:96px; padding:10px 12px; height:auto; resize:vertical; }
+    input::placeholder,textarea::placeholder{ color:color-mix(in srgb, var(--muted) 85%, #000 15%); }
+    input:hover,select:hover,textarea:hover{ border-color:var(--border-strong); }
+    input:focus-visible,select:focus-visible,textarea:focus-visible{ border-color:transparent; box-shadow:0 0 0 3px var(--ring); }
+    select{
+      background-image:linear-gradient(45deg,transparent 50%,#94a3b8 50%), linear-gradient(135deg,#94a3b8 50%,transparent 50%);
+      background-position:calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size:6px 6px,6px 6px; background-repeat:no-repeat; padding-right:38px;
+    }
+  }
+
+  /* ==================  IMPORTANTÍSIMO  ==================
+     Estilos de botón SÓLO para .btn —¡no tocar button genérico!  */
+  .btn{
+    --btn-bg:linear-gradient(180deg,#6a64ff,#5851ff); --btn-fg:#fff; --btn-border:transparent;
+    appearance:none; border:1px solid var(--btn-border); color:var(--btn-fg); background:var(--btn-bg);
+    padding:11px 16px; font-weight:600; letter-spacing:.2px; border-radius:12px; cursor:pointer;
+    transition:transform .05s ease, filter .15s ease, box-shadow .18s ease;
+    box-shadow:0 8px 20px rgba(99,91,255,.18);
+  }
+  .btn:hover{ filter:brightness(1.05); }
+  .btn:active{ transform:translateY(1px); }
+  .btn:focus-visible{ box-shadow:0 0 0 3px var(--ring); }
+  .btn--outline{ --btn-bg:transparent; --btn-fg:var(--ink); --btn-border:var(--border-strong); box-shadow:none; }
+  .btn--ghost{ --btn-bg:transparent; --btn-fg:var(--muted); --btn-border:transparent; box-shadow:none; }
+  .btn--danger{ --btn-bg:linear-gradient(180deg,#ff8a8a,#ff6666); box-shadow:0 8px 18px rgba(239,68,68,.18); }
+  .btn--success{ --btn-bg:linear-gradient(180deg,#34d399,#10b981); box-shadow:0 8px 18px rgba(16,185,129,.18); }
+  .btn--sm{ padding:8px 12px; border-radius:10px; font-size:.95rem; }
+  .btn--lg{ padding:13px 18px; border-radius:14px; font-size:1.05rem; }
+
+  /* Chips */
+  .chip{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:rgba(99,91,255,.10); border:1px solid var(--border); color:#3730a3; font-size:.85rem; white-space:nowrap; }
+  .chip--success{ background:rgba(16,185,129,.12); border-color:rgba(16,185,129,.28); color:#065f46; }
+  .chip--error{ background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.28); color:#7f1d1d; }
+
+  /* Seguridad extra: nada debe exceder el contenedor */
+  :where(.card,.panel,.content,form,.inner){ max-width:100%; }
+
+  /* Neutraliza estilos externos que limiten .card */
+  .config__container > .hero,
+  .config__container > .config__grid,
+  .config__container > .config__status,
+  .config__container > .config__footer{
+    width:100%; max-width:none;
+  }
+
+  .config__grid .card,
+  .config__grid > .card,
+  .config__grid > * .card{
+    display:block; width:100% !important; max-width:none !important; margin:0 !important;
+  }
+
+  .identity-card, .warehouse-card, .carriers-card{
+    width:100% !important; max-width:none !important; margin:0 !important;
+  }
+
+  /* Evita que el wrapper con ref (display: contents) cree caja */
+  .config__grid > [style*="display: contents"]{ display:contents !important; }
+}
+
+/* Subida a 1440 en pantallas grandes */
+@media (min-width: 1440px){
+  .configuracion .config__container{ --container-max: 1440px; }
+}

@@ -1,0 +1,52 @@
+/* frontend/src/styles/require-active.scss */
+/* Barra superior discreta mientras se verifica la suscripción */
+
+.require-active-guard {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Top progress bar estilo NProgress (sin librerías) */
+.topbar-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  overflow: hidden;
+  background: transparent;
+  z-index: 10000;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -40%;
+    height: 100%;
+    width: 40%;
+    background: linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0) 0%,
+      var(--ep-accent, #3b82f6) 50%,
+      rgba(0, 0, 0, 0) 100%
+    );
+    animation: topbar-slide 1.05s ease-in-out infinite;
+  }
+}
+
+@keyframes topbar-slide {
+  0%   { left: -40%; width: 30%; }
+  50%  { left: 25%;  width: 60%; }
+  100% { left: 100%; width: 20%; }
+}
+
+/* Accesibilidad: texto solo para lectores de pantalla */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0);
+  white-space: nowrap; border: 0;
+}

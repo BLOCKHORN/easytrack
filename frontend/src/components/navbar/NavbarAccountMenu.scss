@@ -1,0 +1,131 @@
+/* =================== CHIP DE CUENTA (scoped) =================== */
+.account{
+  position:relative; min-width: 0; z-index: 50;
+
+  .account__trigger{
+    --chip-h: 40px;
+    display:flex; align-items:center; gap:12px;
+    height: var(--chip-h);
+    padding: 6px 10px 6px 12px;
+    border-radius: 14px;
+    background: #111318;
+    border:1px solid var(--nav-border, rgba(255,255,255,.12));
+    color:#e5e7eb; cursor:pointer; max-width: 100%;
+    line-height: 1; transition: background .18s, border-color .18s, box-shadow .18s;
+
+    /* === Aísla iconos que usan em por reglas globales === */
+    font-size: 0;
+
+    &:hover{ background:#151922; border-color: rgba(255,255,255,.18); }
+    &:focus-visible{ outline:none; box-shadow:0 0 0 3px rgba(37,99,235,.35); }
+  }
+
+  /* Texto dentro del trigger vuelve a tamaño normal */
+  .account__meta{
+    font-size: 1rem;             /* ← restaura tipografía del contenido */
+    display:flex; flex-direction:column; line-height:1.06; min-width:0;
+    strong{ font-size:.95rem; color:#fff; max-width:180px; }
+    small{ font-size:.78rem; color: var(--nav-muted,#9aa3b2); max-width:180px; }
+  }
+  .truncate{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* Avatar */
+  .account__avatar{
+    width: 30px; height: 30px; border-radius: 50%; overflow:hidden; flex:0 0 30px;
+    background:#2a2f3a; display:flex; align-items:center; justify-content:center; font-weight:800;
+    img{ width:100%; height:100%; object-fit: cover; display:block; }
+    &.lg{ width: 44px; height: 44px; }
+    &.ring{ position:relative;
+      &::after{
+        content:""; position:absolute; inset:-2px; border-radius:50%;
+        background: conic-gradient(from 0deg, var(--acc-1,#60a5fa), var(--acc-2,#a78bfa), var(--acc-3,#34d399), var(--acc-1,#60a5fa));
+        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
+        mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
+        opacity:0; transition: opacity .18s; pointer-events:none;
+      }
+    }
+  }
+  .account:hover .account__avatar.ring::after{ opacity:.55; animation: spin 6s linear infinite; }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+  .navbar__avatar-fallback{ width:100%; height:100%; border-radius:inherit; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; }
+
+  /* ====== Wrapper que blinda el tamaño de cualquier SVG ====== */
+  .account__icon{
+    display:inline-flex; align-items:center; justify-content:center;
+    width: var(--icon-size); height: var(--icon-size); flex:0 0 var(--icon-size);
+    line-height:0;
+    > svg{ width:100% !important; height:100% !important; flex:0 0 auto; }
+  }
+  .account__chev{ transition: transform .18s ease; }
+  &.open .account__chev{ transform: rotate(180deg); }
+
+  /* Menú */
+  .account__menu{
+    position:absolute; right:0; top: calc(100% + 12px);
+    width: min(320px, 92vw);
+    background: var(--nav-panel, #0f1117);
+    border:1px solid var(--nav-border, rgba(255,255,255,.12));
+    border-radius: 14px;
+    box-shadow: var(--shadow-md, 0 16px 40px rgba(2,6,23,.35));
+    padding: 12px; opacity:0; transform:translateY(-6px) scale(.98);
+    pointer-events:none; transition: opacity .18s, transform .18s;
+    overflow: clip; z-index: 60;
+
+    &::after{
+      content:""; position:absolute; top:-1px; left:0; right:0; height:2px;
+      background: linear-gradient(90deg, var(--acc-1,#60a5fa), var(--acc-2,#34d399), var(--acc-3,#a78bfa));
+      border-top-left-radius: 14px; border-top-right-radius: 14px;
+    }
+    &::before{ content:""; position:absolute; top:-12px; left:0; right:0; height:12px; }
+  }
+  &.open .account__menu{ opacity:1; transform:translateY(0) scale(1); pointer-events:auto; }
+
+  .account__header{
+    display:flex; gap:12px; align-items:center; padding: 6px 6px 12px 6px;
+    .account__who{ display:flex; flex-direction:column; min-width:0;
+      strong{ color:#fff; }
+      .muted{ color: var(--nav-muted,#9aa3b2); overflow-wrap:anywhere; }
+    }
+  }
+
+  /* Ítems del menú: aísla los iconos del font-size global */
+  .account__item{
+    width:100%; display:flex; align-items:center; gap:10px;
+    padding: 11px 12px; border-radius: 12px; border:0; background: transparent;
+    color:#e5e7eb; font-weight:700; cursor:pointer;
+    transition: background .18s, color .18s;
+
+    /* === Aísla em de los svg === */
+    font-size: 0;
+
+    &:hover{ background: rgba(255,255,255,.06); color:#fff; }
+    &:focus-visible{ outline:none; box-shadow:0 0 0 3px rgba(37,99,235,.35); background: rgba(255,255,255,.04); }
+    &.danger:hover{ background: rgba(239,68,68,.18); color:#fff; }
+
+    /* Texto del item (tu <span>) */
+    > .label, > span:not(.account__icon){
+      font-size: .94rem; line-height: 1.1;
+    }
+  }
+
+  hr{ border:0; height:1px; background: var(--nav-border, rgba(255,255,255,.12)); margin: 10px 0; }
+}
+
+/* Responsive */
+@media (max-width: 480px){
+  .account{
+    .account__meta{ strong, small{ max-width:120px; } }
+    .account__menu{ width: min(360px, 94vw); }
+  }
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce){
+  .account .account__menu,
+  .account .account__trigger,
+  .account .account__avatar.ring::after{ transition:none !important; animation:none !important; }
+}
+
+/* ===== Overrides dentro de .navbar por si hay estilos globales agresivos ===== */
+.navbar .account .account__trigger{ line-height:1 !important; }
+.navbar .account .account__icon > svg{ width:100% !important; height:100% !important; }

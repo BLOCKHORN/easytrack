@@ -1,0 +1,234 @@
+/* ==========================================================================
+   ModalImagenBanner — Pro, centrado, sin “cartoon” y responsive
+   Scope: .mib-*
+   ========================================================================== */
+
+/* Overlay: centra SIEMPRE el modal */
+.mib-overlay {
+  position: fixed; inset: 0; z-index: 1200;
+  display: flex; align-items: center; justify-content: center;
+  padding: clamp(12px, 2vw, 24px);
+  background: rgba(2, 6, 23, .46);
+  backdrop-filter: blur(2px);
+
+  /* En móvil se comporta como sheet pegado abajo */
+  @media (max-width: 640px) {
+    align-items: flex-end;
+    padding: 0;
+  }
+}
+
+/* Modal base */
+.mib-modal {
+  --m-surface: var(--surface, #ffffff);
+  --m-border: var(--border, #e6ebf4);
+  --m-text: var(--text, #0f172a);
+  --m-muted: var(--muted, #64748b);
+  --m-brand1: var(--brand-indigo, #635bff);
+  --m-brand2: var(--brand-cyan, #00d4ff);
+  --m-ring: var(--brand-ring, rgba(99,91,255,.28));
+
+  width: min(840px, calc(100% - 32px));
+  background: var(--m-surface);
+  border: 1px solid var(--m-border);
+  border-radius: 16px;
+  /* sombra más sobria */
+  box-shadow: 0 24px 64px rgba(15,23,42,.22);
+  color: var(--m-text);
+  padding: 16px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;        /* solo vertical */
+  overflow-x: hidden;      /* evita scrollbar horizontal */
+  margin: 0 auto;          /* centra por si acaso */
+  animation: mibPop .14s ease-out;
+  box-sizing: border-box;
+}
+.mib-modal * { box-sizing: border-box; }
+
+@keyframes mibPop {
+  from { transform: translateY(4px) scale(.985); opacity: .96; }
+  to   { transform: translateY(0)   scale(1);     opacity: 1; }
+}
+
+/* Sheet en móvil (bottom sheet) */
+@media (max-width: 640px) {
+  .mib-modal {
+    width: 100%;
+    max-height: 100dvh;
+    border: none;
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -14px 40px rgba(15,23,42,.28);
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+    animation: mibSlideUp .16s ease-out;
+  }
+  @keyframes mibSlideUp {
+    from { transform: translateY(18px); opacity: .98; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+}
+
+/* Header sobrio */
+.mib-header {
+  position: sticky; top: 0; z-index: 2;
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
+  background: var(--m-surface);
+  padding-bottom: 10px; margin-bottom: 12px;
+  border-bottom: 1px solid var(--m-border);
+
+  h3 { margin: 0; font-weight: 800; letter-spacing: -.2px; }
+  .mib-close {
+    border: 1px solid var(--m-border);
+    background: #f7f9fd; color: var(--m-text);
+    width: 34px; height: 34px; border-radius: 10px;
+    display: grid; place-items: center; cursor: pointer;
+    transition: transform .12s ease, background .18s ease, box-shadow .18s ease, border-color .18s ease;
+    &:hover { transform: translateY(-1px); background: #fff; border-color: #dfe7f3; box-shadow: 0 8px 18px rgba(15,23,42,.08); }
+    &:active { transform: translateY(0); }
+    &:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--m-ring); }
+    svg { width: 18px; height: 18px; }
+  }
+}
+
+.mib-sub { margin: 4px 0 12px; color: var(--m-muted); font-size: 13px; }
+
+/* Grid: dos columnas en desktop; una en móvil */
+.mib-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 14px;
+  @media (max-width: 960px) { grid-template-columns: 1fr; }
+}
+
+/* Preview limpio */
+.mib-preview {
+  position: relative;
+  border: 1px solid var(--m-border);
+  border-radius: 12px;
+  overflow: hidden; background: #f7f9fd;
+
+  .mib-preview__img {
+    aspect-ratio: 21 / 5; /* 1440x360 aprox */
+    background-size: cover; background-position: center;
+    filter: saturate(1.01);
+    @media (max-width: 640px) { aspect-ratio: 16 / 6; }
+  }
+  .mib-badge {
+    position: absolute; top: 10px; left: 10px;
+    padding: 4px 8px; font-size: 12px; font-weight: 700;
+    color: #0b1220; border: 1px solid var(--m-border); border-radius: 999px;
+    background: #ffffffee; backdrop-filter: blur(6px);
+  }
+}
+
+/* Dropzone sobrio */
+.mib-dropzone {
+  position: relative;
+  border: 1px dashed var(--m-border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfcff, #f7f9fd);
+  min-height: 220px;
+  display: grid; place-items: center; text-align: center;
+  padding: 16px; cursor: pointer;
+  transition: box-shadow .18s ease, border-color .18s ease, transform .12s ease;
+
+  &:hover { transform: translateY(-1px); box-shadow: 0 12px 24px rgba(15,23,42,.06); }
+  @media (max-width: 640px) { min-height: 180px; }
+
+  .mib-dropzone__icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    display: grid; place-items: center; margin-bottom: 8px; color: #fff;
+    background: linear-gradient(135deg, var(--m-brand1), var(--m-brand2));
+    box-shadow: 0 10px 22px rgba(99,91,255,.16);
+    svg { width: 22px; height: 22px; }
+  }
+  .mib-dropzone__text {
+    strong { display: block; font-size: 14px; font-weight: 700; }
+    span { display: block; font-size: 12px; color: var(--m-muted); margin-top: 2px; }
+  }
+  &.is-drag {
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--m-brand1) 60%, var(--m-brand2) 40%);
+    box-shadow: 0 0 0 4px var(--m-ring);
+  }
+  &.is-uploading { cursor: wait; }
+}
+
+/* Progreso */
+.mib-progress {
+  position: absolute; inset: auto 12px 12px 12px;
+  border: 1px solid var(--m-border); background: #fff;
+  border-radius: 10px; padding: 10px; display: grid; gap: 8px;
+
+  .mib-progress__bar {
+    height: 8px; border-radius: 999px; overflow: hidden; background: #eef2f8; position: relative;
+    &::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(90deg, var(--m-brand1), var(--m-brand2), var(--m-brand1));
+      background-size: 200% 100%; animation: mibShimmer 1s linear infinite;
+    }
+  }
+  .mib-progress__label { font-size: 12px; color: var(--m-muted); }
+}
+@keyframes mibShimmer { from { background-position: 0 0; } to { background-position: 200% 0; } }
+
+/* Footer: integrado, sin “cartoon”. En móvil: botones full-width */
+.mib-actions {
+  position: sticky; bottom: 0; z-index: 2;
+  display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;
+  margin-top: 16px; padding-top: 12px;
+  background: var(--m-surface);
+  box-shadow: inset 0 1px 0 var(--m-border);
+
+  @media (max-width: 640px) {
+    gap: 8px;
+    .mib-btn { flex: 1 1 100%; }
+  }
+}
+
+/* Botones: más serios (menos sombra, radios más pequeños, tipografía 600) */
+.mib-btn {
+  appearance: none; border: 1px solid transparent; border-radius: 10px;
+  padding: 10px 14px; font-weight: 700; letter-spacing: .1px;
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer; color: #fff;
+  box-shadow: 0 6px 16px rgba(15,23,42,.08);
+  transition: transform .12s ease, box-shadow .18s ease, filter .18s ease, border-color .18s ease;
+
+  &:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(15,23,42,.10); }
+  &:active { transform: translateY(0); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--m-ring), 0 6px 16px rgba(15,23,42,.08); }
+
+  &--primary {
+    background: linear-gradient(180deg, #635bff, #5a54f7); /* indigo sólido, corporate */
+    border-color: #5c56f3;
+  }
+
+  /* Danger en variante OUTLINE para menos estridencia */
+  &--danger {
+    background: #fff;
+    color: #d92a34;
+    border-color: #f3c7cc;
+    box-shadow: none;
+    &:hover { background: #fff5f6; border-color: #eeb8bf; }
+    &:active { background: #ffecee; }
+  }
+
+  &:disabled {
+    opacity: .65; cursor: not-allowed; transform: none;
+    box-shadow: 0 4px 12px rgba(15,23,42,.04);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
+.mib-error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #9f1239;
+  background: #fff1f3;
+  border: 1px solid #ffd6dd;
+  border-radius: 10px;
+}

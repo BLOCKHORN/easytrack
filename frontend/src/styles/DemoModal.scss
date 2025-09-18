@@ -1,0 +1,98 @@
+/* ======================================================
+   DEMO MODAL — Scope completo en prefijo .et-demo__
+   (idéntico al que tenías dentro del Hero)
+   ====================================================== */
+.et-demo__overlay{
+  position: fixed; inset: 0; z-index: 9999;
+  display: grid; place-items: center;
+  padding: clamp(12px, 2.5vw, 24px);
+}
+
+.et-demo__backdrop{
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(80% 80% at 50% 30%, rgba(14,18,28,.65), rgba(14,18,28,.86)),
+    linear-gradient(0deg, rgba(8,11,20,.35), rgba(8,11,20,.35));
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+  backdrop-filter: blur(6px) saturate(120%);
+}
+
+/* Caja principal con borde-gradiente sutil y sombra limpia */
+.et-demo__dialog{
+  position: relative;
+  width: min(980px, 96vw);
+  border-radius: 20px;
+  padding: clamp(12px, 1.6vw, 18px);
+  background: #fff;
+  box-shadow:
+    0 20px 50px rgba(2,6,12,.22),
+    inset 0 0 0 1px rgba(15,23,42,.06);
+  isolation: isolate;
+  animation: etZoomIn .16s ease-out;
+}
+
+@keyframes etZoomIn{
+  from { transform: scale(.985); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+/* Borde decorativo (halo) */
+.et-demo__dialog::before{
+  content:"";
+  position:absolute; inset:-1px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(99,102,241,.25), rgba(34,197,94,.18));
+  z-index:-1; filter: blur(8px); opacity:.5;
+}
+
+/* Header */
+.et-demo__header{
+  display:flex; align-items:center; justify-content:space-between;
+  gap: 12px; padding: 6px 4px 10px;
+}
+.et-demo__header h2{
+  margin:0; font-weight:800; font-size: clamp(1.05rem, 2.4vw, 1.25rem);
+  color:#0f172a; letter-spacing:.2px;
+}
+
+.et-demo__close{
+  flex: 0 0 auto;
+  width: 36px; height: 36px; border-radius: 999px;
+  display:grid; place-items:center; cursor:pointer;
+  background:#fff;
+  border: 1px solid rgba(15,23,42,.10);
+  box-shadow: 0 2px 6px rgba(2,6,12,.06);
+  transition: background .15s ease, transform .08s ease;
+}
+.et-demo__close:hover{ background:#f6f7fb; }
+.et-demo__close:active{ transform: translateY(1px); }
+
+/* Player */
+.et-demo__player{
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 14px;
+  overflow:hidden;
+  background: linear-gradient(180deg,#eef3fa,#e7edf5);
+  border: 1px solid rgba(15,23,42,.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+}
+.et-demo__player video{
+  width:100%; height:100%; object-fit:cover; display:block;
+}
+
+/* Placeholder elegante */
+.et-demo__placeholder{
+  height:100%; display:grid; place-items:center;
+  text-align:center; color:#334155; padding: 16px;
+}
+.et-demo__placeholder img{
+  width: 140px; max-width: 40%; opacity:.9; margin-bottom: 8px;
+}
+.et-demo__placeholder p{ margin:0; font-weight:600; }
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce){
+  .et-demo__dialog{ animation:none; }
+  .et-demo__backdrop{ -webkit-backdrop-filter:none; backdrop-filter:none; }
+}

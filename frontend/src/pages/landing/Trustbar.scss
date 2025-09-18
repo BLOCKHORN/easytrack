@@ -1,0 +1,120 @@
+/* ==========================================================================
+   EasyTrack Trustbar — versión sutil y elegante
+   Scope root: .et-trustbar (sin fugas a otros componentes)
+   ========================================================================== */
+.et-trustbar{
+  /* paleta clara por defecto */
+  --tb-ink: #0f172a;                 /* texto principal */
+  --tb-muted: #667085;               /* texto secundario */
+  --tb-accent: #6d7cff;              /* acento discreto */
+  --tb-card-bg: hsla(0 0% 100% / .72);   /* “glass” suave */
+  --tb-card-border: #e7edf5;         /* borde sutil */
+  --tb-card-shadow: 0 6px 18px rgba(2, 6, 12, .06);
+  --tb-icon-bg: color-mix(in srgb, var(--tb-accent) 14%, #ffffff);
+  --tb-icon-border: #e6e9f2;
+  --tb-icon-ink: color-mix(in srgb, var(--tb-accent) 60%, #0b1020);
+  color: var(--tb-ink);
+  padding-block: 6px 0;
+}
+
+/* variante oscura opcional (.et-trustbar.is-dark) */
+.et-trustbar.is-dark{
+  --tb-ink: #e5e7eb;
+  --tb-muted: #a3b1c6;
+  --tb-card-bg: hsla(222 36% 8% / .72);
+  --tb-card-border: #1e2633;
+  --tb-card-shadow: 0 10px 22px rgba(0,0,0,.22);
+  --tb-icon-bg: color-mix(in srgb, var(--tb-accent) 10%, #0f1116);
+  --tb-icon-border: color-mix(in srgb, var(--tb-accent) 12%, #1f2633);
+  --tb-icon-ink: color-mix(in srgb, var(--tb-accent) 80%, #dbeafe);
+}
+
+/* variante compacta opcional (.et-trustbar.is-compact) */
+.et-trustbar.is-compact .tb-stat{ padding: 10px 12px; border-radius: 12px; }
+
+/* grid */
+.et-trustbar__stats{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 560px){ .et-trustbar__stats{ grid-template-columns: repeat(3, 1fr); } }
+
+/* tarjeta métrica */
+.tb-stat{
+  display:flex; align-items:center; gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--tb-card-bg);
+  border: 1px solid var(--tb-card-border);
+  box-shadow: var(--tb-card-shadow);
+  -webkit-backdrop-filter: saturate(120%) blur(6px);
+  backdrop-filter: saturate(120%) blur(6px);
+}
+
+/* icono */
+.tb-icon{
+  width: 36px; height: 36px; flex: 0 0 36px;
+  display:grid; place-items:center;
+  border-radius: 10px;
+  background: var(--tb-icon-bg);
+  border: 1px solid var(--tb-icon-border);
+  color: var(--tb-icon-ink);
+  svg{ width:18px; height:18px; }
+}
+
+/* textos */
+.tb-body{ display:flex; flex-direction:column; line-height: 1.05; }
+.tb-num{
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(1rem, 2.6vw, 1.25rem);
+  letter-spacing: .2px;
+}
+.tb-label{
+  color: var(--tb-muted);
+  font-size: .88rem;
+}
+
+/* skeleton sutil (sin “brillos” agresivos) */
+@keyframes tb-fade {
+  0%   { opacity: .35; }
+  100% { opacity: 1; }
+}
+.skel{
+  display:inline-block; border-radius: 8px;
+  width: 64px; height: 18px;
+  background: linear-gradient(180deg, #eef3fa, #e7edf5);
+  animation: tb-fade .8s ease-in-out infinite alternate;
+}
+.et-trustbar.is-dark .skel{
+  background: linear-gradient(180deg, #1a2230, #223049);
+}
+
+/* pie */
+.et-trustbar__foot{
+  margin-top: 6px;
+  display:flex; align-items:center; gap: 10px; flex-wrap: wrap;
+}
+.tb-footnote{
+  color: var(--tb-muted);
+  font-size: .82rem; margin: 0;
+}
+.tb-updated{
+  margin-left: auto;
+  font-size: .78rem;
+  color: var(--tb-muted);
+  background: hsla(220 20% 96% / .9);
+  border: 1px solid var(--tb-card-border);
+  padding: 4px 8px; border-radius: 999px;
+}
+.et-trustbar.is-dark .tb-updated{
+  background: #121724;
+  border-color: #1e2633;
+}
+
+/* reduce motion */
+@media (prefers-reduced-motion: reduce){
+  .skel{ animation: none; opacity: .55; }
+  .tb-stat{ -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

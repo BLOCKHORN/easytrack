@@ -1,0 +1,163 @@
+/* ========= Subscription Gate — Light, con hero informativo ========= */
+
+:root {
+  --bg: #f7f9ff;
+  --surface: #ffffff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: rgba(2, 6, 23, 0.08);
+
+  --ring: rgba(59, 130, 246, .28);
+  --primary: #5b7cff;
+  --primary-2: #9c6bff;
+  --brand: #0ea5e9;
+
+  --danger-bg: #fff1f2;
+  --danger: #be123c;
+}
+
+.gate {
+  min-height: 100vh;
+  color: var(--text);
+  position: relative;
+  background:
+    radial-gradient(1100px 700px at 15% -10%, rgba(99,102,241,.10) 0%, transparent 65%),
+    radial-gradient(1100px 700px at 100% 0%, rgba(14,165,233,.12) 0%, transparent 60%),
+    var(--bg);
+
+  &.gate--light { /* alias por si quieres variantes */ }
+
+  .gate_bg {
+    position: absolute; inset: 0; pointer-events: none;
+    .bubble {
+      position: absolute; width: var(--size); height: var(--size);
+      border-radius: 100%;
+      background: radial-gradient(circle at 35% 35%, #fff, #cde5ff 55%, #b9a6ff);
+      opacity: .45; filter: blur(2px);
+    }
+  }
+
+  .gate_wrap {
+    position: relative;
+    max-width: 1100px; margin: 0 auto;
+    padding: clamp(20px, 4vw, 40px) 16px 56px;
+  }
+
+  .gate_head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-bottom: 22px;
+
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .2px; }
+    .dot   { width: 10px; height: 10px; border-radius: 999px;
+             background: radial-gradient(circle at 30% 30%, #fff, #bfe6ff 55%, #7cd3ff);
+             box-shadow: 0 0 12px rgba(14,165,233,.45); }
+  }
+
+  .gate_main {
+    opacity: 0; /* se revela con anime */
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: clamp(18px, 2.4vw, 24px);
+    box-shadow: 0 10px 30px rgba(2, 6, 23, 0.06);
+  }
+
+  h1 {
+    font-size: clamp(26px, 4.2vw, 40px);
+    line-height: 1.1; margin: 0 0 8px; letter-spacing: .2px;
+  }
+  .lead { color: var(--muted); margin-bottom: 14px; }
+
+  /* Tarjetas informativas */
+  .info_cards {
+    display: grid; gap: 12px; margin: 8px 0 14px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .info_card {
+    background: #fff; border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px; box-shadow: 0 6px 18px rgba(2,6,23,.05);
+    .ic_title { font-weight: 700; margin-bottom: 6px; font-size: 14px; }
+    .ic_body  { color: var(--muted); font-size: 13.5px; }
+  }
+
+  .cta_row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 8px; padding: 10px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 700;
+    color: #0b1220;
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    box-shadow: 0 10px 22px rgba(91,124,255,.25);
+    transition: transform .08s ease, box-shadow .18s ease, filter .18s ease;
+  }
+  .btn:hover   { transform: translateY(-1px); box-shadow: 0 12px 26px rgba(91,124,255,.30); }
+  .btn:active  { transform: translateY(0); filter: saturate(1.05); }
+  .btn:disabled{ opacity: .65; cursor: not-allowed; }
+
+  .btn--ghost {
+    background: #fff; color: var(--text);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 14px rgba(2,6,23,.05);
+  }
+  .btn--ghost:hover { box-shadow: 0 6px 18px rgba(2,6,23,.08); }
+
+  .error {
+    background: var(--danger-bg); color: var(--danger);
+    border: 1px solid #fecdd3; padding: 10px 12px; border-radius: 12px;
+    margin: 6px 0 4px; font-weight: 600;
+  }
+
+  .muted { color: var(--muted); margin-top: 8px; }
+  .muted a { color: #1d4ed8; text-decoration: none; }
+  .muted a:hover { text-decoration: underline; }
+
+  .reveal { opacity: 0; } /* los elementos que aparecen con anime */
+
+  /* Responsive */
+  @media (max-width: 1024px) {
+    .info_cards { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 640px) {
+    .info_cards { grid-template-columns: 1fr; }
+    .gate_main  { padding: 14px; }
+    .cta_row .btn { flex: 1; min-width: 220px; }
+  }
+}
+/* === Animación CSS sin librerías === */
+.gate_bg { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
+.bubble {
+  position: absolute;
+  width: var(--size, 120px);
+  height: var(--size, 120px);
+  border-radius: 999px;
+  background: radial-gradient(closest-side, rgba(99,102,241,.18), rgba(99,102,241,0));
+  filter: blur(0.2px);
+  animation-name: bubbleFloat;
+  animation-duration: var(--dur, 6s);
+  animation-delay: var(--delay, 0s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  will-change: transform;
+}
+
+@keyframes bubbleFloat {
+  from { transform: translate(0,0) scale(1); }
+  to   { transform: translate(var(--dx, 24px), var(--dy, 16px)) scale(1.06); }
+}
+
+/* Respeto a usuarios con reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+  .bubble { animation: none; }
+}
+
+/* === Aparición suave del contenido === */
+.gate_main, .reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity .42s ease, transform .42s ease;
+}
+.gate.is-on .gate_main, .gate.is-on .reveal {
+  opacity: 1;
+  transform: translateY(0);
+}

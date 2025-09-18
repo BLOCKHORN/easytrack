@@ -1,0 +1,98 @@
+/* ==========================================================================
+   ConfiguracionImagen — Selector de banner (branding Stripe-like)
+   Scope: .config-imagen
+   ========================================================================== */
+
+.config-imagen {
+  /* Tokens */
+  --ci-surface: var(--surface, #ffffff);
+  --ci-surface-2: var(--surface-2, #f7f9fc);
+  --ci-border: var(--border, #e6ebf4);
+  --ci-text: var(--text, #0f172a);
+  --ci-muted: var(--muted, #64748b);
+  --ci-brand1: var(--brand-indigo, #635bff);
+  --ci-brand2: var(--brand-cyan, #00d4ff);
+  --ci-ring: var(--brand-ring, rgba(99, 91, 255, .28));
+  --ci-danger: #d92a34;
+
+  color: var(--ci-text);
+
+  .imagen-preview {
+    position: relative;
+    border: 1px solid var(--ci-border);
+    border-radius: 20px;
+    background-color: var(--ci-surface-2);
+    background-size: cover;
+    background-position: center;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, .06);
+    overflow: hidden;
+
+    /* Proporción 1440x360 ≈ 4:1 */
+    aspect-ratio: 4 / 1;
+    min-height: 160px;
+
+    /* Halo suave tipo Stripe */
+    &::before {
+      content: "";
+      position: absolute; inset: 0;
+      background:
+        linear-gradient(180deg, rgba(15,23,42,.00) 0%, rgba(15,23,42,.12) 100%),
+        radial-gradient(140% 120% at 10% -10%, rgba(255,114,210,.22), transparent 55%),
+        radial-gradient(120% 100% at 90% 0%, rgba(0,212,255,.18), transparent 55%),
+        radial-gradient(120% 120% at -10% 110%, rgba(255,184,107,.16), transparent 60%);
+      pointer-events: none;
+    }
+
+    /* Botonera */
+    > button {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      appearance: none;
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      color: #fff;
+      box-shadow: 0 12px 28px rgba(15,23,42,.12);
+      transition: transform .14s ease, box-shadow .18s ease, filter .18s ease;
+      backdrop-filter: saturate(1.1);
+
+      &:hover { transform: translateY(-1px); filter: saturate(1.05); }
+      &:active { transform: translateY(0); }
+      &:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--ci-ring), 0 12px 28px rgba(15,23,42,.12); }
+
+      /* Sheen sutil */
+      &::after{
+        content:""; position:absolute; inset:0; border-radius: inherit;
+        background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.35) 22%, transparent 44%);
+        transform: translateX(-120%) skewX(-20deg);
+        transition: transform .6s ease;
+        pointer-events: none;
+      }
+      &:hover::after{ transform: translateX(120%) skewX(-20deg); }
+    }
+
+    /* Principal (cargar/subir) */
+    > button:first-of-type {
+      background: linear-gradient(135deg, var(--ci-brand1), var(--ci-brand2));
+    }
+
+    /* Eliminar (si existe) */
+    > button:last-of-type {
+      right: auto; left: 12px;
+      background: linear-gradient(135deg, #ff7a90, #ff4d61);
+    }
+  }
+
+  @media (max-width: 560px) {
+    .imagen-preview > button {
+      padding: 9px 12px;
+      font-size: 14px;
+    }
+  }
+}

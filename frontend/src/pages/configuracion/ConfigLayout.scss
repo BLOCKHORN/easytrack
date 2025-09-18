@@ -1,0 +1,163 @@
+/* ===== ConfigLayout.scss =====
+   Sub-sidebar + tabs móviles + layout ancho tipo Stripe
+*/
+.cfg {
+  --ink: #0f172a;
+  --muted: #64748b;
+  --border: #e6e9ef;
+  --bg: #ffffff;
+  --primary: #2563eb;
+  --ring: rgba(37,99,235,.18);
+
+  color: var(--ink);
+
+  /* ---------- Header ---------- */
+  .cfg__head {
+    margin-bottom: 12px;
+
+    h2 {
+      margin: 0 0 6px;
+      font-size: 1.4rem;
+      font-weight: 900;
+      letter-spacing: .2px;
+      line-height: 1.2;
+    }
+
+    .cfg__crumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      flex-wrap: wrap; /* evita overflow en migas */
+      svg { opacity: .7; }
+    }
+  }
+
+  /* ---------- Tabs móviles ---------- */
+  .cfg__tabs { display: none; }
+
+  .cfg-tab {
+    appearance: none;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: #111827;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, transform .06s ease, box-shadow .15s ease;
+
+    &:hover { background: #f8fafc; border-color: #e5e7eb; }
+    &:active { transform: translateY(1px); }
+    &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+
+    &.is-active { background: #eef4ff; border-color: #dbe7ff; box-shadow: 0 6px 16px rgba(2,6,23,.06); }
+    svg { color: var(--primary); }
+  }
+
+  /* ---------- Body ---------- */
+  .cfg__body {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    column-gap: 24px;
+    align-items: start;
+  }
+
+  /* Sidebar */
+  .cfg__side {
+    align-self: start;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 10px;
+    position: sticky;
+    top: 12px;
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .cfg__nav {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  .cfg__navbtn {
+    appearance: none;
+    width: 100%;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    color: #111827;
+    background: #fff;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, transform .06s ease, box-shadow .15s ease;
+    min-width: 0; /* permite truncado del texto */
+
+    &:hover { background: #f8fafc; border-color: #e5e7eb; }
+    &:active { transform: translateY(1px); }
+    &.is-active { background: #eef4ff; border-color: #dbe7ff; box-shadow: 0 6px 16px rgba(2,6,23,.06); }
+
+    &:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--ring);
+    }
+
+    svg { color: var(--primary); flex: 0 0 auto; }
+    span {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap; /* evita empuje del layout */
+    }
+    .cfg__badge {
+      margin-left: auto;
+      font-size: .75rem;
+      color: #334155;
+      background: #eef2f7;
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+  }
+
+  .cfg__content {
+    min-height: 320px;
+    max-width: none;
+  }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 900px) {
+    .cfg__body { grid-template-columns: 1fr; }
+    .cfg__side { display: none; }
+
+    .cfg__tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 2px;
+      mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+    }
+  }
+
+  /* ---------- Extra ancho en pantallas grandes ---------- */
+  @media (min-width: 1400px) {
+    .cfg__body {
+      grid-template-columns: 340px minmax(0, 1fr);
+      column-gap: 28px;
+    }
+    .cfg__side { max-width: 340px; }
+  }
+}

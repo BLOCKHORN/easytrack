@@ -1,0 +1,70 @@
+:root {
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --gray-light: #f1f5f9;
+  --gray: #64748b;
+  --text-dark: #0f172a;
+  --text-light: #334155;
+  --radius: 12px;
+  --font-main: 'Inter', system-ui, sans-serif;
+
+  font-family: var(--font-main);
+  color: var(--text-dark);
+  background-color: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  min-height: 100%;
+  width: 100%;
+  font-size: 16px;
+  background-color: #f8fafc;
+  line-height: 1.5;
+}
+
+body {
+  font-family: var(--font-main);
+  color: var(--text-dark);
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+button.primary {
+  background-color: var(--primary);
+  color: white;
+
+  &:hover {
+    background-color: var(--primary-dark);
+  }
+}
+
+.container {
+  max-width: 1280px;
+  width: 100%;
+  padding: 2rem;
+  margin: 0 auto;
+}

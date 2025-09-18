@@ -1,0 +1,302 @@
+/* ==========================================================================
+   IdentityCard.scss — Configuración / Identidad del negocio
+   Scope: .identity-card + sub-bloques del uploader
+   Branding: indigo (#635bff) → cian (#00d4ff)
+   ========================================================================== */
+
+.identity-card {
+  /* ======= Tokens ======= */
+  --bd: var(--border, #e6ebf2);
+  --mut: var(--muted, #64748b);
+  --text: var(--text, #0f172a);
+  --surface: var(--surface, #ffffff);
+  --ring: rgba(99, 91, 255, .28);
+  --brand1: #635bff;
+  --brand2: #00d4ff;
+
+  color: var(--text);
+  border-radius: 16px;
+  position: relative;
+  min-width: 0;
+
+  /* Glow sutil al hover del bloque */
+  &::after {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: inherit; pointer-events: none;
+    padding: 1px; opacity: 0; transition: opacity .22s ease;
+    background: linear-gradient(120deg, rgba(99,91,255,.30), rgba(34,211,238,.20), rgba(99,91,255,.30));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+  &:hover::after { opacity: .55; }
+
+  /* =======================================================================
+     HEADER (unificado y blindado frente a .card__header global)
+     ======================================================================= */
+  .card__header.identity-card__header {
+    display: grid !important;
+    grid-template-columns: auto 1fr !important;
+    gap: 12px !important;
+    align-items: center !important;
+    min-height: 76px !important;
+    background: linear-gradient(180deg, rgba(2,6,23,.02), rgba(2,6,23,.04));
+    border: 1px solid var(--bd);
+    border-radius: 14px;
+    padding: 12px 14px !important;
+    box-sizing: border-box;
+  }
+
+  &__badge {
+    width: clamp(46px, 5vw, 56px);
+    height: clamp(46px, 5vw, 56px);
+    border-radius: 999px;
+    display: grid; place-items: center;
+    color: #fff;
+    background: conic-gradient(from 220deg, #a5b4fc, #22d3ee, #fca5a5, #a5b4fc);
+    box-shadow: inset 0 8px 20px rgba(99,91,255,.18);
+    svg { font-size: 1.1rem; opacity: .95; }
+  }
+
+  /* Flex col + sin offset para alinear EXACTO a Warehouse */
+  &__headtext {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    margin-left: 0;        /* (antes -4px) */
+  }
+
+  &__title {
+    margin: 0;
+    font-weight: 900;
+    letter-spacing: .2px;
+    line-height: 1.2;
+    font-size: clamp(1.02rem, 2vw, 1.12rem); /* mismo tamaño que Warehouse */
+  }
+  &__subtitle {
+    margin: 0;
+    color: var(--mut);
+    font-size: .95rem;
+    line-height: 1.2;
+    max-width: 100%;
+    text-wrap: balance;
+  }
+
+  /* =======================================================================
+     BODY
+     ======================================================================= */
+  &__body { display: grid; gap: clamp(12px, 1.6vw, 18px); margin-top: 10px; }
+
+  /* Callout */
+  &__callout {
+    display: grid; grid-template-columns: auto 1fr; align-items: start; gap: 10px;
+    padding: 10px 12px;
+    border: 1px dashed var(--bd); border-radius: 12px;
+    background: linear-gradient(180deg, rgba(99,91,255,.06), rgba(99,91,255,.03));
+    color: var(--mut);
+    svg { color: #6366f1; font-size: 18px; }
+    p { margin: 0; }
+  }
+
+  /* Campo: Nombre */
+  &__row { display: grid; gap: 12px; }
+  &__field { display: grid; gap: 8px; min-width: 0; }
+  &__label { font-size: .95rem; color: var(--mut); font-weight: 600; }
+
+  &__inputwrap { position: relative; min-height: 42px; }
+  &__inputicon { display: none; } /* sin icono interno */
+
+  &__input {
+    width: 100%; height: 42px; padding: 0 12px;
+    font-weight: 700; letter-spacing: .2px; line-height: 1.35;
+    border-radius: 10px; border: 1px solid var(--bd); background: var(--surface);
+    transition: box-shadow .18s ease, border-color .18s ease, background .18s ease;
+    &::placeholder { color: color-mix(in srgb, var(--mut) 85%, #000 15%); }
+    &:focus-visible { outline: none; border-color: transparent; box-shadow: 0 0 0 3px var(--ring); }
+  }
+
+  &__hint { color: var(--mut); font-size: .85rem; margin-top: 2px; }
+
+  /* Divider */
+  &__divider {
+    height: 1px; border: 0; margin: 8px 0 2px;
+    background: linear-gradient(90deg, rgba(2,6,23,.04), rgba(2,6,23,.08), rgba(2,6,23,.04));
+  }
+
+  /* Sección banner */
+  &__section { display: grid; gap: 10px; }
+  &__sectionhead { display: grid; gap: 4px; }
+  &__sectiontitle { margin: 0; font-weight: 800; letter-spacing: .2px; font-size: 1.05rem; }
+  &__sectiondesc { margin: 0; color: var(--mut); font-size: .95rem; }
+
+  /* Marco simple para el componente ConfiguracionImagen */
+  &__bannerframe {
+    border-radius: 14px;
+    border: 1px solid var(--bd);
+    background: linear-gradient(180deg, rgba(2,6,23,.02), rgba(2,6,23,.04)) padding-box;
+    padding: 6px;
+  }
+  &__bannerinner {
+    border-radius: 12px;
+    background: #fff;
+    border: 1px dashed color-mix(in srgb, var(--bd), #94a3b8 18%);
+    padding: 6px;
+    overflow: hidden;
+  }
+
+  /* =======================================================================
+     U P L O A D E R  (si lo usas dentro del scope de IdentityCard)
+     ======================================================================= */
+  &__uploader { display: grid; gap: 10px; }
+  &__uploader-frame {
+    border-radius: 14px;
+    border: 1px solid var(--bd);
+    background: linear-gradient(180deg, rgba(2,6,23,.02), rgba(2,6,23,.04)) padding-box;
+    padding: 8px;
+  }
+  &__uploader-banner {
+    position: relative;
+    border-radius: 12px;
+    border: 1px dashed color-mix(in srgb, var(--bd), #94a3b8 18%);
+    background-size: cover; background-position: center;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.6);
+    aspect-ratio: 21 / 5;  /* ~1440x360 */
+    min-height: 160px;
+
+    &::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(15,23,42,.00) 40%, rgba(15,23,42,.18) 100%);
+      pointer-events: none;
+    }
+    &.is-empty {
+      background-image:
+        radial-gradient(110% 80% at 0% 0%, rgba(99,91,255,.16), transparent 55%),
+        radial-gradient(110% 80% at 100% 0%, rgba(0,212,255,.16), transparent 55%),
+        linear-gradient(180deg, #f8fbff, #eef4ff);
+      &::before { background: linear-gradient(180deg, rgba(15,23,42,.00) 60%, rgba(15,23,42,.05) 100%); }
+    }
+  }
+  &__uploader-overlay {
+    position: absolute; inset: 0;
+    display: grid; grid-template-columns: 1fr auto;
+    align-items: end; gap: 10px; padding: 12px;
+  }
+  &__uploader-left { align-self: start; }
+  &__uploader-pill {
+    display: inline-block;
+    padding: 4px 10px; font-size: 12px; font-weight: 800; letter-spacing: .2px;
+    color: #0b1220; background: rgba(255,255,255,.9);
+    border: 1px solid var(--bd); border-radius: 999px; backdrop-filter: blur(4px);
+  }
+  &__uploader-actions {
+    display: inline-flex; gap: 8px; flex-wrap: wrap; justify-self: end;
+  }
+
+  /* =======================================================================
+     Botones PRO con shine contenido
+     ======================================================================= */
+  &__btn {
+    position: relative;
+    z-index: 0;
+    isolation: isolate;
+    overflow: hidden;
+    clip-path: inset(0 round 12px);
+
+    appearance: none;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-weight: 800; letter-spacing: .2px;
+    display: inline-flex; align-items: center; gap: 8px;
+    cursor: pointer;
+    transition: transform .12s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
+
+    &:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--ring); }
+    &:active { transform: translateY(0); }
+    &[disabled] { opacity: .6; cursor: not-allowed; }
+
+    svg { width: 18px; height: 18px; }
+
+    &::after {
+      content:"";
+      position:absolute;
+      top: -15%; bottom: -15%; left: -35%; right: -35%;
+      border-radius: inherit;
+      background: linear-gradient(
+        110deg,
+        rgba(255,255,255,0) 42%,
+        rgba(255,255,255,.55) 50%,
+        rgba(255,255,255,0) 58%
+      );
+      transform: translateX(-120%) rotate(8deg);
+      transition: transform .75s ease;
+      pointer-events: none;
+      mix-blend-mode: normal;
+      will-change: transform;
+    }
+    &:hover::after { transform: translateX(120%) rotate(8deg); }
+  }
+  &__btn--primary {
+    color: #fff;
+    background: linear-gradient(135deg, var(--brand1), var(--brand2));
+    box-shadow: 0 12px 28px rgba(99,91,255,.18);
+    &:hover { transform: translateY(-1px); box-shadow: 0 16px 34px rgba(99,91,255,.22); }
+  }
+  &__btn--danger {
+    color: #d92a34;
+    background: #fff;
+    border-color: #f3c7cc;
+    &:hover { background: #fff5f6; border-color: #eeb8bf; transform: translateY(-1px); }
+  }
+  &__btn--ghost {
+    color: var(--text);
+    background: #fff;
+    border-color: var(--bd);
+    &:hover { background: #f9fafb; }
+  }
+
+  /* =======================================================================
+     Progreso de subida
+     ======================================================================= */
+  &__progress {
+    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 10px;
+    background: #fff; border: 1px solid var(--bd);
+    box-shadow: 0 8px 22px rgba(15,23,42,.06);
+  }
+  &__progress-bar {
+    height: 8px; border-radius: 999px; overflow: hidden; background: #eef2f8; position: relative;
+  }
+  &__progress-bar::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, var(--brand1), var(--brand2), var(--brand1));
+    background-size: 200% 100%; animation: icShimmer 1s linear infinite;
+  }
+  &__progress-label { font-size: 12px; color: var(--mut); }
+
+  /* =======================================================================
+     Error
+     ======================================================================= */
+  &__error {
+    margin: 0; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid #ffd6dd; background: #fff1f3; color: #9f1239; font-size: 13px;
+  }
+
+  /* =======================================================================
+     Responsive
+     ======================================================================= */
+  @media (max-width: 640px) {
+    &__uploader-actions { justify-self: stretch; }
+    &__btn { flex: 1 1 auto; justify-content: center; }
+  }
+
+  @keyframes icShimmer { from { background-position: 0 0; } to { background-position: 200% 0; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    &__btn::after { transition-duration: .001ms !important; }
+    &__progress-bar::after { animation-duration: .001ms !important; }
+  }
+}

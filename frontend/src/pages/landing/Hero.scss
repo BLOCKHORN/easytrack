@@ -1,0 +1,152 @@
+/* =====================================================
+   Hero centrado — SVG compacto sin ocupar altura
+   ===================================================== */
+.hero{
+  --px: var(--page-x, clamp(16px, 4vw, 48px));
+  --primary-rgb: 79, 70, 229;
+  --ink-900: #0f172a;
+  --ink-700: #334155;
+  --ink-600: #475569;
+
+  position: relative;
+  z-index: 1;
+  padding: clamp(36px, 5vw, 56px) var(--px) clamp(22px, 4vw, 32px);
+  text-align: center;
+  overflow: clip;
+}
+
+.hero__inner{
+  position: relative;
+  z-index: 2;
+  max-width: 980px;
+  margin-inline: auto;
+}
+
+/* ===== Fondo ===== */
+.hero__bg{
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  -webkit-mask-image: radial-gradient(130% 130% at 50% 40%, #000 70%, transparent 100%);
+  mask-image: radial-gradient(130% 130% at 50% 40%, #000 70%, transparent 100%);
+
+  .bg__beam{
+    position: absolute; inset: -35% -10% -35% -10%;
+    background: conic-gradient(from 220deg at 50% 40%,
+      rgba(99,102,241,.12),
+      rgba(16,185,129,.18),
+      rgba(14,165,233,.18),
+      rgba(99,102,241,.12));
+    filter: blur(24px) saturate(115%);
+    transform: rotate(-6deg);
+    animation: beamShift 16s ease-in-out infinite alternate;
+  }
+  .bg__glow{ position:absolute; border-radius:50%; filter: blur(32px); }
+  .bg__glow--1{
+    width: 480px; height: 480px; top:-110px; left:-140px;
+    background: radial-gradient(40% 40% at 50% 50%, rgba(99,102,241,.30), transparent 70%);
+    opacity:.48; animation: floatA 18s ease-in-out infinite;
+  }
+  .bg__glow--2{
+    width: 560px; height: 560px; right:-240px; bottom:-260px;
+    background: radial-gradient(closest-side at 55% 55%,
+      rgba(16,185,129,.22), rgba(16,185,129,.14) 35%, transparent 70%);
+    opacity:.32; animation: floatB 22s ease-in-out infinite;
+  }
+  .bg__grid{
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(115deg, rgba(15,23,42,.06) 0 1px, transparent 1px 22px);
+    mask-image: radial-gradient(70% 70% at 60% 40%, #000 60%, transparent 100%);
+    opacity:.85; transform: translateZ(0); animation: gridDrift 30s linear infinite;
+  }
+}
+
+/* ===== Tipografía y copy ===== */
+.eyebrow{
+  display:inline-block; font-weight:700; letter-spacing:.4px; font-size:.9rem;
+  color:var(--ink-700);
+  background:rgba(var(--primary-rgb), .08);
+  border:1px solid rgba(var(--primary-rgb), .18);
+  padding:6px 10px; border-radius:999px; margin-bottom:12px;
+  box-shadow:0 0 0 3px rgba(255,255,255,.6);
+}
+.headline{
+  margin:0 0 12px; color:var(--ink-900);
+  display:grid; gap:.16em; line-height:1.05; letter-spacing:-0.02em;
+  .line{ font-weight:900; font-size: clamp(2.1rem, 6vw, 3.5rem); }
+  .line--gradient{
+    background:linear-gradient(90deg, #6473f3, #22c55e 60%, #0fb9d8);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  }
+}
+.subheadline{
+  font-size: clamp(1.02rem, 2vw, 1.22rem);
+  color:var(--ink-600); margin:0 0 16px;
+  strong{ color:#111827; }
+}
+
+/* ===== CTAs columna ===== */
+.cta-col{
+  display:grid; grid-template-columns:1fr; gap:10px; justify-items:center;
+  margin:16px auto 10px; max-width:360px;
+  .btn{ width:100%; padding:14px 18px; font-weight:800; border-radius:14px; line-height:1; }
+}
+
+/* ===== Badges ===== */
+.bullets{
+  margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center; color:var(--ink-600);
+  li{
+    list-style:none; display:inline-flex; align-items:center; gap:8px;
+    padding:8px 12px; border-radius:999px;
+    border:1px dashed rgba(15,23,42,.12);
+    background:rgba(255,255,255,.78);
+    -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+    font-size:.95rem; box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 1px 2px rgba(15,23,42,.04);
+    svg{ flex:0 0 auto; }
+  }
+}
+
+/* ===== Ornamento del SVG (compacto) ===== */
+.hero__artblock{
+  --size: clamp(140px, 18vw, 220px);
+  position: relative;
+  width: fit-content;
+  margin: clamp(8px, 1.6vw, 14px) auto 6px;
+  pointer-events: none;
+}
+.artblock__img{
+  display:block; width: var(--size); height:auto;
+  filter: drop-shadow(0 6px 18px rgba(2,6,12,.08));
+  animation: svgFloat 9s ease-in-out infinite;
+  position: relative; z-index: 2;
+}
+.artblock__halo{
+  position:absolute; inset: -14% -12% -18% -12%;
+  background: radial-gradient(60% 55% at 50% 52%,
+    rgba(var(--primary-rgb), .22),
+    rgba(var(--primary-rgb), .10) 35%,
+    transparent 70%);
+  filter: blur(10px);
+  border-radius: 50%;
+  z-index: 1;
+}
+
+/* ===== Trustbar compacto debajo ===== */
+.hero__trustbar{ margin-top: 8px; }
+
+/* ===== Responsive refinements ===== */
+@media (max-width: 640px){
+  .hero{ padding-bottom: clamp(18px, 6vw, 26px); }
+  .bullets li{ font-size: .92rem; }
+}
+
+/* ===== Motion prefs ===== */
+@media (prefers-reduced-motion: reduce){
+  .hero__bg .bg__beam, .hero__bg .bg__glow, .hero__bg .bg__grid,
+  .artblock__img, .artblock__halo{ animation: none !important; }
+}
+
+/* ===== Keyframes ===== */
+@keyframes beamShift{ 0%{ transform: rotate(-6deg) translateY(-2%);} 100%{ transform: rotate(-5deg) translateY(2%);} }
+@keyframes gridDrift{ 0%{ transform: translate3d(0,0,0);} 100%{ transform: translate3d(-120px,0,0);} }
+@keyframes floatA{ 0%,100%{ transform: translate3d(0,0,0);} 50%{ transform: translate3d(12px,6px,0);} }
+@keyframes floatB{ 0%,100%{ transform: translate3d(0,0,0);} 50%{ transform: translate3d(-10px,-8px,0);} }
+@keyframes svgFloat{ 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-4px);} }

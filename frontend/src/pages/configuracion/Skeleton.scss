@@ -1,0 +1,65 @@
+/* Scope total a la sección de configuración */
+.configuracion {
+  .hero--config.skeleton,
+  .config__grid .card.skeleton,
+  .grid-cards .card.skeleton { /* por compat: si usas grid-cards */
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    border: 1px solid var(--border, #e6e9ef);
+    background:
+      linear-gradient(90deg,
+        rgba(15,23,42,0.06) 0%,
+        rgba(15,23,42,0.12) 20%,
+        rgba(15,23,42,0.06) 40%);
+    background-size: 300% 100%;
+    animation: conf-skel 1.2s ease-in-out infinite;
+  }
+
+  .hero--config.skeleton {
+    margin: clamp(16px, 3vw, 28px) auto 10px;
+    max-width: 1200px;
+    min-height: clamp(120px, 18vw, 180px);
+    padding: clamp(14px, 2.2vw, 22px);
+    display: grid; gap: 12px;
+  }
+
+  .config__grid .card.skeleton,
+  .grid-cards .card.skeleton {
+    min-height: 180px;
+    padding: clamp(14px, 2vw, 20px);
+    box-shadow: 0 1px 2px rgba(15,23,42,.06);
+  }
+
+  .skeleton-line {
+    display: block;
+    height: 14px;
+    border-radius: 8px;
+    background:
+      linear-gradient(90deg,
+        rgba(15,23,42,0.06) 0%,
+        rgba(15,23,42,0.12) 20%,
+        rgba(15,23,42,0.06) 40%);
+    background-size: 300% 100%;
+    animation: conf-skel 1.2s ease-in-out infinite;
+  }
+  .skeleton-line + .skeleton-line { margin-top: 12px; }
+
+  .w-40 { width: 40%; }
+  .w-50 { width: 50%; }
+  .w-60 { width: 60%; }
+  .w-70 { width: 70%; }
+  .w-80 { width: 80%; }
+  .w-100 { width: 100%; }
+
+  @media (min-width: 1024px) {
+    .hero--config.skeleton { min-height: 160px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero--config.skeleton,
+    .config__grid .card.skeleton,
+    .grid-cards .card.skeleton,
+    .skeleton-line { animation: none; }
+  }
+}

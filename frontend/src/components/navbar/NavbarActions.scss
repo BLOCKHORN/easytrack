@@ -1,0 +1,56 @@
+/* =================== ACCIONES DERECHA =================== */
+.navbar__actions{
+  display:flex; align-items:center; gap: 10px; min-width: 0;
+
+  .navbar__link{
+    display:inline-flex; align-items:center; gap:8px;
+    padding: 9px 12px; border-radius: 12px;
+    font-weight: 700; font-size:.95rem;
+    color:#e5e7eb; background: transparent; border:1px solid var(--nav-border);
+    transition: background var(--tr), color var(--tr), border var(--tr);
+    white-space: nowrap;
+    &:hover{ background: rgba(255,255,255,.06); color:#fff; border-color: rgba(255,255,255,.18); }
+    &.block{ width:100%; justify-content:center; }
+  }
+
+  .navbar__cta{
+    position:relative; padding: 10px 16px; border-radius: 12px; border:0;
+    font-weight:800; font-size:.95rem; letter-spacing:.2px; cursor:pointer;
+    color:#0b1120; background:#fff;
+    transition: transform var(--tr), box-shadow var(--tr), opacity var(--tr);
+    box-shadow: 0 8px 30px rgba(96,165,250,.15);
+    white-space: nowrap;
+    &:hover{ transform: translateY(-1px); box-shadow: 0 12px 36px rgba(96,165,250,.25); }
+    &.block{ width:100%; }
+  }
+
+  .btn{
+    position:relative;
+    display:inline-flex; align-items:center; justify-content:center;
+    padding: 10px 16px; border-radius: 12px; font-weight:800;
+    color:#e5e7eb; background: var(--nav-surface);
+    border:1px solid var(--nav-border);
+    transition: background var(--tr), border var(--tr), transform var(--tr);
+    white-space: nowrap;
+
+    &::before{
+      content:""; position:absolute; inset:0; border-radius: 12px; padding:1px;
+      background: linear-gradient(120deg, var(--acc-1), var(--acc-2), var(--acc-3));
+      -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude;
+      opacity:.45; transition: opacity var(--tr);
+      pointer-events:none;
+    }
+    &:hover{ background:#1a1d23; border-color: rgba(255,255,255,.18); }
+    &:hover::before{ opacity:.9; }
+    &.block{ width:100%; }
+  }
+  .btn--enter{ border-radius: 12px; }
+}
+
+/* en móviles muy pequeños, oculta el enlace "Login" para priorizar CTA/chip */
+@media (max-width: 480px){
+  .navbar__actions .navbar__link{ display:none; }
+}

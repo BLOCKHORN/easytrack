@@ -1,0 +1,262 @@
+/* ========= Legal.scss — Tema claro, pro, accesible y responsive ========= */
+/* Sirve para /legal/terminos, /legal/privacidad y /legal/cookies */
+
+:root {
+  --lg-radius: 14px;
+  --lg-border: 1px;
+  --lg-pad: clamp(18px, 2.5vw, 32px);
+
+  --lg-bg: #f8fafc;          /* fondo página */
+  --lg-card: #ffffff;        /* tarjetas */
+  --lg-text: #0f172a;        /* texto principal */
+  --lg-muted: #64748b;       /* texto secundario */
+  --lg-border-color: #e2e8f0;
+  --lg-accent: #2563eb;      /* azul */
+  --lg-accent-700: #1d4ed8;  /* azul más intenso */
+
+  --lg-note-bg: #eff6ff;     /* bloques destacados */
+  --lg-note-bd: #bfdbfe;
+  --lg-note-tx: #1e40af;
+}
+
+.legal {
+  background: var(--lg-bg);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: clamp(20px, 3vw, 48px) 16px;
+  color: var(--lg-text);
+}
+
+/* Layout general */
+.legal__shell {
+  width: 100%;
+  max-width: 1100px;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: clamp(16px, 2vw, 28px);
+}
+
+.legal__card {
+  background: var(--lg-card);
+  border: var(--lg-border) solid var(--lg-border-color);
+  border-radius: var(--lg-radius);
+  box-shadow: 0 10px 30px rgba(2, 6, 23, .06);
+}
+
+/* ================= TOC (índice) ================= */
+.legal__toc {
+  position: sticky;
+  top: 96px; /* compensa navbar fijo */
+  height: fit-content;
+  padding: 16px;
+}
+.legal__toc-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 8px;
+}
+.legal__toc h3 {
+  margin: 0;
+  font-size: .96rem;
+  font-weight: 800;
+  color: var(--lg-text);
+}
+.legal__print {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 36px; padding: 0 12px;
+  border-radius: 10px; border: var(--lg-border) solid var(--lg-border-color);
+  background: transparent; color: var(--lg-text);
+  cursor: pointer;
+  transition: border-color .15s ease, transform .15s ease;
+}
+.legal__print:hover { border-color: var(--lg-accent); transform: translateY(-1px); }
+
+.legal__toc nav ul {
+  margin: 10px 0 0; padding: 0; list-style: none;
+  display: grid; gap: 6px;
+}
+.legal__toc a {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: var(--lg-muted);
+  text-decoration: none; /* <- evita subrayado en el TOC */
+  border: var(--lg-border) solid transparent;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
+}
+.legal__toc a:hover {
+  transform: translateX(2px);
+  background: #f1f5f9;
+  border-color: var(--lg-border-color);
+  color: var(--lg-text);
+}
+.legal__toc a.is-active {
+  color: var(--lg-text);
+  background: linear-gradient(180deg, rgba(37,99,235,.10), rgba(37,99,235,.06));
+  border-color: rgba(37,99,235,.35);
+}
+
+/* ================= Contenido ================= */
+.legal__content { padding: var(--lg-pad); }
+
+.legal__head {
+  margin-bottom: clamp(14px, 2vw, 20px);
+  padding-bottom: 14px;
+  border-bottom: var(--lg-border) solid var(--lg-border-color);
+}
+.legal__kicker {
+  margin: 0 0 6px;
+  font-size: .85rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--lg-muted);
+}
+.legal__title {
+  margin: 0 0 6px;
+  font-size: clamp(1.6rem, 1.2rem + 1.2vw, 2.2rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, var(--lg-text), var(--lg-accent-700) 70%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.legal__meta { color: var(--lg-muted); font-size: .9rem; }
+
+.legal__section { margin: clamp(16px, 2vw, 24px) 0; }
+.legal__section h2 {
+  margin: 0 0 8px;
+  font-size: clamp(1.06rem, .96rem + .42vw, 1.35rem);
+  font-weight: 800;
+  color: var(--lg-text);
+  scroll-margin-top: 96px; /* anclar con navbar fijo */
+}
+.legal__section p, .legal__section li { line-height: 1.7; font-size: 1rem; }
+.legal__section ul { padding-left: 1.2rem; }
+
+.legal__note {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--lg-note-bg);
+  border: var(--lg-border) solid var(--lg-note-bd);
+  color: var(--lg-note-tx);
+  font-size: .95rem;
+}
+
+/* ===== Enlaces dentro del contenido (sin afectar botones ni TOC) ===== */
+/* Importante: solo aplica a enlaces "de texto" */
+.legal :where(p, li, .legal__section) a:not(.legal__btn):not(.legal__toc a) {
+  color: var(--lg-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.legal :where(p, li, .legal__section) a:not(.legal__btn):hover { opacity: .85; }
+
+/* ================= CTA / Botones (scope fuerte) ================= */
+/* Evita choques con .btn globales */
+.legal a.legal__btn,
+.legal button.legal__btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 40px; padding: 0 14px;
+  border-radius: 10px; font-weight: 700;
+  border: var(--lg-border) solid var(--lg-border-color);
+  color: var(--lg-text); background: var(--lg-card);
+  text-decoration: none; /* <- quita subrayado aunque haya reglas globales */
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease, color .15s ease;
+}
+.legal a.legal__btn:hover,
+.legal button.legal__btn:hover { transform: translateY(-1px); }
+.legal a.legal__btn:focus-visible,
+.legal button.legal__btn:focus-visible {
+  outline: 2px solid var(--lg-accent); outline-offset: 2px;
+}
+
+/* Variante primaria */
+.legal a.legal__btn--primary,
+.legal button.legal__btn--primary {
+  background: var(--lg-accent);
+  color: #fff;
+  border-color: var(--lg-accent);
+}
+.legal a.legal__btn--primary:hover,
+.legal button.legal__btn--primary:hover { background: var(--lg-accent-700); }
+
+/* Contenedor de CTAs */
+.legal__cta {
+  margin-top: 24px;
+  display: flex; gap: 10px; flex-wrap: wrap;
+}
+
+/* ======= Responsive ======= */
+@media (max-width: 1120px) {
+  .legal__shell { grid-template-columns: 260px 1fr; }
+}
+@media (max-width: 1024px) {
+  .legal__shell { grid-template-columns: 1fr; }
+  .legal__toc { position: relative; top: 0; }
+  .legal__toc nav ul { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 640px) {
+  .legal__toc nav ul { grid-template-columns: 1fr; }
+  .legal__title { font-size: clamp(1.5rem, 1.1rem + 3vw, 1.9rem); }
+}
+
+/* ======= Print ======= */
+@media print {
+  .legal { background: #fff; padding: 0; color: #111; }
+  .legal__shell { display: block; max-width: 800px; margin: 0 auto; }
+  .legal__toc { display: none; }
+  .legal__card { box-shadow: none; border: none; background: #fff; }
+  .legal__content { padding: 0; }
+  .legal__btn, .legal__print { display: none !important; }
+}
+
+/* ====== Extensiones para Cookies (tablas/badges) ====== */
+.legal__table-wrap {
+  width: 100%;
+  overflow: auto;
+  border: var(--lg-border) solid var(--lg-border-color);
+  border-radius: 12px;
+  background: var(--lg-card);
+}
+.legal__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 720px;
+  thead th {
+    text-align: left;
+    font-weight: 800;
+    font-size: .92rem;
+    padding: 12px 14px;
+    background: linear-gradient(180deg, rgba(2,6,23,.04), rgba(2,6,23,.02));
+    color: var(--lg-text);
+    border-bottom: var(--lg-border) solid var(--lg-border-color);
+  }
+  tbody td {
+    padding: 12px 14px;
+    border-bottom: var(--lg-border) solid var(--lg-border-color);
+    color: var(--lg-text);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+}
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .2px;
+  color: var(--lg-text);
+  background: rgba(2,6,23,.06);
+  border: var(--lg-border) solid var(--lg-border-color);
+}
+.badge--pref      { background: rgba(109,40,217,.10); border-color: rgba(109,40,217,.35); }
+.badge--analytics { background: rgba(2,132,199,.12);  border-color: rgba(2,132,199,.35); }
+.badge--mkt       { background: rgba(244,63,94,.12);  border-color: rgba(244,63,94,.35); }
+
+/* Respeta reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
