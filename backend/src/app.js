@@ -3,32 +3,32 @@
 require('dotenv').config();
 
 const express = require('express');
-const cors    = require('cors');
+const cors = require('cors');
 
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
 /* ============== Rutas existentes ============== */
-const paquetesRoutes         = require('./routes/paquetes.routes');
-const estantesRoutes         = require('./routes/estantes.routes');
-const dashboardRoutes        = require('./routes/dashboard.routes');
-const areaPersonalRoutes     = require('./routes/areaPersonal.routes');
-const imagenesRoutes         = require('./routes/imagenes.routes');
-const authRoutes             = require('./routes/auth.routes');
+const paquetesRoutes = require('./routes/paquetes.routes');
+const estantesRoutes = require('./routes/estantes.routes');
+const dashboardRoutes = require('./routes/dashboard.routes');
+const areaPersonalRoutes = require('./routes/areaPersonal.routes');
+const imagenesRoutes = require('./routes/imagenes.routes');
+const authRoutes = require('./routes/auth.routes');
 const verificarUsuarioRoutes = require('./routes/verificar.usuario');
-const tenantsRoutes          = require('./routes/tenants.routes');
-const metricsRouter          = require('./routes/metrics.routes');
+const tenantsRoutes = require('./routes/tenants.routes');
+const metricsRouter = require('./routes/metrics.routes');
 
 /* ============== Billing (Stripe) ============== */
-const billingRoutes          = require('./routes/billing.routes');
-const { stripeWebhook }      = require('./routes/stripe.webhook');
+const billingRoutes = require('./routes/billing.routes');
+const { stripeWebhook } = require('./routes/stripe.webhook');
 
 /* ============== Admin (Superadmin) ============== */
-const adminRoutes            = require('./routes/admin.routes');
+const adminRoutes = require('./routes/admin.routes');
 
 /* ============== Cortafuegos de suscripción ============== */
-const subscriptionFirewall   = require('./middlewares/subscriptionFirewall');
+const subscriptionFirewall = require('./middlewares/subscriptionFirewall');
 
 /* ============== CORS ROBUSTO ============== */
 const envOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
@@ -54,7 +54,7 @@ const ALLOWED_ORIGINS = Array.from(new Set([
 console.log('CORS ORIGINS:', ALLOWED_ORIGINS.join(', '));
 
 function originChecker(origin, cb) {
-  if (!origin) return cb(null, true);               // curl/cron/healthchecks
+  if (!origin) return cb(null, true); // curl/cron/healthchecks
   if (ALLOWED_ORIGINS.includes('*')) return cb(null, true);
 
   try {
@@ -65,10 +65,11 @@ function originChecker(origin, cb) {
       ALLOWED_ORIGINS.includes(origin) ||
       host === 'localhost' ||
       host === '127.0.0.1' ||
-      host.endsWith('.devtunnels.ms');              // permite subdominios de devtunnels
+      host.endsWith('.devtunnels.ms') || // subdominios de devtunnels
+      host.endsWith('.vercel.app');      // previews de Vercel
 
     if (ok) return cb(null, true);
-  } catch {}
+  } catch { /* noop */ }
 
   return cb(new Error('Not allowed by CORS'));
 }
@@ -82,11 +83,11 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-// ⬇️ Arreglo: usar regexp para preflight global (en Express nuevo '*' rompe)
+// preflight global (en Express 5, '*' da problemas; usamos regexp)
 app.options(/.*/, cors(corsOptions));
 
 /* ============== Healthchecks ============== */
-app.get('/health',             (_, res) => res.json({ ok: true }));
+app.get('/health', (_, res) => res.json({ ok: true }));
 app.get('/.well-known/health', (_, res) => res.json({ ok: true }));
 
 /* =========================================================
@@ -94,16 +95,16 @@ app.get('/.well-known/health', (_, res) => res.json({ ok: true }));
    ========================================================= */
 const rawJson = express.raw({ type: 'application/json' });
 app.post('/billing/stripe/webhook', rawJson, stripeWebhook);
-app.post('/webhooks/stripe',        rawJson, stripeWebhook);
+app.post('/webhooks/stripe', rawJson, stripeWebhook);
 
 /* ============== Parsers JSON normales ============== */
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 /* ============== Rutas públicas (sin firewall) ============== */
-app.use('/api/auth',              authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/verificar-usuario', verificarUsuarioRoutes);
-app.use('/api/metrics',           metricsRouter);
+app.use('/api/metrics', metricsRouter);
 
 /* ============== Admin (Superadmin) ============== */
 app.use('/admin', adminRoutes);
@@ -117,24 +118,24 @@ app.use(subscriptionFirewall());
 app.use('/api/tenants', tenantsRoutes);
 
 /* ============== Legacy (sin slug en URL) ============== */
-app.use('/api/paquetes',      paquetesRoutes);
-app.use('/api/estantes',      estantesRoutes);
-app.use('/api/dashboard',     dashboardRoutes);
+app.use('/api/paquetes', paquetesRoutes);
+app.use('/api/estantes', estantesRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/area-personal', areaPersonalRoutes);
-app.use('/api/imagenes',      imagenesRoutes);
+app.use('/api/imagenes', imagenesRoutes);
 
 /* =========================================================
    Billing (Stripe) — compat con y sin /api
    ========================================================= */
-app.use('/billing',     billingRoutes);
+app.use('/billing', billingRoutes);
 app.use('/api/billing', billingRoutes);
 
 /* ============== Multi-tenant por slug (montajes explícitos) ============== */
-app.use('/:tenantSlug/api/paquetes',      paquetesRoutes);
-app.use('/:tenantSlug/api/estantes',      estantesRoutes);
-app.use('/:tenantSlug/api/dashboard',     dashboardRoutes);
+app.use('/:tenantSlug/api/paquetes', paquetesRoutes);
+app.use('/:tenantSlug/api/estantes', estantesRoutes);
+app.use('/:tenantSlug/api/dashboard', dashboardRoutes);
 app.use('/:tenantSlug/api/area-personal', areaPersonalRoutes);
-app.use('/:tenantSlug/api/imagenes',      imagenesRoutes);
+app.use('/:tenantSlug/api/imagenes', imagenesRoutes);
 
 /* ============== 404 ============== */
 app.use((req, res) => {
