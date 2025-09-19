@@ -1,44 +1,46 @@
 // frontend/src/utils/fetcher.js
 import { supabase } from './supabaseClient';
 
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
+function toAbs(url) {
+  if (/^https?:\/\//i.test(url)) return url;                 // ya absoluta
+  if (API_BASE) return `${API_BASE}${url.startsWith('/') ? url : `/${url}`}`;
+  return url;                                                // dev con proxy
+}
+
 export async function apiFetch(url, init = {}) {
   const headers = {
     Accept: 'application/json',
     ...(init.headers || {}),
   };
 
-  // 🔐 Adjunta automáticamente el Bearer si no lo han pasado ya
+  // Bearer de Supabase si no lo pasaron ya
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token && !headers.Authorization && !headers.authorization) {
       headers.Authorization = `Bearer ${session.access_token}`;
     }
-  } catch {
-    /* noop */
-  }
+  } catch { /* noop */ }
 
-  const opts = {
-    credentials: 'include',
+  const res = await fetch(toAbs(url), {
+    credentials: 'include',   // cookies (si las hubiera)
     ...init,
     headers,
-  };
+  });
 
-  const res = await fetch(url, opts);
-
-  // ---- Suscripción inactiva -> 402 ----
+  // 402 => bloque por suscripción (no confundir con errores de red)
   if (res.status === 402) {
     let payload = null;
     try { payload = await res.clone().json(); } catch {}
-
-    const reason       = payload?.reason ?? 'inactive';
-    const tenant_id    = payload?.tenant_id ?? null;
-    const tenant_slug  = payload?.tenant_slug ?? payload?.tenantSlug ?? null;
-    const portalUrl    = payload?.portal_url ?? payload?.portalUrl
+    const reason      = payload?.reason ?? 'inactive';
+    const tenant_slug = payload?.tenant_slug ?? payload?.tenantSlug ?? null;
+    const portalUrl   = payload?.portal_url ?? payload?.portalUrl
                       ?? (tenant_slug ? `/${tenant_slug}/portal` : '/portal');
 
     const ctx = {
       reason,
-      tenant_id,
+      tenant_id: payload?.tenant_id ?? null,
       tenantSlug: tenant_slug || undefined,
       portalUrl,
       ts: Date.now(),
@@ -50,12 +52,7 @@ export async function apiFetch(url, init = {}) {
       const qp = new URLSearchParams({ reason });
       location.assign(`/reactivar?${qp.toString()}`);
     }
-
-    if (location.pathname.startsWith('/reactivar')) {
-      return res; // deja continuar en esa página
-    }
-
-    throw new Error('SUBSCRIPTION_INACTIVE');
+    return res; // deja continuar si ya estás en /reactivar
   }
 
   return res;

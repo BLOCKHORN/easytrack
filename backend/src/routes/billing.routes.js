@@ -5,6 +5,7 @@ const Stripe  = require('stripe');
 const { supabase, supabaseAdmin } = require('../utils/supabaseClient');
 const { getPlans, normalizePlan } = require('../utils/pricing');
 const { slugifyBase, uniqueSlug } = require('../helpers/slug');
+const requireAuth = require('../middlewares/requireAuth'); // <- para /portal y /self-status
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
@@ -17,11 +18,14 @@ const TRIAL_DAYS = 30;
 
 const toEmail = (v) => String(v || '').trim().toLowerCase();
 
+/* -----------------------------------------------------------
+   Helpers
+----------------------------------------------------------- */
 async function upsertTenantByEmail(email, businessName) {
   const low = toEmail(email);
   const { data: exist, error: exErr } = await supabase
     .from('tenants')
-    .select('id, slug, nombre_empresa, email, stripe_customer_id')
+    .select('id, slug, nombre_empresa, email, stripe_customer_id, stripe_status, plan_code, plan_renews_at')
     .eq('email', low)
     .maybeSingle();
   if (exErr) throw exErr;
@@ -32,7 +36,7 @@ async function upsertTenantByEmail(email, businessName) {
   const { data, error } = await supabase
     .from('tenants')
     .insert([{ email: low, nombre_empresa: businessName || base, slug }])
-    .select('id, slug, nombre_empresa, email, stripe_customer_id')
+    .select('id, slug, nombre_empresa, email, stripe_customer_id, stripe_status, plan_code, plan_renews_at')
     .single();
   if (error) throw error;
   return data;
@@ -45,7 +49,9 @@ function makeIdemKey(req, tenantId, planCode) {
   return `co:${tenantId || 'anon'}:${planCode}:${bucket}`;
 }
 
-/** GET /billing/plans */
+/* -----------------------------------------------------------
+   GET /billing/plans
+----------------------------------------------------------- */
 router.get('/plans', async (_req, res) => {
   try {
     const plans = await getPlans();
@@ -56,7 +62,9 @@ router.get('/plans', async (_req, res) => {
   }
 });
 
-/** POST /billing/checkout/start */
+/* -----------------------------------------------------------
+   POST /billing/checkout/start
+----------------------------------------------------------- */
 router.post('/checkout/start', async (req, res) => {
   try {
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -149,7 +157,9 @@ router.post('/checkout/start', async (req, res) => {
   }
 });
 
-/** GET /billing/checkout/verify?session_id=cs_xxx */
+/* -----------------------------------------------------------
+   GET /billing/checkout/verify?session_id=cs_xxx
+----------------------------------------------------------- */
 router.get('/checkout/verify', async (req, res) => {
   const baseFail = (code, message) => {
     const urlsObj = { portal: '', dashboard: `${FRONTEND_URL}/app`, plans: `${FRONTEND_URL}/planes` };
@@ -215,7 +225,10 @@ router.get('/checkout/verify', async (req, res) => {
   }
 });
 
-/** POST /billing/checkout/resend-invite  (invite → reset fallback) */
+/* -----------------------------------------------------------
+   POST /billing/checkout/resend-invite
+   (invite → reset fallback)
+----------------------------------------------------------- */
 router.post('/checkout/resend-invite', async (req, res) => {
   try {
     const email = toEmail(req.body?.email);
@@ -253,6 +266,69 @@ router.post('/checkout/resend-invite', async (req, res) => {
   } catch (e) {
     console.error('[resend-invite] error:', e);
     return res.status(500).json({ ok:false, error: e.message });
+  }
+});
+
+/* -----------------------------------------------------------
+   GET /billing/portal   (USADO POR EL FRONT)
+   - Requiere auth. Crea sesión del portal para el tenant actual.
+----------------------------------------------------------- */
+router.get('/portal', requireAuth, async (req, res) => {
+  try {
+    const tenantId = req.tenant?.id || null;
+    if (!tenantId) return res.status(401).json({ ok:false, error:'UNAUTHENTICATED' });
+
+    const { data: tenant, error } = await supabase
+      .from('tenants')
+      .select('id, slug, email, stripe_customer_id')
+      .eq('id', tenantId)
+      .maybeSingle();
+    if (error) throw error;
+
+    if (!tenant?.stripe_customer_id) {
+      return res.status(404).json({ ok:false, error:'TENANT_WITHOUT_CUSTOMER' });
+    }
+
+    const portal = await stripe.billingPortal.sessions.create({
+      customer: tenant.stripe_customer_id,
+      return_url: `${FRONTEND_URL}/app`
+    });
+
+    return res.json({ ok:true, url: portal.url });
+  } catch (e) {
+    console.error('[GET /billing/portal] error', e);
+    return res.status(500).json({ ok:false, error: e.message || 'PORTAL_ERROR' });
+  }
+});
+
+/* -----------------------------------------------------------
+   GET /billing/self-status  (diagnóstico)
+----------------------------------------------------------- */
+router.get('/self-status', requireAuth, async (req, res) => {
+  try {
+    const key = String(process.env.STRIPE_SECRET_KEY || '');
+    const stripeMode = key.startsWith('sk_live') ? 'live' : key.startsWith('sk_test') ? 'test' : 'unknown';
+
+    const tenantId = req.tenant?.id || null;
+    if (!tenantId) {
+      return res.status(200).json({
+        ok: true,
+        stripeMode,
+        note: 'No hay req.tenant aún. Revisa requireAuth/tenant resolver.'
+      });
+    }
+
+    const { data: tenant, error } = await supabase
+      .from('tenants')
+      .select('id, slug, email, nombre_empresa, stripe_customer_id, stripe_status, plan_code, plan_renews_at')
+      .eq('id', tenantId)
+      .maybeSingle();
+    if (error) throw error;
+
+    return res.json({ ok:true, stripeMode, tenant: tenant || null });
+  } catch (e) {
+    console.error('[billing:self-status] error', e);
+    return res.status(500).json({ ok:false, error:'SELF_STATUS_ERROR' });
   }
 });
 

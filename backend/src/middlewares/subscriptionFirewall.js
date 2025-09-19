@@ -1,24 +1,27 @@
 // backend/src/middlewares/subscriptionFirewall.js
 'use strict';
 
-const rawRequireAuth       = require('./requireAuth');                 // tu middleware de auth
-const makeRequireActive    = require('./requireActiveSubscription');   // factory → devuelve middleware
+const rawRequireAuth       = require('./requireAuth');               // tu middleware de auth
+const makeRequireActive    = require('./requireActiveSubscription'); // factory → devuelve middleware
+
+// Permite BYPASS temporal (prod o staging) para no bloquear mientras depuras
+const BYPASS = process.env.SUBSCRIPTION_FIREWALL_BYPASS === '1';
 
 // Prefijos totalmente públicos (no auth, no sub-check)
 const PUBLIC_PREFIXES = [
   '/health',
   '/.well-known/health',
-  '/webhooks',       // p.ej. /webhooks/stripe
-  '/billing',        // ojo: los handlers de billing pueden validar por su cuenta
+  '/webhooks',      // p.ej. /webhooks/stripe
+  '/billing',       // los handlers de billing validan por su cuenta (y /portal ya trae requireAuth)
   '/api/billing',
   '/api/auth',
   '/api/metrics',
-  '/admin',          // /admin ya protege con requireSuperadmin internamente
+  '/admin',         // /admin protege internamente
 ];
 
 // Endpoints “solo auth” (saltan el check de suscripción)
 const AUTH_ONLY_EXACT = new Set([
-  '/api/tenants/me', // ← necesitamos req.user para saber el tenant, pero NO bloquear por suscripción
+  '/api/tenants/me', // necesitamos req.user/tenant pero NO bloquear por suscripción aquí
 ]);
 
 // Coincide con /api/* y /:slug/api/*
@@ -47,6 +50,12 @@ module.exports = function subscriptionFirewall() {
 
     // Endpoints totalmente públicos
     if (isPublicPrefix(path)) return next();
+
+    // BYPASS para debug/control
+    if (BYPASS) {
+      res.setHeader('X-SubFirewall', 'bypass');
+      return requireAuth(req, res, next); // al menos exige login
+    }
 
     // Endpoints que requieren login pero NO chequeo de suscripción
     if (AUTH_ONLY_EXACT.has(path)) {

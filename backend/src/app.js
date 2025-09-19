@@ -1,4 +1,3 @@
-// backend/src/app.js
 'use strict';
 require('dotenv').config();
 
@@ -9,7 +8,11 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
-/* ============== Rutas existentes ============== */
+/* ===== Middlewares propios ===== */
+const requireAuth = require('./middlewares/requireAuth');
+const subscriptionFirewall = require('./middlewares/subscriptionFirewall');
+
+/* ===== Rutas ===== */
 const paquetesRoutes = require('./routes/paquetes.routes');
 const estantesRoutes = require('./routes/estantes.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
@@ -20,15 +23,10 @@ const verificarUsuarioRoutes = require('./routes/verificar.usuario');
 const tenantsRoutes = require('./routes/tenants.routes');
 const metricsRouter = require('./routes/metrics.routes');
 
-/* ============== Billing (Stripe) ============== */
 const billingRoutes = require('./routes/billing.routes');
 const { stripeWebhook } = require('./routes/stripe.webhook');
 
-/* ============== Admin (Superadmin) ============== */
 const adminRoutes = require('./routes/admin.routes');
-
-/* ============== Cortafuegos de suscripción ============== */
-const subscriptionFirewall = require('./middlewares/subscriptionFirewall');
 
 /* ============== CORS ROBUSTO ============== */
 const envOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
@@ -43,7 +41,7 @@ const defaultsDev = [
   'http://localhost:5174', 'http://127.0.0.1:5174',
   'http://localhost:4173', 'http://127.0.0.1:4173',
   'http://localhost:4174', 'http://127.0.0.1:4174',
-  'https://8r7cj2hr-5173.uks1.devtunnels.ms', // túnel
+  'https://8r7cj2hr-5173.uks1.devtunnels.ms',
 ].filter(Boolean);
 
 const ALLOWED_ORIGINS = Array.from(new Set([
@@ -51,23 +49,18 @@ const ALLOWED_ORIGINS = Array.from(new Set([
   ...(process.env.NODE_ENV === 'production' ? [] : defaultsDev),
 ]));
 
-console.log('CORS ORIGINS:', ALLOWED_ORIGINS.join(', '));
-
 function originChecker(origin, cb) {
-  if (!origin) return cb(null, true); // curl/cron/healthchecks
+  if (!origin) return cb(null, true);          // curl/cron/healthchecks
   if (ALLOWED_ORIGINS.includes('*')) return cb(null, true);
 
   try {
     const u = new URL(origin);
     const host = u.hostname;
-
     const ok =
       ALLOWED_ORIGINS.includes(origin) ||
-      host === 'localhost' ||
-      host === '127.0.0.1' ||
-      host.endsWith('.devtunnels.ms') || // subdominios de devtunnels
-      host.endsWith('.vercel.app');      // previews de Vercel
-
+      host === 'localhost' || host === '127.0.0.1' ||
+      host.endsWith('.devtunnels.ms') ||
+      host.endsWith('.vercel.app');            // previews/prod en Vercel
     if (ok) return cb(null, true);
   } catch { /* noop */ }
 
@@ -83,7 +76,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-// preflight global (en Express 5, '*' da problemas; usamos regexp)
 app.options(/.*/, cors(corsOptions));
 
 /* ============== Healthchecks ============== */
@@ -110,32 +102,33 @@ app.use('/api/metrics', metricsRouter);
 app.use('/admin', adminRoutes);
 
 /* =========================================================
-   🔒 CORTAFUEGOS GLOBAL DE SUSCRIPCIÓN PARA LA APP DEL CLIENTE
-   ========================================================= */
-app.use(subscriptionFirewall());
-
-/* ============== Identidad de tenant (cliente) ============== */
-app.use('/api/tenants', tenantsRoutes);
-
-/* ============== Legacy (sin slug en URL) ============== */
-app.use('/api/paquetes', paquetesRoutes);
-app.use('/api/estantes', estantesRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/area-personal', areaPersonalRoutes);
-app.use('/api/imagenes', imagenesRoutes);
-
-/* =========================================================
-   Billing (Stripe) — compat con y sin /api
+   Billing (Stripe) — SIEMPRE accesible (antes del firewall)
    ========================================================= */
 app.use('/billing', billingRoutes);
 app.use('/api/billing', billingRoutes);
 
-/* ============== Multi-tenant por slug (montajes explícitos) ============== */
-app.use('/:tenantSlug/api/paquetes', paquetesRoutes);
-app.use('/:tenantSlug/api/estantes', estantesRoutes);
-app.use('/:tenantSlug/api/dashboard', dashboardRoutes);
-app.use('/:tenantSlug/api/area-personal', areaPersonalRoutes);
-app.use('/:tenantSlug/api/imagenes', imagenesRoutes);
+/* =========================================================
+   Helper para montar rutas protegidas:
+   requireAuth  → subscriptionFirewall → router
+   ========================================================= */
+function gate(path, router) {
+  app.use(path, requireAuth, subscriptionFirewall(), router);
+}
+
+/* ============== Rutas protegidas (legacy sin slug) ============== */
+gate('/api/tenants', tenantsRoutes);
+gate('/api/paquetes', paquetesRoutes);
+gate('/api/estantes', estantesRoutes);
+gate('/api/dashboard', dashboardRoutes);
+gate('/api/area-personal', areaPersonalRoutes);
+gate('/api/imagenes', imagenesRoutes);
+
+/* ============== Rutas protegidas multi-tenant (con slug) ============== */
+gate('/:tenantSlug/api/paquetes', paquetesRoutes);
+gate('/:tenantSlug/api/estantes', estantesRoutes);
+gate('/:tenantSlug/api/dashboard', dashboardRoutes);
+gate('/:tenantSlug/api/area-personal', areaPersonalRoutes);
+gate('/:tenantSlug/api/imagenes', imagenesRoutes);
 
 /* ============== 404 ============== */
 app.use((req, res) => {
