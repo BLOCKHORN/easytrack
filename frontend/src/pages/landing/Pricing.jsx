@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./Pricing.scss";
 
+/* ===== API base ===== */
+const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
+
 /* ===== Datos base ===== */
 const FALLBACK = [
   { code: "monthly",     label: "Mensual",   period_months: 1,  price_cents:  2900 },
@@ -80,7 +83,7 @@ export default function Pricing() {
     let on = true;
     (async () => {
       try {
-        const r = await fetch("/api/billing/plans");
+        const r = await fetch(`${API_BASE}/api/billing/plans`);
         if (r.ok) {
           const j = await r.json();
           const plans = (j?.plans || [])
@@ -149,9 +152,10 @@ export default function Pricing() {
 
   const animMonthly = useAnimatedNumber(plan.uiMonthly || 0);
 
-  function goToPlanes(planCode) {
+  // ✅ Enviar a /precios (no /planes) para evitar 404 del servidor
+  function goToPricing(planCode) {
     try { localStorage.setItem("preferred_plan", planCode); } catch {}
-    window.location.assign(`/planes?plan=${encodeURIComponent(planCode)}`);
+    window.location.assign(`/precios?plan=${encodeURIComponent(planCode)}`);
   }
 
   return (
@@ -239,7 +243,7 @@ export default function Pricing() {
         )}
 
         <div className="cta-inline">
-          <button className="btn-primary" disabled={loading} onClick={() => goToPlanes(plan.code)}>
+          <button className="btn-primary" disabled={loading} onClick={() => goToPricing(plan.code)}>
             Empezar ahora
           </button>
         </div>
