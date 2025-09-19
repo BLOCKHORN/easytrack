@@ -1,4 +1,6 @@
+// frontend/src/pages/PortalBridge.jsx
 import { useEffect, useState } from 'react';
+import { apiFetch } from '../utils/fetcher';
 import { supabase } from '../utils/supabaseClient';
 
 export default function PortalBridge() {
@@ -6,17 +8,12 @@ export default function PortalBridge() {
 
   useEffect(() => {
     let abort = false;
-
     (async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const headers = {
-          Accept: 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        };
+        // fuerza sesión fresca por si el tab cambió
+        await supabase.auth.getSession();
 
-        // GET o POST según tu backend; aquí asumo GET
-        const res = await fetch('/billing/portal', { method: 'GET', headers, credentials: 'include' });
+        const res = await apiFetch('/api/billing/portal', { method: 'GET' });
 
         if (res.status === 401) {
           if (!abort) window.location.replace('/');
@@ -33,7 +30,6 @@ export default function PortalBridge() {
         if (!abort) setErr(e.message || 'Error al abrir el portal');
       }
     })();
-
     return () => { abort = true; };
   }, []);
 
