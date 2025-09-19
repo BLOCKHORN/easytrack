@@ -1,66 +1,53 @@
 // frontend/src/utils/tenant.js
 import { supabase } from './supabaseClient';
 
-const RESERVED = new Set([
-  'app','planes','precios','portal','reactivar','login','register','signup',
-  'admin','api','billing','sobre-nosotros','soporte','contacto','legal','docs',
-]);
+const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
-function firstPathSeg() {
+/** Devuelve el slug si la URL es /:tenantSlug/... */
+export function getTenantSlugFromPath() {
   try {
-    const seg = window.location.pathname.split('/').filter(Boolean)[0] || '';
-    return seg || null;
-  } catch { return null; }
+    const m = window.location.pathname.match(/^\/([^/]+)(?:\/|$)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  } catch {
+    return null;
+  }
 }
 
-export function currentTenantSlug() {
-  const seg = firstPathSeg();
-  if (!seg) return null;
-  if (RESERVED.has(seg)) return null;
-  if (!/^[a-z0-9-]{3,}$/.test(seg)) return null;
-  return seg;
+export function getTenantSlugOrThrow() {
+  const s = getTenantSlugFromPath();
+  if (!s) throw new Error('NO_SLUG_IN_PATH');
+  return s;
 }
 
-async function getTenantIdBySlug(slug) {
-  const { data, error } = await supabase
-    .from('tenants')
-    .select('id, slug')
-    .eq('slug', slug)
-    .maybeSingle();
-  if (error) throw error;
-  return data?.id || null;
+/** Versión estricta: lanza si no hay sesión o tenant. */
+export async function getTenantIdOrThrow() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('NO_SESSION');
+
+  const r = await fetch(`${API}/api/tenants/me`, {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (r.status === 402) {
+    const e = new Error('SUBSCRIPTION_INACTIVE');
+    e.code = 402;
+    throw e;
+  }
+  if (!r.ok) {
+    const txt = await r.text().catch(() => '');
+    throw new Error(`TENANT_ME_FAILED ${r.status} ${txt}`);
+  }
+
+  const { tenant } = await r.json();
+  if (!tenant?.id) throw new Error('TENANT_NOT_FOUND');
+  return tenant.id;
 }
 
-async function getTenantIdByEmail() {
-  const { data: { user } } = await supabase.auth.getUser();
-  const email = String(user?.email || '').toLowerCase().trim();
-  if (!email) return null;
-  const { data, error } = await supabase
-    .from('tenants')
-    .select('id')
-    .ilike('email', email)
-    .maybeSingle();
-  if (error) throw error;
-  return data?.id || null;
-}
-
-/**
- * Devuelve el tenant UUID resolviendo por prioridad:
- *   1) slug de la URL (si existe)
- *   2) email del usuario autenticado (fallback)
- * Cachea el resultado por sesión.
- */
-export async function getTenantIdOrThrow(slugFromRoute) {
-  const slug = slugFromRoute || currentTenantSlug();
-  const cacheKey = slug ? `TENANT_ID:${slug}` : 'TENANT_ID:byEmail';
-  const cached = sessionStorage.getItem(cacheKey);
-  if (cached) return cached;
-
-  let id = null;
-  if (slug) id = await getTenantIdBySlug(slug);
-  if (!id) id = await getTenantIdByEmail();
-
-  if (!id) throw new Error('Tenant no resuelto');
-  sessionStorage.setItem(cacheKey, id);
-  return id;
+/** Back-compat: misma API antigua; devuelve null si algo falla. */
+export async function getTenantId() {
+  try {
+    return await getTenantIdOrThrow();
+  } catch {
+    return null;
+  }
 }
