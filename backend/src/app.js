@@ -50,7 +50,7 @@ const ALLOWED_ORIGINS = Array.from(new Set([
 ]));
 
 function originChecker(origin, cb) {
-  if (!origin) return cb(null, true);
+  if (!origin) return cb(null, true);          // curl/cron/healthchecks
   if (ALLOWED_ORIGINS.includes('*')) return cb(null, true);
   try {
     const u = new URL(origin);
@@ -101,6 +101,7 @@ app.use('/admin', adminRoutes);
 
 /* =========================================================
    Billing (Stripe) — SIEMPRE accesible (antes del firewall)
+   (dentro de billing.routes, /portal ya usa requireAuth)
    ========================================================= */
 app.use('/billing', billingRoutes);
 app.use('/api/billing', billingRoutes);
@@ -113,25 +114,26 @@ function gate(path, router) {
   app.use(path, requireAuth, subscriptionFirewall(), router);
 }
 function authOnly(path, router) {
-  // Solo login, SIN cortafuegos (para dashboard & imagenes)
+  // Solo login, SIN cortafuegos (para vistas que no deben romperse)
   app.use(path, requireAuth, router);
 }
 
 /* ============== Rutas protegidas (solo login) ============== */
-/* Dashboard e Imágenes NO pasan por el firewall para evitar 402 en ocupación */
+/* Dashboard, Imágenes y Estantes sin firewall para evitar 402 en ocupación */
 authOnly('/api/dashboard', dashboardRoutes);
 authOnly('/api/imagenes', imagenesRoutes);
+authOnly('/api/estantes', estantesRoutes);
+
 authOnly('/:tenantSlug/api/dashboard', dashboardRoutes);
 authOnly('/:tenantSlug/api/imagenes', imagenesRoutes);
+authOnly('/:tenantSlug/api/estantes', estantesRoutes);
 
 /* ============== Rutas protegidas (login + firewall) ============== */
 gate('/api/tenants', tenantsRoutes);
 gate('/api/paquetes', paquetesRoutes);
-gate('/api/estantes', estantesRoutes);
 gate('/api/area-personal', areaPersonalRoutes);
 
 gate('/:tenantSlug/api/paquetes', paquetesRoutes);
-gate('/:tenantSlug/api/estantes', estantesRoutes);
 gate('/:tenantSlug/api/area-personal', areaPersonalRoutes);
 
 /* ============== 404 ============== */
