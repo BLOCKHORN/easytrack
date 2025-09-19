@@ -50,9 +50,8 @@ const ALLOWED_ORIGINS = Array.from(new Set([
 ]));
 
 function originChecker(origin, cb) {
-  if (!origin) return cb(null, true);          // curl/cron/healthchecks
+  if (!origin) return cb(null, true);
   if (ALLOWED_ORIGINS.includes('*')) return cb(null, true);
-
   try {
     const u = new URL(origin);
     const host = u.hostname;
@@ -60,10 +59,9 @@ function originChecker(origin, cb) {
       ALLOWED_ORIGINS.includes(origin) ||
       host === 'localhost' || host === '127.0.0.1' ||
       host.endsWith('.devtunnels.ms') ||
-      host.endsWith('.vercel.app');            // previews/prod en Vercel
+      host.endsWith('.vercel.app');
     if (ok) return cb(null, true);
-  } catch { /* noop */ }
-
+  } catch {}
   return cb(new Error('Not allowed by CORS'));
 }
 
@@ -108,27 +106,33 @@ app.use('/billing', billingRoutes);
 app.use('/api/billing', billingRoutes);
 
 /* =========================================================
-   Helper para montar rutas protegidas:
-   requireAuth  → subscriptionFirewall → router
+   Helpers de montaje
    ========================================================= */
 function gate(path, router) {
+  // Login + cortafuegos (suscripción activa)
   app.use(path, requireAuth, subscriptionFirewall(), router);
 }
+function authOnly(path, router) {
+  // Solo login, SIN cortafuegos (para dashboard & imagenes)
+  app.use(path, requireAuth, router);
+}
 
-/* ============== Rutas protegidas (legacy sin slug) ============== */
+/* ============== Rutas protegidas (solo login) ============== */
+/* Dashboard e Imágenes NO pasan por el firewall para evitar 402 en ocupación */
+authOnly('/api/dashboard', dashboardRoutes);
+authOnly('/api/imagenes', imagenesRoutes);
+authOnly('/:tenantSlug/api/dashboard', dashboardRoutes);
+authOnly('/:tenantSlug/api/imagenes', imagenesRoutes);
+
+/* ============== Rutas protegidas (login + firewall) ============== */
 gate('/api/tenants', tenantsRoutes);
 gate('/api/paquetes', paquetesRoutes);
 gate('/api/estantes', estantesRoutes);
-gate('/api/dashboard', dashboardRoutes);
 gate('/api/area-personal', areaPersonalRoutes);
-gate('/api/imagenes', imagenesRoutes);
 
-/* ============== Rutas protegidas multi-tenant (con slug) ============== */
 gate('/:tenantSlug/api/paquetes', paquetesRoutes);
 gate('/:tenantSlug/api/estantes', estantesRoutes);
-gate('/:tenantSlug/api/dashboard', dashboardRoutes);
 gate('/:tenantSlug/api/area-personal', areaPersonalRoutes);
-gate('/:tenantSlug/api/imagenes', imagenesRoutes);
 
 /* ============== 404 ============== */
 app.use((req, res) => {
