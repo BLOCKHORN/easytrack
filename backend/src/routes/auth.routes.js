@@ -1,24 +1,30 @@
 // backend/src/routes/auth.routes.js
+'use strict';
+
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { z } = require('zod');
 const router = express.Router();
 const { supabaseAuth } = require('../utils/supabaseClient');
 
-// ---- Rate limit para frenar fuerza bruta ----
+/* ---------- Config de URLs (prod/dev) ---------- */
+const APP_BASE = (process.env.APP_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:5173')
+  .replace(/\/$/, '');
+const EMAIL_CONFIRM_URL = `${APP_BASE}/email-confirmado`;
+
+/* ---------- Rate limit para frenar fuerza bruta ---------- */
 const loginLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 min
   max: 20,                  // 20 intentos/10min por IP
   message: { ok: false, code: 'TOO_MANY_REQUESTS', error: 'Demasiados intentos. Prueba en unos minutos.' }
 });
 
-// ---- Validación de payload ----
+/* ---------- Validaciones ---------- */
 const credsSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres')
 });
 
-// Registro pro: con nombre_empresa y términos
 const registerSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
@@ -27,7 +33,9 @@ const registerSchema = z.object({
   marketingOptIn: z.boolean().optional()
 });
 
-// 🔐 Login tradicional
+/* =========================================================
+   🔐 Login tradicional (email/contraseña)
+   ========================================================= */
 router.post('/login', loginLimiter, async (req, res) => {
   try {
     const parsed = credsSchema.safeParse(req.body);
@@ -58,7 +66,9 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 });
 
-// 📝 Registro tradicional (empresa + términos + metadata)
+/* =========================================================
+   📝 Registro (con nombre_empresa y términos)
+   ========================================================= */
 router.post('/register', async (req, res) => {
   try {
     const parsed = registerSchema.safeParse(req.body);
@@ -73,11 +83,8 @@ router.post('/register', async (req, res) => {
       email,
       password,
       options: {
-        emailRedirectTo: 'http://localhost:5173/email-confirmado',
-        data: {
-          nombre_empresa,
-          marketingOptIn: !!marketingOptIn
-        }
+        emailRedirectTo: EMAIL_CONFIRM_URL,
+        data: { nombre_empresa, marketingOptIn: !!marketingOptIn }
       }
     });
 
@@ -102,7 +109,9 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// 🔁 Reenviar email de confirmación
+/* =========================================================
+   🔁 Reenviar email de confirmación
+   ========================================================= */
 router.post('/resend-confirmation', async (req, res) => {
   try {
     const emailSchema = z.object({ email: z.string().email() });
@@ -116,7 +125,7 @@ router.post('/resend-confirmation', async (req, res) => {
     const { error } = await supabaseAuth.auth.resend({
       type: 'signup',
       email,
-      options: { emailRedirectTo: 'http://localhost:5173/email-confirmado' }
+      options: { emailRedirectTo: EMAIL_CONFIRM_URL }
     });
 
     if (error) {
@@ -129,12 +138,14 @@ router.post('/resend-confirmation', async (req, res) => {
   }
 });
 
-// 🔑 Login con Google (redirección directa)
+/* =========================================================
+   🔑 Login con Google (redirección)
+   ========================================================= */
 router.get('/login-google', (req, res) => {
   const redirectUrl =
     `${process.env.SUPABASE_URL}/auth/v1/authorize` +
     `?provider=google` +
-    `&redirect_to=${encodeURIComponent('http://localhost:5173/email-confirmado')}`;
+    `&redirect_to=${encodeURIComponent(EMAIL_CONFIRM_URL)}`;
   res.redirect(redirectUrl);
 });
 
