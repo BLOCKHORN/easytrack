@@ -509,7 +509,7 @@ export default function VerEstantes() {
                   <button
                     type="button"
                     className={`lane-head ${clsOcupacion(n)}`}
-                    style={{ ["--lane"]: laneColor, ["--lane-rgba"]: laneTint, ["--sel-ring"]: laneRing }}
+                    style={{ '--lane': laneColor, '--lane-rgba': laneTint, '--sel-ring': laneRing }}
                     onClick={() => toggle(lane.id)}
                     aria-expanded={open}
                     aria-controls={`vis-lane-${lane.id}`}
@@ -551,7 +551,7 @@ export default function VerEstantes() {
       ) : estructuraFiltradaRacks.length === 0 ? (
         <div className="estado-vacio">No hay estantes que coincidan con el filtro.</div>
       ) : (
-        <div className="grid-estantes" style={{ ["--rack-cols"]: `repeat(${rackGrid.cols || 1}, minmax(340px, 1fr))` }} role="grid">
+        <div className="grid-estantes" style={{ '--rack-cols': `repeat(${rackGrid.cols || 1}, minmax(340px, 1fr))` }} role="grid">
           {(() => {
             const estantesOrdenados = (rackOrder.length ? rackOrder : estructuraRacks.map(r => r.estante).sort((a,b)=>a-b));
             const totalCells = (rackGrid.rows || 1) * (rackGrid.cols || 1);
