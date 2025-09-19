@@ -185,7 +185,7 @@ export default function SubscriptionGate() {
           </div>
 
           <div className="cta_row reveal">
-            <a className="btn" href="/planes">Ver planes y reactivar</a>
+            <a className="btn" href="/precios">Ver planes y reactivar</a>
             <button
               className="btn btn--ghost"
               onClick={openPortal}

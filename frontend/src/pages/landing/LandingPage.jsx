@@ -48,7 +48,7 @@ export default function LandingPage() {
   }, [location.search])
 
   // CTA a planes (tu App redirige /planes -> /precios)
-  const goPlans = () => navigate('/planes?cta=landing', { replace: false })
+  const goPlans = () => navigate('/precios?cta=landing', { replace: false })
 
   // -------- Métricas Trustbar (tal cual tenías) --------
   const API_BASE = useMemo(() => {

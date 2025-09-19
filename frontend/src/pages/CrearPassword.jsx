@@ -91,7 +91,7 @@ export default function CrearPassword() {
             No hay sesión activa. Abre el enlace de invitación desde este mismo
             navegador o solicita uno nuevo.
           </p>
-          <a className="btn ghost" href="/planes">Volver a planes</a>
+          <a className="btn ghost" href="/precios">Volver a planes</a>
         </div>
       </section>
     );
@@ -166,7 +166,7 @@ export default function CrearPassword() {
             <button className="btn primary" disabled={!allValid || saving}>
               {saving ? 'Guardando…' : 'Guardar y entrar'}
             </button>
-            <a className="btn ghost" href="/planes">Cancelar</a>
+            <a className="btn ghost" href="/precios">Cancelar</a>
           </div>
         </form>
 

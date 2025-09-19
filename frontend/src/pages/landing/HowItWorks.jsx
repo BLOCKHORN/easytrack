@@ -7,7 +7,7 @@ export default function HowItWorks({ onOpenDemo }) {
   const navigate = useNavigate()
 
   const startNow = () => {
-    navigate('/planes?cta=hiw', { replace: false }) // /planes -> redirige a /precios
+    navigate('/precios?cta=hiw', { replace: false }) // /planes -> redirige a /precios
   }
 
   const openDemo = () => {
