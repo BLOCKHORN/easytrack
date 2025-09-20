@@ -1,4 +1,3 @@
-// src/components/Footer.jsx
 import { Link } from 'react-router-dom'
 import { useMemo } from 'react'
 import { FaTwitter, FaLinkedin, FaGithub, FaArrowUp, FaShieldAlt } from 'react-icons/fa'
@@ -23,7 +22,7 @@ export default function Footer() {
     legalBottom: [
       { to: '/legal/privacidad', label: 'Privacidad' },
       { to: '/legal/terminos', label: 'Términos' },
-      { to: '/legal/cookies', label: 'Cookies' },        // ← añadido
+      { to: '/legal/cookies', label: 'Cookies' },
     ]
   }), [])
 
@@ -36,8 +35,7 @@ export default function Footer() {
           {/* Branding */}
           <div className="footer__brand">
             <Link to="/" className="footer__brand-link" aria-label="Inicio EasyTrack">
-              {/* Cambia la ruta del logo si tu asset se llama distinto */}
-              <img src="/easypack.png" alt="EasyTrack logo" className="footer__logo" />
+              <img src="/easypack.png" alt="EasyTrack logo" className="footer__logo" loading="lazy" />
             </Link>
 
             <p className="footer__tagline">
@@ -61,7 +59,7 @@ export default function Footer() {
             </div>
 
             <div className="footer__madeby" aria-label="Hecho por Blockhorn">
-              <img src="/blockhorn.png" alt="Blockhorn logo" />
+              <img src="/blockhorn.png" alt="Blockhorn logo" loading="lazy" />
               <div>
                 <span>Una solución de <strong>Blockhorn</strong></span>
                 <small>Infraestructura para puntos de paquetería.</small>

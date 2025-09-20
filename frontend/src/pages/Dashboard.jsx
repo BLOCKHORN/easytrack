@@ -1,4 +1,3 @@
-// src/pages/Dashboard.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -11,7 +10,8 @@ import {
   FaInbox,
   FaUserCircle,
   FaExclamationTriangle,
-  FaClock
+  FaClock,
+  FaTimes
 } from "react-icons/fa";
 import AnadirPaquete from "./AnadirPaquete";
 import VolumenPaquetes from "../components/VolumenPaquetes";
@@ -76,6 +76,15 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
     if (s.includes("mixto")) return "mixto";
     return s;
   }, [negocio]);
+
+  // Bloquear scroll del fondo cuando el modal está abierto
+  useEffect(() => {
+    const el = document.documentElement;
+    const prev = el.style.overflow;
+    if (mostrarModal) el.style.overflow = "hidden";
+    else el.style.overflow = prev || "";
+    return () => { el.style.overflow = prev || ""; };
+  }, [mostrarModal]);
 
   // Cargar negocio
   useEffect(() => {
@@ -247,7 +256,22 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
           }}
         >
           <div className="modal-contenido" role="dialog" aria-modal="true" aria-label="Añadir paquete">
-            <AnadirPaquete paquetes={paquetes} actualizarPaquetes={actualizarPaquetes} />
+            <header className="modal-head">
+              <h3>Añadir paquete</h3>
+              <button
+                type="button"
+                className="modal-close"
+                aria-label="Cerrar"
+                onClick={() => setMostrarModal(false)}
+              >
+                <FaTimes />
+              </button>
+            </header>
+
+            {/* 👉 cuerpo con scroll interno para que nada se corte */}
+            <div className="modal-body">
+              <AnadirPaquete modoRapido paquetes={paquetes} actualizarPaquetes={actualizarPaquetes} />
+            </div>
           </div>
         </div>
       )}

@@ -1,8 +1,11 @@
-// src/pages/AnadirPaquete.jsx
 import { useState, useEffect, useMemo, useCallback, useRef, startTransition } from 'react';
 import { supabase } from '../utils/supabaseClient';
-import { getTenantId } from '../utils/tenant';
-import { crearPaqueteBackend } from '../services/paquetesService';
+import { getTenantIdOrThrow } from '../utils/tenant';
+import {
+  crearPaqueteBackend,
+  obtenerPaquetesBackend,
+  obtenerEstructuraEstantesYPaquetes,
+} from '../services/paquetesService';
 import { FaBoxOpen, FaLightbulb, FaCheckCircle, FaCube, FaInfoCircle, FaSearch, FaUserTie } from 'react-icons/fa';
 import '../styles/AnadirPaquete.scss';
 
@@ -29,23 +32,71 @@ const pullPos = (o) => ({
   row: num(o?.position?.row ?? o?.row ?? o?.r ?? o?.grid_row ?? o?.y, 1),
   col: num(o?.position?.col ?? o?.col ?? o?.c ?? o?.grid_col ?? o?.x, 1),
 });
+const stripPrefix = (s='') => String(s).replace(/^\s*(carril|estante)\s+/i,'').trim();
+const isCodeLike = (s='') => /^[A-Z]{1,3}\s*\d{1,3}$/i.test(String(s).trim());
 
-/* Baldas fallback directo (tabla) */
-const fetchBaldasDirect = async (tenantId) => {
-  const { data: rows } = await supabase
-    .from('baldas')
-    .select('id, codigo, estante, balda')
-    .eq('id_negocio', tenantId)
-    .order('estante', { ascending: true })
-    .order('balda', { ascending: true });
-
-  return (rows || []).map(r => ({
-    id: r.id,
-    codigo: String(r.codigo || '').toUpperCase(),
-    estante: num(r.estante, 1),
-    balda: num(r.balda, 1),
-  }));
+// Parser de códigos “A1”, “B2”, “12-3”, “A”, “3”, etc.
+const canon = (s) => String(s||'').trim().toUpperCase().replace(/\s+/g,'');
+const alphaToNum = (str) => {
+  const s = String(str||'').toUpperCase();
+  if (!/^[A-Z]+$/.test(s)) return NaN;
+  let n = 0; for (const ch of s) n = n*26 + (ch.charCodeAt(0)-64);
+  return n;
 };
+function parseCodigoGenerico(raw) {
+  const code = canon(raw);
+  if (/^\d+$/.test(code)) return { estante: parseInt(code, 10), balda: 1 };
+  if (/^[A-Z]+$/.test(code)) return { estante: alphaToNum(code), balda: 1 };
+  let m = code.match(/^([A-Z]+)(\d+)$/);           // A1, B12
+  if (m) return { estante: alphaToNum(m[1]), balda: parseInt(m[2], 10) };
+  m = String(raw).trim().match(/^(\d+)\s*-\s*(\d+)$/); // 2-3
+  if (m) return { estante: parseInt(m[1], 10), balda: parseInt(m[2], 10) };
+  return null;
+}
+
+/* ================= EXTRACCIÓN (estructura backend) ================= */
+function extractBaldasFromEstructura(payload) {
+  // Esperado: { estructura:[{estante, nombre, filas:[{id, idx/codigo/name}]}] }
+  const out = [];
+  const root = payload?.estructura;
+  if (!Array.isArray(root)) return out;
+  for (const est of root) {
+    const estNum = num(est?.estante, NaN);
+    const rname = est?.nombre || String(estNum);
+    const filas = Array.isArray(est?.filas) ? est.filas : [];
+    for (const f of filas) {
+      const idx = num(f?.idx ?? f?.index ?? f?.i ?? f?.balda, NaN);
+      const id  = f?.id ?? `${estNum}:${idx}`;
+      const codigo = (f?.codigo || f?.name || `${rname}${idx}`).toUpperCase();
+      if (Number.isFinite(estNum) && Number.isFinite(idx)) {
+        out.push({ id, codigo, estante: estNum, balda: idx });
+      }
+    }
+  }
+  // si el backend devolviera “plano”
+  if (out.length === 0 && Array.isArray(payload)) {
+    return payload.map(r => ({
+      id: r.id, codigo: String(r.codigo||'').toUpperCase(),
+      estante: num(r.estante,1), balda: num(r.balda,1)
+    }));
+  }
+  return out.sort((a,b)=> (a.estante-b.estante) || (a.balda-b.balda));
+}
+
+/* ================= FETCH ROBUSTO DE PAQUETES (siempre backend) ================= */
+async function cargarPaquetesDesdeBackend() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token || null;
+    if (!token) throw new Error('NO_SESSION');
+    const apiRows = await obtenerPaquetesBackend(token);
+    console.log('[AñadirPaquete] Fuente: Backend ->', apiRows?.length || 0, 'fila(s).');
+    return apiRows || [];
+  } catch (err) {
+    console.error('[AñadirPaquete] obtenerPaquetesBackend falló:', err?.message || err);
+    return [];
+  }
+}
 
 export default function AnadirPaquete({ modoRapido = false }) {
   const [tenant, setTenant] = useState(null);
@@ -73,6 +124,11 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const [loading, setLoading]   = useState(false);
   const [exito, setExito]       = useState(false);
   const [cargandoInicial, setCargandoInicial] = useState(true);
+
+  // ---- READY FLAGS (para evitar flash feo)
+  const [readyEmpresas, setReadyEmpresas] = useState(false);
+  const [readyLayout,   setReadyLayout]   = useState(false);
+  const [readyBaldas,   setReadyBaldas]   = useState(false); // solo aplica en racks
 
   // Sugerencias cliente
   const [sugs, setSugs]           = useState([]);
@@ -103,15 +159,26 @@ export default function AnadirPaquete({ modoRapido = false }) {
 
   const conteo = useMemo(() => {
     const c = {};
+    const inc = (k) => { if (k == null) return; const s = String(k); c[s] = (c[s] || 0) + 1; };
+
     for (const p of paquetes) {
       const noEntregado = p.entregado === false || p.entregado == null;
       if (!noEntregado) continue;
-      const key = p.compartimento || (layoutMode === 'lanes'
-        ? (p.lane_id != null ? String(p.lane_id) : '')
-        : (p.balda_id != null ? String(p.balda_id) : '')
-      );
-      if (!key) continue;
-      c[key] = (c[key] || 0) + 1;
+
+      if (layoutMode === 'lanes') {
+        const raw = (typeof p.compartimento === 'string' && p.compartimento.trim()) ? p.compartimento.trim() : null;
+        const laneName = raw ? stripPrefix(raw) : null;
+        const laneId   = Number.isFinite(Number(p.lane_id)) ? String(Number(p.lane_id)) : null;
+        if (laneName) inc(laneName);
+        if (laneId)   inc(laneId);
+      } else {
+        const code = (typeof p.compartimento === 'string' && p.compartimento.trim())
+          ? p.compartimento.trim().toUpperCase()
+          : (p?.baldas?.codigo ? String(p.baldas.codigo).toUpperCase() : null);
+        const id   = Number.isFinite(Number(p?.balda_id)) ? String(Number(p.balda_id)) : null;
+        if (code) inc(code);
+        if (id)   inc(id);
+      }
     }
     return c;
   }, [paquetes, layoutMode]);
@@ -133,168 +200,240 @@ export default function AnadirPaquete({ modoRapido = false }) {
   useEffect(() => {
     let cancelado = false;
     (async () => {
+      const mark = `[AñadirPaquete] carga ${Date.now()}`;
+      console.time(mark);
       setCargandoInicial(true);
+      setReadyEmpresas(false);
+      setReadyLayout(false);
+      setReadyBaldas(false);
 
-      // 1) Tenant a partir de memberships
-      const tid = await getTenantId().catch(() => null);
-      if (!tid || cancelado) { setCargandoInicial(false); return; }
-      setTenant({ id: tid });
-
-      // 2) Empresas del tenant
-      const { data: empresasRes } = await supabase
-        .from('empresas_transporte_tenant')
-        .select('nombre')
-        .eq('tenant_id', tid);
-
-      const empresas = (empresasRes || [])
-        .map(e => e.nombre)
-        .filter(Boolean)
-        .sort((a,b)=>a.localeCompare(b));
-
-      setCompanias(empresas);
-      const ultima = localStorage.getItem(LAST_COMPANY_KEY);
-      setCompania(empresas.includes(ultima) ? ultima : (empresas[0] || ''));
-
-      // 3) Layout: FIRST try layouts_meta (source of truth)
-      let meta = null;
       try {
-        const { data } = await supabase
-          .from('layouts_meta')
-          .select('mode, rows, cols, payload')
-          .eq('org_id', tid)
-          .maybeSingle();
-        meta = data || null;
-      } catch { meta = null; }
+        // 1) Tenant (estricto)
+        const tid = await getTenantIdOrThrow();
+        if (cancelado) return;
+        setTenant({ id: tid });
 
-      // RPC fallback
-      if (!meta) {
+        // 2) Empresas
+        let empresas = [];
         try {
-          const { data } = await supabase.rpc('get_warehouse_layout', { p_org: tid });
+          const { data: empresasRes } = await supabase
+            .from('empresas_transporte_tenant')
+            .select('nombre')
+            .eq('tenant_id', tid);
+          empresas = (empresasRes || [])
+            .map(e => e.nombre)
+            .filter(Boolean)
+            .sort((a,b)=>a.localeCompare(b));
+        } catch {}
+        setCompanias(empresas);
+        const ultima = localStorage.getItem(LAST_COMPANY_KEY);
+        setCompania(empresas.includes(ultima) ? ultima : (empresas[0] || ''));
+        setReadyEmpresas(true);
+
+        // 3) Paquetes (siempre backend)
+        const paquetesRaw = await cargarPaquetesDesdeBackend();
+        if (cancelado) return;
+
+        // 4) Layouts_meta (modo / grid hints / lanes)
+        let meta = null;
+        try {
+          const { data } = await supabase
+            .from('layouts_meta')
+            .select('mode, rows, cols, payload')
+            .eq('org_id', tid)
+            .maybeSingle();
           meta = data || null;
         } catch { meta = null; }
-      }
 
-      // Normalizar payload
-      const root = meta?.payload ? meta.payload : meta || {};
-      const mode = meta?.mode || root?.layout_mode || 'racks';
-      const gridRowsHint = num(meta?.rows ?? root?.grid?.rows, 0);
-      const gridColsHint = num(meta?.cols ?? root?.grid?.cols, 0);
+        const root = meta?.payload ? meta.payload : (meta || {});
+        const mode = meta?.mode || root?.layout_mode || 'racks';
+        const gridRowsHint = num(meta?.rows ?? root?.grid?.rows, 0);
+        const gridColsHint = num(meta?.cols ?? root?.grid?.cols, 0);
 
-      const lanesArr = Array.isArray(root?.lanes) ? root.lanes : [];
-      const racksArr = Array.isArray(root?.racks) ? root.racks : [];
+        /* ================= MODO LANES ================= */
+        if (mode === 'lanes') {
+          setLayoutMode('lanes');
 
-      /* ======= L A N E S ======= */
-      if (mode === 'lanes' && lanesArr.length) {
-        setLayoutMode('lanes');
+          // 4.1 lanes desde payload (preferente)
+          let lanesArr = Array.isArray(root?.lanes) ? root.lanes : [];
 
-        const ls = lanesArr
-          .map(l => ({
-            id: num(l.id ?? l.lane_id, NaN),
-            name: l.name || String(l.id ?? l.lane_id),
-            color: l.color || '#f59e0b',
-            position: pullPos(l),
-          }))
-          .filter(l => Number.isFinite(l.id))
-          .sort((a,b)=> (a.position.row - b.position.row) || (a.position.col - b.position.col));
+          // 4.2 si no vienen, inferir de paquetes
+          if (!lanesArr.length && paquetesRaw.length) {
+            const set = new Map(); // name -> {id,name,color,position}
+            let idx = 1;
+            for (const p of paquetesRaw) {
+              const laneId = Number.isFinite(Number(p.lane_id)) ? Number(p.lane_id) : null;
+              const comp = (typeof p.compartimento === 'string' ? stripPrefix(p.compartimento) : '').trim();
+              const name = comp && !isCodeLike(comp) ? comp : (laneId != null ? String(laneId) : null);
+              if (!name) continue;
+              if (!set.has(name)) {
+                set.set(name, { id: laneId ?? idx++, name, color: '#f59e0b', position: { row: 1, col: set.size + 1 } });
+              }
+            }
+            lanesArr = Array.from(set.values());
+          }
 
-        setLanes(ls);
+          const ls = (lanesArr || [])
+            .map(l => ({
+              id: num(l.id ?? l.lane_id, NaN),
+              name: l.name || String(l.id ?? l.lane_id),
+              color: l.color || '#f59e0b',
+              position: pullPos(l),
+            }))
+            .filter(l => Number.isFinite(l.id))
+            .sort((a,b)=> (a.position.row - b.position.row) || (a.position.col - b.position.col));
 
-        const rows = gridRowsHint > 0 ? gridRowsHint : Math.max(1, ...(ls.map(x => x.position.row)));
-        const cols = gridColsHint > 0 ? gridColsHint : Math.max(1, ...(ls.map(x => x.position.col)));
-        setGrid({ rows, cols });
+          setLanes(ls);
 
-        // Paquetes (ocupación)
-        const { data: paquetesRes } = await supabase
-          .from('paquetes')
-          .select('id,nombre_cliente,empresa_transporte,entregado,fecha_llegada,balda_id,baldas(estante,codigo),lane_id,compartimento')
-          .eq('tenant_id', tid);
+          const rows = gridRowsHint > 0 ? gridRowsHint : Math.max(1, ...(ls.map(x => x.position.row || 1)));
+          const cols = gridColsHint > 0 ? gridColsHint : Math.max(1, ...(ls.map(x => x.position.col || 1)));
+          setGrid({ rows, cols });
 
-        const byId = new Map(ls.map(x => [x.id, x]));
-        setPaquetes((paquetesRes || []).map(p => {
-          const laneName =
-            (p?.lane_id != null && byId.get(num(p.lane_id))?.name)
-              ? byId.get(num(p.lane_id)).name
-              : (p?.baldas?.estante != null
-                  ? (byId.get(num(p.baldas.estante))?.name ?? String(p.baldas.estante))
-                  : (p.compartimento || null)
-                );
-          return { ...p, created_at: p.fecha_llegada || null, compartimento: p.compartimento || laneName };
-        }));
-      }
-      /* ======= R A C K S ======= */
-      else {
-        setLayoutMode('racks');
+          // 4.3 mapear paquetes a lane_id / nombre lane
+          const byId = new Map(ls.map(x => [x.id, x]));
+          const mapped = paquetesRaw.map(p => {
+            const laneId = Number.isFinite(Number(p.lane_id)) ? Number(p.lane_id) : null;
+            const laneNameFromId = laneId != null ? (byId.get(laneId)?.name || null) : null;
+            const rawComp = (typeof p.compartimento === 'string' && p.compartimento.trim()) ? p.compartimento.trim() : null;
+            const compName = rawComp ? stripPrefix(rawComp) : null;
+            return {
+              ...p,
+              created_at: p.fecha_llegada || null,
+              lane_id: laneId,
+              compartimento: compName || laneNameFromId || null,
+            };
+          });
 
-        let baldasVirtuales = [];
-        let orderFromPos = [];
+          if (!cancelado) setPaquetes(mapped);
+          setReadyLayout(true);
+        }
+        /* ================= MODO RACKS ================= */
+        else {
+          setLayoutMode('racks');
 
-        if (racksArr.length) {
-          for (const r of racksArr) {
-            const rid   = num(r?.id, NaN);
-            if (!Number.isFinite(rid)) continue;
-            const rname = r?.name || String(rid);
-            const shelves = Array.isArray(r?.shelves) ? r.shelves : [];
+          // 5) Intento 1: estructura desde tu BACKEND (no le afecta el RLS del cliente)
+          let baldasVirtuales = [];
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            if (token) {
+              const estructura = await obtenerEstructuraEstantesYPaquetes(token).catch(()=>null);
+              if (estructura) {
+                baldasVirtuales = extractBaldasFromEstructura(estructura);
+              }
+            }
+          } catch {}
 
+          // 6) Intento 2: tabla baldas (RLS). Si falla, se queda como esté.
+          if (!baldasVirtuales.length) {
+            try {
+              const { data: rows } = await supabase
+                .from('baldas')
+                .select('id, codigo, estante, balda')
+                .eq('id_negocio', tid)
+                .order('estante', { ascending: true })
+                .order('balda', { ascending: true });
+              baldasVirtuales = (rows || []).map(r => ({
+                id: r.id,
+                codigo: String(r.codigo || '').toUpperCase(),
+                estante: num(r.estante, 1),
+                balda: num(r.balda, 1),
+              }));
+              if (!baldasVirtuales.length) {
+                console.warn('[AñadirPaquete] RLS baldas devolvió 0 filas. Usaremos inferencia.');
+              }
+            } catch (e) {
+              console.warn('[AñadirPaquete] Error leyendo baldas (RLS):', e?.message || e);
+            }
+          }
+
+          // 7) Intento 3: inferir desde paquetes
+          if (!baldasVirtuales.length && paquetesRaw.length) {
+            const map = new Map(); // codigo -> {id,codigo,estante,balda}
+            let seq = 1;
+            for (const p of paquetesRaw) {
+              const code = (typeof p.compartimento === 'string' && p.compartimento.trim())
+                ? p.compartimento.trim().toUpperCase()
+                : (p?.baldas?.codigo ? String(p.baldas.codigo).toUpperCase() : null);
+              if (!code) continue;
+              if (!map.has(code)) {
+                const parsed = parseCodigoGenerico(code);
+                if (parsed) {
+                  map.set(code, { id: `virt:${seq++}`, codigo: code, estante: parsed.estante, balda: parsed.balda });
+                }
+              }
+            }
+            baldasVirtuales = Array.from(map.values()).sort((a,b)=> (a.estante-b.estante) || (a.balda-b.balda));
+          }
+
+          setBaldas(baldasVirtuales);
+          setReadyBaldas(true);
+
+          // 8) Orden de estantes & grid
+          const rootRacks = Array.isArray(root?.racks) ? root.racks : [];
+          let orderFromPos = [];
+          for (const r of rootRacks) {
+            const rid = num(r?.id, NaN);
             const pos = pullPos(r);
-            if (Number.isFinite(pos.row) && Number.isFinite(pos.col)) {
+            if (Number.isFinite(rid) && Number.isFinite(pos.row) && Number.isFinite(pos.col)) {
               orderFromPos.push({ est: rid, r: pos.row, c: pos.col });
             }
-
-            shelves
-              .map(s => ({ idx: shelfIdx(s), name: s?.name }))
-              .sort((a, b) => a.idx - b.idx)
-              .forEach(({ idx, name }) => {
-                const codigo = String(name || `${rname}${idx}`).toUpperCase();
-                baldasVirtuales.push({ id: `${rid}:${idx}`, codigo, estante: rid, balda: idx });
-              });
           }
-        } else {
-          // Sin payload de racks → tabla baldas
-          baldasVirtuales = await fetchBaldasDirect(tid);
-        }
 
-        setBaldas(baldasVirtuales);
-
-        if (orderFromPos.length) {
-          orderFromPos.sort((a, b) => (a.r - b.r) || (a.c - b.c));
-          setRackOrder(orderFromPos.map(x => x.est));
-
-          const maxR = Math.max(...orderFromPos.map(x => x.r));
-          const maxC = Math.max(...orderFromPos.map(x => x.c));
-          setGrid({
-            rows: gridRowsHint > 0 ? gridRowsHint : (Number.isFinite(maxR) ? maxR : 1),
-            cols: gridColsHint > 0 ? gridColsHint : (Number.isFinite(maxC) ? maxC : 1),
-          });
-        } else {
-          const uniqueEst = Array.from(new Set(baldasVirtuales.map(b => b.estante))).sort((a, b) => a - b);
-          setRackOrder(uniqueEst);
-
-          if (gridRowsHint > 0 && gridColsHint > 0) {
-            setGrid({ rows: gridRowsHint, cols: gridColsHint });
+          if (orderFromPos.length) {
+            orderFromPos.sort((a, b) => (a.r - b.r) || (a.c - b.c));
+            setRackOrder(orderFromPos.map(x => x.est));
+            const maxR = Math.max(...orderFromPos.map(x => x.r));
+            const maxC = Math.max(...orderFromPos.map(x => x.c));
+            setGrid({
+              rows: gridRowsHint > 0 ? gridRowsHint : (Number.isFinite(maxR) ? maxR : 1),
+              cols: gridColsHint > 0 ? gridColsHint : (Number.isFinite(maxC) ? maxC : 1),
+            });
           } else {
-            const n = uniqueEst.length || 1;
-            const cols = Math.min(Math.ceil(Math.sqrt(n)), 4);
-            const rows = Math.ceil(n / cols);
-            setGrid({ rows, cols });
+            const uniqueEst = Array.from(new Set(baldasVirtuales.map(b => b.estante))).sort((a, b) => a - b);
+            setRackOrder(uniqueEst);
+            if (gridRowsHint > 0 && gridColsHint > 0) {
+              setGrid({ rows: gridRowsHint, cols: gridColsHint });
+            } else {
+              const n = uniqueEst.length || 1;
+              const cols = Math.min(Math.ceil(Math.sqrt(n)), 4);
+              const rows = Math.ceil(n / cols);
+              setGrid({ rows, cols });
+            }
           }
+
+          // 9) Mapear paquetes (resolver balda_id por código si hace falta)
+          const byCodigo = new Map(baldasVirtuales.map(b => [b.codigo, b]));
+          const mapped = paquetesRaw.map(p => {
+            const code =
+              (typeof p.compartimento === 'string' && p.compartimento.trim())
+                ? p.compartimento.trim().toUpperCase()
+                : (p?.baldas?.codigo ? String(p.baldas.codigo).toUpperCase() : null);
+
+            const baldaIdFromCode = (() => {
+              if (!code) return null;
+              const found = byCodigo.get(code);
+              return found ? found.id : null;
+            })();
+
+            return {
+              ...p,
+              created_at: p.fecha_llegada || null,
+              balda_id: p.balda_id ?? baldaIdFromCode ?? null,
+              compartimento: code || null,
+            };
+          });
+
+          if (!cancelado) setPaquetes(mapped);
+          setReadyLayout(true);
         }
 
-        // Paquetes (para ocupación)
-        const { data: paquetesRes } = await supabase
-          .from('paquetes')
-          .select('id,nombre_cliente,empresa_transporte,entregado,fecha_llegada,balda_id,baldas(id,estante,balda,codigo),lane_id,compartimento')
-          .eq('tenant_id', tid);
-
-        setPaquetes((paquetesRes || []).map(p => ({
-          ...p,
-          created_at: p.fecha_llegada || null,
-          // aseguro un código visible para conteo si no hay 'compartimento'
-          compartimento: p.compartimento || p?.baldas?.codigo || null
-        })));
+        startTransition(() => inputClienteRef.current?.focus());
+      } catch (e) {
+        console.error('[AñadirPaquete] Error de carga:', e);
+      } finally {
+        if (!cancelado) { setCargandoInicial(false); console.timeEnd(mark); }
       }
-
-      startTransition(() => inputClienteRef.current?.focus());
-      if (!cancelado) setCargandoInicial(false);
     })();
 
     return () => { cancelado = true; };
@@ -319,7 +458,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
       cur.lastDate = new Date();
       map.set(key, cur);
     };
-    paquetes.forEach(p => push(p.nombre_cliente, p.empresa_transporte, p.compartimento));
+    paquetes.forEach(p => push(p.nombre_cliente, p.empresa_transporte ?? p.compania, p.compartimento || p.balda_id));
     setClientesStats(map);
   }, [paquetes]);
 
@@ -480,7 +619,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
         created_at: ahora,
         compartimento: slotSel.label,
         ...(layoutMode === 'lanes' && Number.isInteger(slotSel.id) ? { lane_id:  slotSel.id } : {})
-        // En racks NO forzamos balda_id virtual: el backend resuelve/crea por "compartimento".
       };
       setPaquetes(prev => [temp, ...prev]);
 
@@ -497,9 +635,10 @@ export default function AnadirPaquete({ modoRapido = false }) {
       setPaquetes(prev => prev.map(p => p.id === tempId ? { ...p, id: creado.id } : p));
 
       // heurísticas
+      const slot = slotSel.label;
       setUltimaCompaniaPorCliente(upperCliente, compania);
-      setUltimaBaldaPorCompania(compania, slotSel.label);
-      setUltimaBaldaPorCliente(upperCliente, slotSel.label);
+      setUltimaBaldaPorCompania(compania, slot);
+      setUltimaBaldaPorCliente(upperCliente, slot);
       localStorage.setItem(LAST_COMPANY_KEY, compania);
 
       setExito(true);
@@ -577,14 +716,14 @@ export default function AnadirPaquete({ modoRapido = false }) {
                 <ul id="sugs-list" className="sugs sugs--compact" role="listbox">
                   {sugs.map((c, i) => (
                     <li
-                      key={c.nombre}
+                      key={c.nombre || c}
                       role="option"
                       aria-selected={i===sugsActive}
                       className={i===sugsActive ? 'active' : ''}
-                      onMouseDown={(e)=>{ e.preventDefault(); setCliente(c.nombre); aplicarHeuristicasCliente(c.nombre); setSugsOpen(false); }}
+                      onMouseDown={(e)=>{ e.preventDefault(); const nombre = c.nombre || c; setCliente(nombre); aplicarHeuristicasCliente(nombre); setSugsOpen(false); }}
                     >
-                      <b>{c.nombre}</b>
-                      <small>{c.count} envíos</small>
+                      <b>{c.nombre || c}</b>
+                      {c.count != null && <small>{c.count} envíos</small>}
                     </li>
                   ))}
                 </ul>
@@ -624,17 +763,25 @@ export default function AnadirPaquete({ modoRapido = false }) {
                 </label>
               </div>
 
-              {!companias.length && !cargandoInicial && (
+              {/* Avisos: solo cuando SABEMOS que no hay datos */}
+              {readyEmpresas && !companias.length && (
                 <div className="alerta info">
                   <FaInfoCircle aria-hidden="true" />
                   <div><b>No hay empresas configuradas.</b><p>Añade empresas en <i>Configuración</i> para habilitar el registro.</p></div>
                 </div>
               )}
 
-              {!listaCompartimentos.length && !cargandoInicial && (
+              {layoutMode==='racks' && readyLayout && readyBaldas && !baldas.length && (
                 <div className="alerta warning">
                   <FaInfoCircle aria-hidden="true" />
-                  <div><b>No hay baldas configuradas.</b><p>Ve a <i>Configuración</i> para definir estantes y baldas.</p></div>
+                  <div><b>No hay baldas detectadas.</b><p>Se infieren desde paquetes si es posible. Revisa <i>Configuración</i> si persiste.</p></div>
+                </div>
+              )}
+
+              {layoutMode==='lanes' && readyLayout && !lanes.length && (
+                <div className="alerta warning">
+                  <FaInfoCircle aria-hidden="true" />
+                  <div><b>No hay carriles detectados.</b><p>Se infieren desde paquetes si es posible. Revisa <i>Configuración</i> si persiste.</p></div>
                 </div>
               )}
             </div>
@@ -653,7 +800,11 @@ export default function AnadirPaquete({ modoRapido = false }) {
           <h2>Rejilla del almacén</h2>
           <p className="hint">Selecciona un compartimento. Verás la ocupación en tiempo real.</p>
 
-          {layoutMode === 'lanes' ? (
+          {!readyLayout ? (
+            <div className="grid-skeleton" aria-hidden="true">
+              {Array.from({ length: 6 }).map((_, i) => (<div key={i} className="skeleton-card" />))}
+            </div>
+          ) : layoutMode === 'lanes' ? (
             <>
               <div
                 className="lanes-grid"
@@ -668,7 +819,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
                     if (!lane) return <div key={`cell-${r}-${c}`} className="lane-cell empty" />;
 
                     const activa = slotSel?.type==='lane' && slotSel?.id === lane.id;
-                    const cantidad = conteo[lane.name] || conteo[String(lane.id)] || 0;
+                    const cantidad = (conteo[lane.name] ?? conteo[String(lane.id)] ?? 0);
 
                     const visible = buscarBalda.trim()
                       ? (lane.name || '').toUpperCase().includes(buscarBalda.trim().toUpperCase())
@@ -735,7 +886,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
                         <div className="baldas-grid">
                           {list.map(b => {
                             const activa = slotSel?.type==='shelf' && slotSel?.id === b.id;
-                            const cantidad = conteo[b.codigo] || 0;
+                            const cantidad = (conteo[b.codigo] ?? conteo[String(b.id)] ?? 0);
 
                             const visible = buscarBalda.trim()
                               ? b.codigo.toUpperCase().includes(buscarBalda.trim().toUpperCase())

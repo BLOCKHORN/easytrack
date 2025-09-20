@@ -1,3 +1,4 @@
+// src/pages/account/AccountSettings.jsx
 import { useEffect, useMemo, useState } from "react";
 import {
   MdMail,
@@ -8,9 +9,15 @@ import {
   MdInfo,
   MdVisibility,
   MdVisibilityOff,
+  MdAutorenew,
+  MdCancel,
+  MdReceiptLong,
 } from "react-icons/md";
 import { supabase } from "../../utils/supabaseClient";
 import "./AccountSettings.scss";
+
+/* ========= API base ========= */
+const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
 
 /* ========= Reauth helpers ========= */
 async function reauthWithPassword(currentEmail, password) {
@@ -66,6 +73,35 @@ function scorePassword(pwd) {
 const strengthClass = (label) =>
   label === "Fuerte" ? "strong" : label === "Media" ? "medium" : label === "Débil" ? "weak" : "very-weak";
 
+/* ========= Billing helpers ========= */
+function eur0(c) {
+  if (!Number.isFinite(+c)) return "—";
+  return (c / 100).toLocaleString("es-ES", { maximumFractionDigits: 0 });
+}
+function fmtDate(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+  } catch {
+    return iso;
+  }
+}
+async function authedFetch(path, opts = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error("No auth");
+  return fetch(`${API_BASE}${path}`, {
+    method: opts.method || "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(opts.headers || {}),
+    },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+}
+
 export default function AccountSettings() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -92,6 +128,67 @@ export default function AccountSettings() {
     return user?.identities?.[0]?.provider || "email";
   }, [user]);
 
+  /* ===== Suscripción ===== */
+  const [sub, setSub] = useState(null);
+  const [subLoading, setSubLoading] = useState(true);
+  const [subMsg, setSubMsg] = useState("");
+
+  async function loadSubscription() {
+    setSubLoading(true);
+    setSubMsg("");
+    try {
+      const r = await authedFetch("/api/billing/subscription");
+      if (!r.ok) throw new Error(await r.text().catch(() => "No se pudo cargar la suscripción"));
+      const j = await r.json();
+      setSub(j || null);
+    } catch (e) {
+      setSubMsg(e.message || "No se pudo cargar la suscripción.");
+      setSub(null);
+    } finally {
+      setSubLoading(false);
+    }
+  }
+
+  async function cancelAtPeriodEnd() {
+    if (!window.confirm("¿Cancelar la renovación automática? Se mantendrá activo hasta el fin del periodo actual.")) return;
+    setSubMsg("");
+    try {
+      const r = await authedFetch("/api/billing/cancel-renewal", { method: "POST" });
+      if (!r.ok) throw new Error(await r.text().catch(() => "No se pudo cancelar la renovación"));
+      const j = await r.json();
+      setSub(j);
+      setSubMsg("La suscripción no se renovará. Seguirá activa hasta la fecha indicada.");
+    } catch (e) {
+      setSubMsg(e.message || "No se pudo cancelar la renovación.");
+    }
+  }
+
+  async function resumeRenewal() {
+    if (!window.confirm("¿Reactivar la renovación automática?")) return;
+    setSubMsg("");
+    try {
+      const r = await authedFetch("/api/billing/resume", { method: "POST" });
+      if (!r.ok) throw new Error(await r.text().catch(() => "No se pudo reactivar la renovación"));
+      const j = await r.json();
+      setSub(j);
+      setSubMsg("Renovación automática reactivada.");
+    } catch (e) {
+      setSubMsg(e.message || "No se pudo reactivar la renovación.");
+    }
+  }
+
+  async function openPortal() {
+    try {
+      const r = await authedFetch("/api/billing/portal", { method: "POST", body: { return_to: window.location.href } });
+      if (!r.ok) throw new Error(await r.text().catch(() => "No se pudo abrir el portal"));
+      const j = await r.json();
+      if (j?.url) window.open(j.url, "_blank", "noopener");
+    } catch (e) {
+      setSubMsg(e.message || "No se pudo abrir el portal de facturación.");
+    }
+  }
+
+  /* ===== Carga inicial ===== */
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -103,11 +200,11 @@ export default function AccountSettings() {
         if (error) console.error(error);
       }
     })();
-    return () => {
-      mounted = false;
-    };
+    loadSubscription().catch(() => {});
+    return () => { mounted = false; };
   }, []);
 
+  /* ===== Email ===== */
   const updateEmail = async () => {
     setEmailMsg("");
     const current = user?.email || "";
@@ -137,6 +234,7 @@ export default function AccountSettings() {
     setEmailMsg("Te hemos enviado un correo de confirmación. El cambio se aplicará cuando lo confirmes.");
   };
 
+  /* ===== Password ===== */
   const updatePassword = async () => {
     setPwdMsg("");
     if (provider !== "email") {
@@ -184,7 +282,7 @@ export default function AccountSettings() {
 
   return (
     <div className="acct card">
-      {/* Header limpio */}
+      {/* Header */}
       <header className="card__header acct__header">
         <div className="acct__left">
           <div className="acct__avatar" aria-hidden>
@@ -200,8 +298,73 @@ export default function AccountSettings() {
         </div>
       </header>
 
-      {/* Bloques apilados (columna) */}
+      {/* Contenido */}
       <div className="acct__stack">
+
+        {/* Suscripción */}
+        <section className="acct__block acct__block--billing">
+          <div className="blk__head">
+            <h4 className="blk__title"><MdAutorenew /> Suscripción</h4>
+            {subLoading && <span className="hint">Cargando…</span>}
+          </div>
+
+          {sub ? (
+            <>
+              <div className="billing__row">
+                <div className="billing__k">Plan</div>
+                <div className="billing__v">
+                  <strong>{sub.plan_label || "Plan único"}</strong>
+                  {" · "}
+                  {eur0(sub.price_cents)} €/mes
+                  {sub.interval_label ? ` · ${sub.interval_label}` : ""}
+                </div>
+              </div>
+
+              <div className="billing__row">
+                <div className="billing__k">Estado</div>
+                <div className="billing__v">
+                  <span className={`badge badge--${sub.status}`}>{sub.status}</span>
+                  {" "}
+                  {sub.cancel_at_period_end ? (
+                    <span className="muted">· Se cancelará al finalizar el periodo</span>
+                  ) : (
+                    <span className="muted">· Renovación automática activa</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="billing__row">
+                <div className="billing__k">Fin de periodo</div>
+                <div className="billing__v">{fmtDate(sub.current_period_end)}</div>
+              </div>
+
+              <div className="actions">
+                {!sub.cancel_at_period_end ? (
+                  <button className="btn btn--danger" onClick={cancelAtPeriodEnd}>
+                    <MdCancel /> Cancelar renovación
+                  </button>
+                ) : (
+                  <button className="btn btn--primary" onClick={resumeRenewal}>
+                    <MdAutorenew /> Reanudar renovación
+                  </button>
+                )}
+                <button className="btn btn--outline" onClick={openPortal}>
+                  <MdReceiptLong /> Ver facturas / cambiar tarjeta
+                </button>
+              </div>
+
+              {subMsg && (
+                <div className="note" role="status">
+                  <MdInfo aria-hidden /> {subMsg}
+                </div>
+              )}
+            </>
+          ) : subLoading ? null : (
+            <div className="note">
+              <MdInfo aria-hidden /> No hemos encontrado una suscripción activa para tu cuenta.
+            </div>
+          )}
+        </section>
 
         {/* Email */}
         <section className="acct__block">
@@ -275,7 +438,8 @@ export default function AccountSettings() {
                       onClick={() => setShowPwd1((v) => !v)}
                       aria-label={showPwd1 ? "Ocultar contraseña" : "Mostrar contraseña"}
                     >
-                      {showPwd1 ? <MdVisibilityOff /> : <MdVisibility />}
+                      <MdVisibilityOff style={{ display: showPwd1 ? "block" : "none" }} />
+                      <MdVisibility style={{ display: showPwd1 ? "none" : "block" }} />
                     </button>
                   </div>
 
@@ -301,7 +465,8 @@ export default function AccountSettings() {
                       onClick={() => setShowPwd2((v) => !v)}
                       aria-label={showPwd2 ? "Ocultar contraseña" : "Mostrar contraseña"}
                     >
-                      {showPwd2 ? <MdVisibilityOff /> : <MdVisibility />}
+                      <MdVisibilityOff style={{ display: showPwd2 ? "block" : "none" }} />
+                      <MdVisibility style={{ display: showPwd2 ? "none" : "block" }} />
                     </button>
                   </div>
                   <span className="field__hint" />

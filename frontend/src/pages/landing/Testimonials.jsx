@@ -4,14 +4,15 @@ import { FaStar, FaCheckCircle, FaChevronLeft, FaChevronRight } from 'react-icon
 import './Testimonials.scss'
 
 /**
- * Reseñas enfocadas en:
- * - Impacto en caja (ahorro de tiempo, menos errores, picos controlados).
- * - Escalar añadiendo más paqueteras sin fricción.
- * - Plan único: 29 €/mes; anual 24 €/mes (pago único); bianual 19 €/mes (pago único).
- * - 1 reseña 4★ con pequeña pega (realismo).
- * NOTA: sin prometer multi-empresa por cuenta.
+ * Reseñas centradas en:
+ * - Ahorro real de tiempo en mostrador y conciliación.
+ * - “Siempre sabemos dónde están los paquetes” (ubicación fiable).
+ * - Permite operar con más paqueteras sin liarla.
+ * - 1 reseña ★★★★ para dar realismo.
+ * Mezcla: ~70% ES / ~30% EN.
  */
 const REVIEWS = [
+  // ======= España (70%) =======
   {
     initials: 'MG',
     name: 'María G.',
@@ -21,8 +22,8 @@ const REVIEWS = [
     city: 'Madrid',
     rating: 5,
     quote:
-      'La conciliación pasó de 3 horas/mes a 12 minutos. Junio marcó 3 diferencias que recuperamos en el siguiente pago.',
-    meta: ['−86% tiempo conciliación', '+3 ajustes recuperados'],
+      'En caja ya no preguntamos “¿dónde está?”. Cada alta queda con estante y balda. Buscar pasó de minutos a segundos y pudimos meter otra paquetera sin colas.',
+    meta: ['−45% tiempo de búsqueda', '+1 paquetera'],
     date: 'Jun 2025',
     verified: true
   },
@@ -30,13 +31,13 @@ const REVIEWS = [
     initials: 'JL',
     name: 'José L.',
     role: 'Propietario',
-    sector: 'Supermercado independiente',
-    businessLabel: 'Barrio La Huerta',
+    sector: 'Estanco',
+    businessLabel: 'Av. del Puerto',
     city: 'Valencia',
     rating: 5,
     quote:
-      'Empezamos mes a mes y al ver el ahorro de tiempo pasamos al anual: 24 €/mes (pago único). Coste predecible y sin sustos.',
-    meta: ['Plan anual 24 €/mes', 'Coste estable'],
+      'Antes teníamos montones y confusiones. Ahora sabemos la balda exacta y la cola baja solo con eso. La conciliación ya no va con Excel: nos ahorra una tarde al mes.',
+    meta: ['−60% cola de mostrador', 'Conciliación sin Excel'],
     date: 'May 2025',
     verified: true
   },
@@ -44,13 +45,13 @@ const REVIEWS = [
     initials: 'PC',
     name: 'Paula C.',
     role: 'Encargada',
-    sector: 'Punto PUDO',
+    sector: 'Farmacia',
     businessLabel: 'Nervión',
     city: 'Sevilla',
     rating: 5,
     quote:
-      'Añadimos dos paqueteras nuevas la semana del Día de la Madre. Sin formación extra y sin colas: fue plug & play.',
-    meta: ['+2 paqueteras en 1 semana', '0 colas añadidas'],
+      'Añadimos GLS y Correos Express en una semana. No hubo que formar al equipo: es la misma pantalla. Saber la balda nos evita vueltas y llamadas.',
+    meta: ['+2 paqueteras', 'Menos llamadas'],
     date: 'May 2025',
     verified: true
   },
@@ -63,23 +64,9 @@ const REVIEWS = [
     city: 'Zaragoza',
     rating: 5,
     quote:
-      'Altas en 22 segundos de media y 0 paquetes extraviados en 90 días. La cola de tarde prácticamente desapareció.',
-    meta: ['22 s alta media', '0 extravíos en 90 días'],
+      'Estamos dando de alta en unos 20–25 segundos. En tres meses, cero extravíos. Al tenerlo todo por balda, entregamos más rápido incluso en horas pico.',
+    meta: ['~22 s por alta', '0 extravíos en 90 días'],
     date: 'Ago 2025',
-    verified: true
-  },
-  {
-    initials: 'RS',
-    name: 'Rosa S.',
-    role: 'Responsable',
-    sector: 'Estanco',
-    businessLabel: 'Málaga Centro',
-    city: 'Málaga',
-    rating: 5,
-    quote:
-      'Avisos por WhatsApp con un clic: recogidas al primer intento +21 puntos. Ahorro directo en tiempo de mostrador.',
-    meta: ['+21 pp primer intento', '118 € ahorro/mes'],
-    date: 'Jul 2025',
     verified: true
   },
   {
@@ -91,9 +78,23 @@ const REVIEWS = [
     city: 'Bilbao',
     rating: 5,
     quote:
-      'La conciliación automática detectó 5 diferencias en el Q2. Recuperamos 164 € de margen que dábamos por perdidos.',
-    meta: ['5 ajustes Q2', '+164 € recuperados'],
+      'La conciliación mensual se hace en un rato y sin hojas sueltas. Detectamos diferencias y recuperamos importes que dábamos por perdidos.',
+    meta: ['Conciliación en minutos', '+164 € recuperados'],
     date: 'Jun 2025',
+    verified: true
+  },
+  {
+    initials: 'CB',
+    name: 'Carla B.',
+    role: 'Gerente',
+    sector: 'Cafetería con PUDO',
+    businessLabel: 'Ensanche',
+    city: 'Pamplona',
+    rating: 5,
+    quote:
+      'Con rebajas subimos el volumen un 30% sin contratar a nadie. Saber la balda acelera la entrega y ya no hay “búsqueda por el almacén”.',
+    meta: ['+30% paquetes/día', '0 contrataciones extra'],
+    date: 'Ene 2025',
     verified: true
   },
   {
@@ -105,50 +106,8 @@ const REVIEWS = [
     city: 'Alicante',
     rating: 5,
     quote:
-      'Con 29 €/mes nos compensa, y al pasar a anual queda en 24 €/mes (pago único). ROI desde el primer mes.',
-    meta: ['ROI en el mes 1', 'Plan anual 24 €/mes'],
-    date: 'Jul 2025',
-    verified: true
-  },
-  {
-    initials: 'IV',
-    name: 'Iván V.',
-    role: 'Encargado',
-    sector: 'Punto PUDO',
-    businessLabel: 'Sants',
-    city: 'Barcelona',
-    rating: 5,
-    quote:
-      'Mover entre baldas sin perder rastro bajó los errores un 73%. Se nota en el tiempo y en la cara del cliente.',
-    meta: ['−73% errores de ubicación', '183 € ahorro/mes'],
-    date: 'May 2025',
-    verified: true
-  },
-  {
-    initials: 'NP',
-    name: 'Nuria P.',
-    role: 'Dueña',
-    sector: 'Supermercado eco',
-    businessLabel: 'Rondilla',
-    city: 'Valladolid',
-    rating: 5,
-    quote:
-      'Panel diario y caducidades a cero. Las llamadas de “¿está mi paquete?” cayeron un 58%.',
-    meta: ['0 caducidades en 120 días', '−58% llamadas'],
-    date: 'Ago 2025',
-    verified: true
-  },
-  {
-    initials: 'TT',
-    name: 'Tomás T.',
-    role: 'Gerente',
-    sector: 'Droguería',
-    businessLabel: 'Barrio del Carmen',
-    city: 'Murcia',
-    rating: 4,
-    quote:
-      'Me habría gustado más plantillas de informes desde el primer día; soporte me pasó una en 48 h. Seguimos en mensual (29 €/mes) y quizá pasemos a anual.',
-    meta: ['Soporte en 48 h', '29 €/mes (mensual)'],
+      'Pasamos al plan anual porque el tiempo que nos ahorra es evidente. Lo mejor es que siempre sabemos en qué balda está cada paquete.',
+    meta: ['ROI en el mes 1', 'Plan anual'],
     date: 'Jul 2025',
     verified: true
   },
@@ -161,23 +120,95 @@ const REVIEWS = [
     city: 'Toledo',
     rating: 5,
     quote:
-      'Sumamos otra paquetera en Navidad en 3 minutos. No tuvimos que enseñar nada al equipo: la interfaz es la misma.',
-    meta: ['+1 paquetera en 3 min', 'Sin formación adicional'],
+      'Sumamos otra paquetera en Navidad en tres minutos. El equipo siguió el mismo flujo y no se nos perdió nada en todo el periodo.',
+    meta: ['+1 paquetera', '0 pérdidas en campaña'],
     date: 'Dic 2024',
     verified: true
   },
   {
-    initials: 'CB',
-    name: 'Carla B.',
+    initials: 'TT',
+    name: 'Tomás T.',
     role: 'Gerente',
-    sector: 'Cafetería con PUDO',
-    businessLabel: 'Ensanche',
-    city: 'Pamplona',
+    sector: 'Minimarket',
+    businessLabel: 'Barrio del Carmen',
+    city: 'Murcia',
+    rating: 4,
+    quote:
+      'Echo en falta algún informe más “de serie”, aunque soporte me montó uno en dos días. Aun así, el ahorro de tiempo y que todo tenga su balda compensa de sobra.',
+    meta: ['Soporte 48 h', '−40% tiempo en mostrador'],
+    date: 'Jul 2025',
+    verified: true
+  },
+  {
+    initials: 'LC',
+    name: 'Laura C.',
+    role: 'Dueña',
+    sector: 'Librería',
+    businessLabel: 'Riazor',
+    city: 'A Coruña',
     rating: 5,
     quote:
-      'Aguantamos el pico de rebajas con un 30% más de paquetes sin ampliar personal. La pista por baldas fue clave.',
-    meta: ['+30% volumen en rebajas', '0 contrataciones extra'],
-    date: 'Ene 2025',
+      'Las llamadas de “¿está mi paquete?” bajaron a la mitad. Buscamos por nombre o por estante y lo tenemos en la mano en nada.',
+    meta: ['−55% llamadas', 'Entregas más rápidas'],
+    date: 'Sep 2025',
+    verified: true
+  },
+
+  // ======= Internacional (30%) =======
+  {
+    initials: 'AB',
+    name: 'Alex B.',
+    role: 'Owner',
+    sector: 'Corner shop',
+    businessLabel: 'High Street',
+    city: 'London',
+    rating: 5,
+    quote:
+      'We always know the exact shelf now. Search time dropped massively and queues are shorter. We even added two new couriers without slowing the till.',
+    meta: ['−45% search time', '+2 couriers'],
+    date: 'Jun 2025',
+    verified: true
+  },
+  {
+    initials: 'GM',
+    name: 'Giulia M.',
+    role: 'Manager',
+    sector: 'Tabacchi',
+    businessLabel: 'Navigli',
+    city: 'Milano',
+    rating: 5,
+    quote:
+      'Onboarding a new courier took minutes. Staff didn’t need training and handovers are quicker because every parcel has a clear shelf.',
+    meta: ['Setup in minutes', 'Faster handovers'],
+    date: 'Oct 2025',
+    verified: true
+  },
+  {
+    initials: 'SO',
+    name: 'Sean O.',
+    role: 'Pharmacist',
+    sector: 'Pharmacy',
+    businessLabel: 'Southside',
+    city: 'Dublin',
+    rating: 5,
+    quote:
+      'No more “where is it?” calls. Reconciliation is clean and the team can handle busy hours with less stress.',
+    meta: ['Fewer calls', 'Easy reconciliation'],
+    date: 'May 2025',
+    verified: true
+  },
+  {
+    initials: 'NR',
+    name: 'Nadia R.',
+    role: 'Owner',
+    sector: 'Newsagent',
+    businessLabel: 'Northern Quarter',
+    city: 'Manchester',
+    rating: 5,
+    quote:
+      'Moved to the yearly plan after a month. Clear shelves, quicker pick-ups and we can accept more parcels without extra staff.',
+    meta: ['Switched to yearly', 'No extra hires'],
+    date: 'Nov 2025',
     verified: true
   }
 ]

@@ -1,8 +1,8 @@
-// src/pages/VerEstantes.jsx
 import "../styles/VerEstantes.scss";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { getTenantIdOrThrow } from "../utils/tenant";
+import { obtenerPaquetesBackend, obtenerEstructuraEstantesYPaquetes } from "../services/paquetesService";
 import { FaBoxes, FaSearch, FaChevronDown, FaTimes } from "react-icons/fa";
 
 /* ===== Helpers ===== */
@@ -55,33 +55,12 @@ function autolayoutLanes(input = [], rowsHint = 0, colsHint = 0) {
     rows = rowsHint > 0 ? rowsHint : Math.ceil(n / cols);
   }
 
-  const totalCells = rows * cols;
   const freeCells = [];
   for (let r = 1; r <= rows; r++) {
     for (let c = 1; c <= cols; c++) {
       const key = `${r}-${c}`;
       if (!taken.has(key)) freeCells.push({ r, c });
     }
-  }
-
-  const stillNeed = Math.max(0, needPlace.length - freeCells.length);
-  if (stillNeed > 0) {
-    const extraCols = colsHint > 0 ? 0 : Math.min(4, cols);
-    const target = placed.length + needPlace.length;
-    if (extraCols === 0) {
-      rows = Math.ceil(target / cols);
-    } else {
-      cols = Math.ceil(target / rows);
-    }
-    const newFree = [];
-    const newTaken = new Set(placed.map(p => `${p.row}-${p.col}`));
-    for (let r = 1; r <= rows; r++) {
-      for (let c = 1; c <= cols; c++) {
-        const k = `${r}-${c}`;
-        if (!newTaken.has(k)) newFree.push({ r, c });
-      }
-    }
-    freeCells.splice(0, freeCells.length, ...newFree);
   }
 
   for (let i = 0; i < needPlace.length; i++) {
@@ -92,6 +71,43 @@ function autolayoutLanes(input = [], rowsHint = 0, colsHint = 0) {
 
   placed.sort((a,b)=> (a.row - b.row) || (a.col - b.col));
   return { lanes: placed, rows, cols };
+}
+
+/* ===== Parse de códigos tipo A1, 2-3, A, 3… ===== */
+const canon = (s) => String(s||'').trim().toUpperCase().replace(/\s+/g,'');
+const alphaToNum = (str) => {
+  const s = String(str||'').toUpperCase();
+  if (!/^[A-Z]+$/.test(s)) return NaN;
+  let n = 0; for (const ch of s) n = n*26 + (ch.charCodeAt(0)-64);
+  return n;
+};
+function parseCodigoGenerico(raw) {
+  const code = canon(raw);
+  if (!code) return null;
+  if (/^\d+$/.test(code)) return { estante: parseInt(code, 10), balda: 1 };
+  if (/^[A-Z]+$/.test(code)) return { estante: alphaToNum(code), balda: 1 };
+  let m = code.match(/^([A-Z]+)(\d+)$/);           // A1, B12
+  if (m) return { estante: alphaToNum(m[1]), balda: parseInt(m[2], 10) };
+  m = String(raw).trim().match(/^(\d+)\s*-\s*(\d+)$/); // 2-3
+  if (m) return { estante: parseInt(m[1], 10), balda: parseInt(m[2], 10) };
+  return null;
+}
+
+/* ===== Extraer estructura de /api/estantes/estructura ===== */
+function extractStructureFromBackend(payload) {
+  // Esperado: { estructura:[{estante, nombre, filas:[{id, idx/codigo/name}]}] }
+  const root = payload?.estructura;
+  if (!Array.isArray(root)) return [];
+  return root.map(est => ({
+    estante: num(est?.estante, NaN),
+    nombre : est?.nombre || String(est?.estante),
+    baldas : (Array.isArray(est?.filas) ? est.filas : []).map(f => ({
+      id    : f?.id ?? `${est?.estante}:${f?.idx ?? f?.index ?? f?.i ?? f?.balda}`,
+      codigo: f?.codigo ?? f?.name ?? null,
+      label : f?.name ?? f?.codigo ?? null,
+      idx   : num(f?.idx ?? f?.index ?? f?.i ?? f?.balda, NaN),
+    })).filter(b => Number.isFinite(b.idx))
+  })).filter(r => Number.isFinite(r.estante));
 }
 
 /* ===================== Componente ===================== */
@@ -116,195 +132,211 @@ export default function VerEstantes() {
   const [q, setQ] = useState("");
   const [soloConPkgs, setSoloConPkgs] = useState(false);
 
+  // ---- ready flags para evitar “flash” feo
+  const [readyLayout, setReadyLayout] = useState(false);
+  const [readyEstructura, setReadyEstructura] = useState(false);
+
   /* ===================== Carga ===================== */
   useEffect(() => {
     let cancel = false;
     (async () => {
-      setCargando(true); setError(null);
+      setCargando(true); setError(null); setReadyLayout(false); setReadyEstructura(false);
       try {
-        const { data: { session} } = await supabase.auth.getSession();
-        if (!session?.access_token) throw new Error("No hay sesión activa.");
+        const [{ data: { session } }] = await Promise.all([supabase.auth.getSession()]);
+        const token = session?.access_token;
+        if (!token) throw new Error("No hay sesión activa.");
         const tenantId = await getTenantIdOrThrow();
 
-        let meta = null;
-        try {
-          const { data } = await supabase
-            .from('layouts_meta')
-            .select('mode, rows, cols, payload')
-            .eq('org_id', tenantId)
-            .maybeSingle();
-          meta = data || null;
-        } catch { meta = null; }
-
-        if (!meta) {
+        // Dispara layout y paquetes EN PARALELO
+        const layoutPromise = (async () => {
+          // layouts_meta o RPC
+          let meta = null;
           try {
-            const { data } = await supabase.rpc('get_warehouse_layout', { p_org: tenantId });
+            const { data } = await supabase
+              .from('layouts_meta')
+              .select('mode, rows, cols, payload')
+              .eq('org_id', tenantId)
+              .maybeSingle();
             meta = data || null;
           } catch { meta = null; }
-        }
+          if (!meta) {
+            try {
+              const { data } = await supabase.rpc('get_warehouse_layout', { p_org: tenantId });
+              meta = data || null;
+            } catch { meta = null; }
+          }
+          return meta || {};
+        })();
 
-        const root = meta?.payload ? meta.payload : meta || {};
-        const modeFromMeta = meta?.mode || root?.layout_mode || "lanes";
-        const rowsHint = num(meta?.rows ?? root?.grid?.rows, 0);
-        const colsHint = num(meta?.cols ?? root?.grid?.cols, 0);
+        const paquetesPromise = obtenerPaquetesBackend(token).catch(() => []);
 
+        // Espera a layout + paquetes
+        const [metaRaw, paquetes] = await Promise.all([layoutPromise, paquetesPromise]);
         if (cancel) return;
+
+        const root = metaRaw?.payload ? metaRaw.payload : metaRaw || {};
+        const modeFromMeta = metaRaw?.mode || root?.layout_mode || "racks";
+        const rowsHint = num(metaRaw?.rows ?? root?.grid?.rows, 0);
+        const colsHint = num(metaRaw?.cols ?? root?.grid?.cols, 0);
         setModo(modeFromMeta);
 
         /* ======================= L A N E S ======================= */
-        if ((modeFromMeta || "lanes") === "lanes") {
+        if (modeFromMeta === "lanes") {
+          // Lanza las dos tablas de fallback en paralelo (solo si hiciera falta)
           let arr = Array.isArray(root?.lanes) ? root.lanes : [];
-          arr = arr
-            .map(l => ({
-              id   : num(l?.id ?? l?.lane_id, NaN),
-              label: l?.name || String(l?.id ?? l?.lane_id),
-              row  : num(l?.position?.row ?? l?.row ?? l?.r, 0),
-              col  : num(l?.position?.col ?? l?.col ?? l?.c, 0),
-              color: l?.color || "#6b7280",
-            }))
-            .filter(l => Number.isFinite(l.id));
-
-          if (arr.length === 0) {
-            try {
-              const { data: rows } = await supabase
-                .from("lanes")
-                .select("lane_id,id,name,color,row,col")
-                .eq("tenant_id", tenantId);
-              const lrows = rows || [];
-              if (lrows.length) {
-                arr = lrows.map(l => ({
-                  id: num(l?.lane_id ?? l?.id, NaN),
-                  label: (l?.name || String(l?.lane_id ?? l?.id)),
-                  row: num(l?.row, 0),
-                  col: num(l?.col, 0),
-                  color: l?.color || "#6b7280",
-                })).filter(x => Number.isFinite(x.id));
-              }
-            } catch {}
-
-            if (arr.length === 0) {
-              try {
-                const { data } = await supabase
-                  .from("carriles")
-                  .select("id,codigo,color,fila,columna")
-                  .eq("tenant_id", tenantId);
-                const carr = data || [];
-                if (carr.length) {
-                  arr = carr.map(r => ({
-                    id: num(r.id, NaN),
-                    label: (r?.codigo || String(r.id)),
-                    row: num(r.fila, 0),
-                    col: num(r.columna, 0),
-                    color: r.color || "#6b7280",
-                  })).filter(x => Number.isFinite(x.id));
+          if (!arr.length) {
+            const [q1, q2] = await Promise.all([
+              supabase.from("lanes").select("lane_id,id,name,color,row,col").eq("tenant_id", tenantId).catch(()=>({ data: [] })),
+              supabase.from("carriles").select("id,codigo,color,fila,columna").eq("tenant_id", tenantId).catch(()=>({ data: [] }))
+            ]);
+            const rows1 = q1?.data || [];
+            const rows2 = q2?.data || [];
+            if (rows1.length) {
+              arr = rows1.map(l => ({
+                id: num(l?.lane_id ?? l?.id, NaN),
+                label: l?.name || String(l?.lane_id ?? l?.id),
+                row: num(l?.row, 0),
+                col: num(l?.col, 0),
+                color: l?.color || "#6b7280",
+              }));
+            } else if (rows2.length) {
+              arr = rows2.map(r => ({
+                id: num(r.id, NaN),
+                label: r?.codigo || String(r.id),
+                row: num(r.fila, 0),
+                col: num(r.columna, 0),
+                color: r.color || "#6b7280",
+              }));
+            } else {
+              // Inferir desde paquetes
+              if (paquetes.length) {
+                const set = new Map(); let idx = 1;
+                for (const p of paquetes) {
+                  const laneId = Number.isFinite(Number(p.lane_id)) ? Number(p.lane_id) : null;
+                  const comp = typeof p.compartimento === 'string' ? String(p.compartimento).trim() : '';
+                  const looksCode = /^[A-Z]{1,3}\s*\d{1,3}$/i.test(comp);
+                  const name = comp && !looksCode ? comp : (laneId != null ? String(laneId) : null);
+                  if (!name) continue;
+                  if (!set.has(name)) set.set(name, { id: laneId ?? idx++, label: name, row: 0, col: 0, color: "#6b7280" });
                 }
-              } catch {}
-            }
-
-            if (arr.length === 0) {
-              const { data: baldas } = await supabase
-                .from("baldas")
-                .select("estante,codigo")
-                .eq("id_negocio", tenantId);
-              const byEst = new Map();
-              (baldas || []).forEach(b => {
-                const est = num(b?.estante, NaN);
-                if (!Number.isFinite(est)) return;
-                if (!byEst.has(est)) byEst.set(est, []);
-                if (b?.codigo) byEst.get(est).push(String(b.codigo));
-              });
-              arr = [...byEst.entries()]
-                .sort((a,b)=>a[0]-b[0])
-                .map(([est, codes]) => ({
-                  id: est,
-                  label: (codes.find(Boolean) || `Carril ${est}`).trim(),
-                  row: 0, col: 0, color: "#6b7280"
-                }));
+                arr = Array.from(set.values());
+              }
             }
           }
 
-          const { lanes: laid, rows, cols } = autolayoutLanes(arr, rowsHint, colsHint);
-          if (cancel) return;
-          setLanes(laid);
-          setGridDims({ rows, cols });
+          const { lanes: laid, rows, cols } = autolayoutLanes(
+            (arr || []).map(l => ({
+              id   : num(l?.id ?? l?.lane_id, NaN),
+              label: l?.label ?? l?.name ?? String(l?.id ?? l?.lane_id),
+              row  : num(l?.row ?? l?.position?.row ?? l?.r, 0),
+              col  : num(l?.col ?? l?.position?.col ?? l?.c, 0),
+              color: l?.color || "#6b7280",
+            })).filter(l => Number.isFinite(l.id)),
+            rowsHint, colsHint
+          );
 
-          const { data: paquetes } = await supabase
-            .from("paquetes")
-            .select("id,nombre_cliente,empresa_transporte,entregado,fecha_llegada,lane_id,compartimento,baldas(estante)")
-            .eq("tenant_id", tenantId);
-
-          if (cancel) return;
-
-          const byLane = {};
+          // map lane name -> id
           const nameToId = new Map(laid.map(l => [String(l.label || "").toUpperCase(), l.id]));
           const laneIds = new Set(laid.map(l => l.id));
-
-          (paquetes || []).forEach(p => {
-            if (!isPending(p)) return;
-            let keyId = Number.isFinite(num(p?.lane_id, NaN)) && laneIds.has(num(p.lane_id))
-              ? num(p.lane_id)
-              : (nameToId.get(String(p?.compartimento || "").toUpperCase())
-                  ?? (Number.isFinite(num(p?.baldas?.estante, NaN)) && laneIds.has(num(p.baldas.estante))
-                        ? num(p.baldas.estante) : null));
-            if (keyId == null) return;
+          const byLane = {};
+          for (const p of (paquetes || [])) {
+            if (!isPending(p)) continue;
+            let keyId =
+              (Number.isFinite(num(p?.lane_id, NaN)) && laneIds.has(num(p.lane_id))) ? num(p.lane_id)
+              : (nameToId.get(String(p?.compartimento || "").trim().toUpperCase()) ?? null);
+            if (keyId == null) continue;
             (byLane[keyId] ||= []).push({
               id: p.id,
               nombre_cliente: p.nombre_cliente,
-              empresa_transporte: p.empresa_transporte,
-              fecha_llegada: p.fecha_llegada,
+              empresa_transporte: p.empresa_transporte ?? p.compania,
+              fecha_llegada: p.fecha_llegada ?? p.created_at,
             });
-          });
+          }
 
+          if (cancel) return;
+          // Un único batch de estados
+          setLanes(laid);
+          setGridDims({ rows, cols });
           setPkgsByLaneId(byLane);
+          setReadyLayout(true);
+          setCargando(false);
           return;
         }
 
         /* ======================= R A C K S ======================= */
-        const pos = [];
-        const rackName = new Map();
-        const racksMeta = Array.isArray(root?.racks) ? root.racks
-                        : Array.isArray(meta?.racks) ? meta.racks : [];
-        for (const r of racksMeta) {
-          const rid = num(r?.id, NaN);
-          if (!Number.isFinite(rid)) continue;
-          rackName.set(rid, r?.name || String(rid));
-          const rr = num(r?.position?.row ?? r?.row ?? r?.r, NaN);
-          const rc = num(r?.position?.col ?? r?.col ?? r?.c, NaN);
-          if (Number.isFinite(rr) && Number.isFinite(rc)) pos.push({ est: rid, r: rr, c: rc });
+        // Dispara estructura backend en paralelo (ya tenemos paquetes)
+        const estructuraBackendPromise = obtenerEstructuraEstantesYPaquetes(token).catch(()=>null);
+
+        let estructura = [];
+        const body = await estructuraBackendPromise;
+        if (body) estructura = extractStructureFromBackend(body);
+
+        // Si no hay, intenta RLS baldas
+        if (!estructura.length) {
+          try {
+            const { data: baldasRows } = await supabase
+              .from("baldas")
+              .select("id, codigo, estante, balda")
+              .eq("id_negocio", tenantId)
+              .order("estante", { ascending: true })
+              .order("balda",   { ascending: true });
+            const porEst = new Map();
+            (baldasRows || []).forEach(b => {
+              const est = num(b?.estante, NaN); if (!Number.isFinite(est)) return;
+              const idx = num(b?.balda, NaN);   if (!Number.isFinite(idx)) return;
+              if (!porEst.has(est)) porEst.set(est, []);
+              porEst.get(est).push({ id: b.id, codigo: b.codigo, label: b.codigo || `Fila ${idx}`, idx });
+            });
+            porEst.forEach(list => list.sort((a,b)=>a.idx-b.idx));
+            estructura = Array.from(porEst.entries())
+              .sort((a,b)=>a[0]-b[0])
+              .map(([est, baldas]) => ({ estante: est, nombre: String(est), baldas }));
+          } catch {}
         }
 
-        const { data: baldasRows } = await supabase
-          .from("baldas")
-          .select("id, codigo, estante, balda")
-          .eq("id_negocio", tenantId)
-          .order("estante", { ascending: true })
-          .order("balda",   { ascending: true });
+        // Tercera vía: inferir desde paquetes
+        if (!estructura.length && paquetes.length) {
+          const map = new Map();
+          let seq = 1;
+          for (const p of paquetes) {
+            const code = typeof p.compartimento === 'string'
+              ? p.compartimento
+              : (p?.baldas?.codigo ?? null);
+            const parsed = code ? parseCodigoGenerico(code) : null;
+            if (!parsed) continue;
+            const { estante, balda } = parsed;
+            if (!map.has(estante)) map.set(estante, { nombre: String(estante), baldas: new Map() });
+            const col = map.get(estante);
+            if (!col.baldas.has(balda)) {
+              col.baldas.set(balda, { id: `virt:${seq++}`, codigo: code || null, label: code || `Fila ${balda}`, idx: balda });
+            }
+          }
+          estructura = Array.from(map.entries())
+            .sort((a,b)=>a[0]-b[0])
+            .map(([estante, col]) => ({
+              estante,
+              nombre: col.nombre,
+              baldas: Array.from(col.baldas.values()).sort((a,b)=>a.idx-b.idx)
+            }));
+        }
 
-        const porEstante = new Map();
-        (baldasRows || []).forEach(b => {
-          const rid = num(b?.estante, NaN); if (!Number.isFinite(rid)) return;
-          const idx = num(b?.balda, 1) || 1;
-          const nombreRack = rackName.get(rid) || String(rid);
-          const label = b?.codigo || `${nombreRack}${idx}`;
-          if (!porEstante.has(rid)) porEstante.set(rid, []);
-          porEstante.get(rid).push({ id: b.id, codigo: b.codigo, idx, label });
-        });
-        porEstante.forEach(list => list.sort((a,b)=>a.idx-b.idx));
-
+        // Orden/grid según meta si existe
+        const pos = [];
+        const racksMeta = Array.isArray(root?.racks) ? root.racks
+                        : Array.isArray(metaRaw?.racks) ? metaRaw.racks : [];
+        for (const r of racksMeta) {
+          const rid = num(r?.id, NaN);
+          const rr  = num(r?.position?.row ?? r?.row ?? r?.r, NaN);
+          const rc  = num(r?.position?.col ?? r?.col ?? r?.c, NaN);
+          if (Number.isFinite(rid) && Number.isFinite(rr) && Number.isFinite(rc)) pos.push({ est: rid, r: rr, c: rc });
+        }
         const estantesOrden = (() => {
           if (pos.length) {
             pos.sort((a,b)=> (a.r-b.r) || (a.c-b.c));
             return pos.map(x => x.est);
           }
-          return Array.from(porEstante.keys()).sort((a,b)=>a-b);
+          return estructura.map(r => r.estante).sort((a,b)=>a-b);
         })();
-
-        const estructura = estantesOrden.map(est => ({
-          estante: est,
-          nombre: rackName.get(est) || String(est),
-          baldas: (porEstante.get(est) || []).map(({id,codigo,label}) => ({ id, codigo, label }))
-        }));
-
         let rowsR, colsR;
         if (pos.length) {
           const maxR = Math.max(...pos.map(x => x.r));
@@ -319,43 +351,51 @@ export default function VerEstantes() {
           rowsR = Math.ceil(n / colsR);
         }
 
-        if (cancel) return;
-        setEstructuraRacks(estructura);
-        setRackOrder(estantesOrden);
-        setRackGrid({ rows: rowsR, cols: colsR });
-
-        const { data: paquetes } = await supabase
-          .from("paquetes")
-          .select("id,nombre_cliente,empresa_transporte,entregado,fecha_llegada,balda_id,baldas(id,codigo),compartimento")
-          .eq("tenant_id", tenantId);
-
-        if (cancel) return;
+        // Lookups para mapear paquetes a balda id
+        const codigoToId = new Map();
+        const pairToId   = new Map(); // "est-balda" -> id
+        estructura.forEach(r => (r.baldas || []).forEach(b => {
+          if (b.codigo) codigoToId.set(String(b.codigo).toUpperCase(), b.id);
+          const parsed = b.codigo ? parseCodigoGenerico(b.codigo) : (Number.isFinite(b.idx) ? { estante: r.estante, balda: b.idx } : null);
+          if (parsed) pairToId.set(`${parsed.estante}-${parsed.balda}`, b.id);
+        }));
 
         const byBalda = {};
-        const codigoToBalda = new Map();
-        estructura.forEach(r => (r.baldas || []).forEach(b => codigoToBalda.set(String(b.codigo || "").toUpperCase(), b.id)));
-
-        (paquetes || []).forEach(p => {
-          if (!isPending(p)) return;
+        for (const p of (paquetes || [])) {
+          if (!isPending(p)) continue;
           let keyId = Number.isFinite(num(p?.balda_id, NaN)) ? num(p.balda_id) : null;
-          if (!keyId && p?.baldas?.id) keyId = num(p.baldas.id);
-          if (!keyId && p?.baldas?.codigo) keyId = codigoToBalda.get(String(p.baldas.codigo || "").toUpperCase()) ?? null;
-          if (!keyId && p?.compartimento) keyId = codigoToBalda.get(String(p.compartimento || "").toUpperCase()) ?? null;
-          if (!keyId) return;
+          if (!keyId && p?.compartimento) {
+            const code = String(p.compartimento).toUpperCase();
+            keyId = codigoToId.get(code) ?? null;
+            if (!keyId) {
+              const parsed = parseCodigoGenerico(code);
+              if (parsed) keyId = pairToId.get(`${parsed.estante}-${parsed.balda}`) ?? null;
+            }
+          }
+          if (!keyId && Number.isFinite(num(p?.estante, NaN)) && Number.isFinite(num(p?.balda, NaN))) {
+            keyId = pairToId.get(`${num(p.estante)}-${num(p.balda)}`) ?? null;
+          }
+          if (!keyId) continue;
           (byBalda[keyId] ||= []).push({
             id: p.id,
             nombre_cliente: p.nombre_cliente,
-            empresa_transporte: p.empresa_transporte,
-            fecha_llegada: p.fecha_llegada,
+            empresa_transporte: p.empresa_transporte ?? p.compania,
+            fecha_llegada: p.fecha_llegada ?? p.created_at,
           });
-        });
+        }
 
+        if (cancel) return;
+        // Un único batch de estados
+        setEstructuraRacks(estructura);
+        setRackOrder(estantesOrden);
+        setRackGrid({ rows: rowsR, cols: colsR });
         setPkgsByBaldaId(byBalda);
+        setReadyLayout(true);
+        setReadyEstructura(true);
+        setCargando(false);
       } catch (e) {
         console.error("[VerEstantes] Error:", e);
-        if (!cancel) setError(e?.message || "No se pudo cargar la vista de almacén");
-      } finally {
-        if (!cancel) setCargando(false);
+        if (!cancel) { setError(e?.message || "No se pudo cargar la vista de almacén"); setCargando(false); }
       }
     })();
     return () => { cancel = true; };
@@ -380,6 +420,13 @@ export default function VerEstantes() {
 
   const toggle = (id) => setOpenSet(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
   const clearQ = () => setQ("");
+
+  // Precompute lane grid lookup to avoid Array.find in render
+  const laneByRC = useMemo(() => {
+    const map = new Map();
+    for (const l of lanes) map.set(`${l.row}-${l.col}`, l);
+    return map;
+  }, [lanes]);
 
   const matchLane = (l) => {
     const t = q.trim().toLowerCase();
@@ -429,7 +476,6 @@ export default function VerEstantes() {
 
       {/* Leyenda + filtros */}
       <div className="toolbar">
-        {/* NUEVA LEYENDA COMPACTA */}
         <div className="leyenda" aria-label="Leyenda de ocupación">
           <span className="leg-item"><i className="dot neutra" /><span>0</span></span>
           <span className="leg-item"><i className="dot verde" /><span>1–4</span></span>
@@ -482,6 +528,8 @@ export default function VerEstantes() {
         <div className="skeleton"><div className="row" /><div className="row" /><div className="row" /></div>
       ) : error ? (
         <div className="estado-error" role="alert">{error}</div>
+      ) : !readyLayout ? (
+        <div className="skeleton"><div className="row" /><div className="row" /><div className="row" /></div>
       ) : modo === "lanes" ? (
         <div
           className="lanes-matrix"
@@ -491,7 +539,7 @@ export default function VerEstantes() {
           {Array.from({ length: gridDims.rows || 1 }).flatMap((_, rIdx) =>
             Array.from({ length: gridDims.cols || 1 }).map((_, cIdx) => {
               const r = rIdx + 1, c = cIdx + 1;
-              const lane = lanes.find(l => l.row === r && l.col === c) || null;
+              const lane = laneByRC.get(`${r}-${c}`) || null;
               if (!lane) return <div key={`cell-${r}-${c}`} className="lane-cell empty" role="gridcell" />;
 
               const arr = pkgsByLaneId[lane.id] || [];
@@ -548,6 +596,8 @@ export default function VerEstantes() {
             })
           )}
         </div>
+      ) : !readyEstructura ? (
+        <div className="skeleton"><div className="row" /><div className="row" /><div className="row" /></div>
       ) : estructuraFiltradaRacks.length === 0 ? (
         <div className="estado-vacio">No hay estantes que coincidan con el filtro.</div>
       ) : (

@@ -13,7 +13,7 @@
     color:#e5e7eb; cursor:pointer; max-width: 100%;
     line-height: 1; transition: background .18s, border-color .18s, box-shadow .18s;
 
-    /* === Aísla iconos que usan em por reglas globales === */
+    /* Aísla iconos que usan em por reglas globales */
     font-size: 0;
 
     &:hover{ background:#151922; border-color: rgba(255,255,255,.18); }
@@ -22,32 +22,54 @@
 
   /* Texto dentro del trigger vuelve a tamaño normal */
   .account__meta{
-    font-size: 1rem;             /* ← restaura tipografía del contenido */
+    font-size: 1rem; /* ← restaura tipografía del contenido */
     display:flex; flex-direction:column; line-height:1.06; min-width:0;
     strong{ font-size:.95rem; color:#fff; max-width:180px; }
     small{ font-size:.78rem; color: var(--nav-muted,#9aa3b2); max-width:180px; }
   }
   .truncate{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-  /* Avatar */
+  /* Avatar — usa variable de tamaño para evitar “óvalos” en flex */
   .account__avatar{
-    width: 30px; height: 30px; border-radius: 50%; overflow:hidden; flex:0 0 30px;
-    background:#2a2f3a; display:flex; align-items:center; justify-content:center; font-weight:800;
-    img{ width:100%; height:100%; object-fit: cover; display:block; }
-    &.lg{ width: 44px; height: 44px; }
+    --av-size: 30px;                 /* tamaño por defecto (md) */
+    width: var(--av-size);
+    height: var(--av-size);
+    flex: 0 0 var(--av-size);        /* ← el truco: el basis coincide con el tamaño */
+    aspect-ratio: 1 / 1;             /* garantiza forma cuadrada */
+    border-radius: 50%;
+    overflow:hidden;
+    background:#2a2f3a;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800;
+    line-height: 1;
+    contain: layout paint;           /* aísla de reglas globales */
+
+    img{ width:100%; height:100%; object-fit: cover; display:block; border-radius: inherit; }
+
+    &.lg{ --av-size: 44px; }
+    &.sm{ --av-size: 24px; }
+
     &.ring{ position:relative;
       &::after{
-        content:""; position:absolute; inset:-2px; border-radius:50%;
+        content:""; position:absolute; inset:calc(-2px);
+        border-radius:50%;
         background: conic-gradient(from 0deg, var(--acc-1,#60a5fa), var(--acc-2,#a78bfa), var(--acc-3,#34d399), var(--acc-1,#60a5fa));
         -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
-        mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
+                mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
         opacity:0; transition: opacity .18s; pointer-events:none;
       }
     }
   }
   .account:hover .account__avatar.ring::after{ opacity:.55; animation: spin 6s linear infinite; }
   @keyframes spin{ to{ transform: rotate(360deg); } }
-  .navbar__avatar-fallback{ width:100%; height:100%; border-radius:inherit; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; }
+
+  /* Fallback con inicial — fija font-size para no heredar 0 del trigger */
+  .navbar__avatar-fallback{
+    width:100%; height:100%; border-radius:inherit;
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-weight:800;
+    font-size: calc(var(--av-size) * .52); /* 52% del avatar */
+  }
 
   /* ====== Wrapper que blinda el tamaño de cualquier SVG ====== */
   .account__icon{
@@ -95,7 +117,7 @@
     color:#e5e7eb; font-weight:700; cursor:pointer;
     transition: background .18s, color .18s;
 
-    /* === Aísla em de los svg === */
+    /* Aislar em de los svg */
     font-size: 0;
 
     &:hover{ background: rgba(255,255,255,.06); color:#fff; }

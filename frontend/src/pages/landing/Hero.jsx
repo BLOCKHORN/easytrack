@@ -1,89 +1,155 @@
-import { useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+// frontend/src/pages/landing/Hero.jsx
+import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import {
   FaClipboardCheck,
-  FaWhatsapp,
-  FaCubes
-} from 'react-icons/fa'
-import HeroIllustration from '../../assets/hero-illustration.svg'
-import Trustbar from './Trustbar'
-import DemoModal from '../../components/DemoModal'
-import './Hero.scss'
+  FaCubes,
+  FaSearch,
+  FaBolt,
+  FaChartLine,
+} from "react-icons/fa";
+import HeroIllustration from "../../assets/hero-illustration.svg";
+import Trustbar from "./Trustbar";
+import DemoModal from "../../components/DemoModal";
+import useScrollMotion from "../../utils/useScrollMotion";
+import "./Hero.scss";
 
 export default function Hero({ onPrimaryCta }) {
-  const navigate = useNavigate()
-  const [demoOpen, setDemoOpen] = useState(false)
+  const navigate = useNavigate();
+  const [demoOpen, setDemoOpen] = useState(false);
+
+  // Reveal + parallax en la página
+  useScrollMotion({ rootMargin: "0px 0px -10% 0px", threshold: 0.15 });
 
   const startNow = () => {
-    try { if (typeof onPrimaryCta === 'function') onPrimaryCta() } catch {}
-    navigate('/precios')
-  }
+    try {
+      if (typeof onPrimaryCta === "function") onPrimaryCta();
+    } catch {}
+    navigate("/precios");
+  };
 
-  // 👉 Cuando tengas el vídeo, pon aquí la ruta o impórtalo
-  // import demoMp4 from '../../assets/demo.mp4'
-  const DEMO_VIDEO = '' // p.ej. '/videos/easytrack-demo.mp4'
+  const DEMO_VIDEO = ""; // '/videos/easytrack-demo.mp4'
 
   return (
     <header className="hero hero--center" role="banner" aria-labelledby="hero-title">
       {/* Fondo decorativo */}
       <div className="hero__bg" aria-hidden="true">
         <div className="bg__beam" />
-        <div className="bg__glow bg__glow--1" />
-        <div className="bg__glow bg__glow--2" />
+        <div className="bg__glow bg__glow--1" data-parallax data-speed="14" />
+        <div className="bg__glow bg__glow--2" data-parallax data-speed="18" />
         <div className="bg__grid" />
       </div>
 
       <div className="hero__inner">
-        <p className="eyebrow">Software para puntos de recogida</p>
-
-        {/* SEO: categoría + segmento en H1 */}
-        <h1 id="hero-title" className="headline">
-          <span className="line line--gradient">Software de gestión de paquetería</span>
-          <span className="line">para puntos de recogida (PUDO)</span>
-        </h1>
-
-        {/* SEO: long-tails clave */}
-        <p className="subheadline">
-          Ubica por balda/estante, avisa por WhatsApp y entrega con justificante.
-          Conciliación con transportistas sin Excel. <strong>30 días de prueba incluidos.</strong>
+        <p className="eyebrow" data-reveal="fade-down" data-duration="600">
+          Para tiendas, estancos, farmacias y puntos de recogida
         </p>
 
-        {/* CTAs en columna */}
-        <div className="cta-col" role="group" aria-label="Acciones principales">
-          <button className="btn btn--primary" onClick={startNow}>
+        {/* SEO: categoría + segmento en H1 */}
+        <h1 id="hero-title" className="headline" aria-describedby="hero-sub">
+          <span
+            className="line line--gradient"
+            data-reveal="fade-up"
+            data-delay="0"
+          >
+            Gestión de paquetería
+          </span>
+          <span className="line" data-reveal="fade-up" data-delay="80">
+            rápida y sin errores en mostrador
+          </span>
+        </h1>
+
+        {/* Mensaje claro de beneficios */}
+        <p
+          id="hero-sub"
+          className="subheadline"
+          data-reveal="fade-up"
+          data-delay="140"
+        >
+          Ubica por <b>estante/balda</b>, registra en segundos y entrega con
+          control básico. Conciliación con transportistas <b>sin Excel</b>.{" "}
+          <strong>30 días gratis.</strong>
+        </p>
+
+        {/* CTA principal */}
+        <div
+          className="cta-col"
+          role="group"
+          aria-label="Acciones principales"
+          data-reveal="fade-up"
+          data-delay="220"
+        >
+          <button className="btn btn--primary btn--xl" onClick={startNow}>
             Empezar gratis 30 días
           </button>
-          <button className="btn btn--ghost" onClick={() => setDemoOpen(true)}>
+          <button
+            className="btn btn--ghost btn--xl"
+            onClick={() => setDemoOpen(true)}
+          >
             Ver demo
           </button>
         </div>
 
-        {/* Badges (beneficios con intención de búsqueda) */}
-        <ul className="bullets" aria-label="Ventajas principales">
-          <li><FaClipboardCheck aria-hidden="true" /> Conciliación con transportistas</li>
-          <li><FaCubes aria-hidden="true" /> Ubicación por balda / estante</li>
-          <li><FaWhatsapp aria-hidden="true" /> Notificaciones por WhatsApp</li>
+        {/* Beneficios rápidos */}
+        <ul
+          className="bullets"
+          aria-label="Ventajas principales"
+          data-reveal="stagger-up"
+          data-stagger="90"
+        >
+          <li data-reveal-child>
+            <FaCubes aria-hidden="true" /> Ubicación por balda / estante
+          </li>
+          <li data-reveal-child>
+            <FaClipboardCheck aria-hidden="true" /> Entrega con verificación
+            básica
+          </li>
+          <li data-reveal-child>
+            <FaSearch aria-hidden="true" /> Búsqueda instantánea de paquetes
+          </li>
         </ul>
 
-        {/* Ornamento SVG compacto (va entre badges y trustbar) */}
-        <div className="hero__artblock" aria-hidden="true">
+
+        <p
+          className="hero__disclaimer"
+          data-reveal="fade-up"
+          data-delay="80"
+          data-duration="600"
+        >
+          Datos medios en clientes piloto. Pueden variar según volumen y
+          operación.
+        </p>
+
+        {/* Ornamento SVG */}
+        <div
+          className="hero__artblock"
+          aria-hidden="true"
+          data-reveal="scale-in"
+          data-delay="140"
+        >
           <div className="artblock__halo" />
           <img
             src={HeroIllustration}
             alt=""
             className="artblock__img"
             draggable="false"
+            data-parallax
+            data-speed="20"
           />
         </div>
 
         {/* Trustbar */}
-        <div className="hero__trustbar">
+        <div className="hero__trustbar" data-reveal="fade-up" data-delay="120">
           <Trustbar />
         </div>
       </div>
 
-      {/* Modal de demo (reutilizable) */}
-      <DemoModal open={demoOpen} onClose={() => setDemoOpen(false)} videoSrc={DEMO_VIDEO} />
+      {/* Modal de demo */}
+      <DemoModal
+        open={demoOpen}
+        onClose={() => setDemoOpen(false)}
+        videoSrc={DEMO_VIDEO}
+      />
     </header>
-  )
+  );
 }

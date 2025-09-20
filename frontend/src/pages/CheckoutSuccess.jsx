@@ -38,6 +38,7 @@ export default function CheckoutSuccess() {
   const [cooldown, setCooldown] = useState(0);
 
   const [loading, setLoading] = useState(true);
+  const [verifiedOk, setVerifiedOk] = useState(false); // <- NUEVO: sabemos si la verificación fue OK
   const [verifyErr, setVerifyErr] = useState('');
   const [planCode, setPlanCode] = useState('');
   const [trialEndsAt, setTrialEndsAt] = useState('');
@@ -109,6 +110,7 @@ export default function CheckoutSuccess() {
           setTrialEndsAt(d.trialEndsAt || '');
           setCurrentPeriodEnd(d.currentPeriodEnd || '');
 
+          setVerifiedOk(true);      // <- marcamos verificación OK
           setLoading(false);
           return true;
         } catch {
@@ -120,6 +122,7 @@ export default function CheckoutSuccess() {
 
     (async () => {
       setLoading(true);
+      setVerifiedOk(false);
       setVerifyErr('');
 
       if (sessionId) {
@@ -133,8 +136,10 @@ export default function CheckoutSuccess() {
     })();
   }, [sessionId, email]);
 
+  // ---- Reenviar/invitar (lo usa el auto-envío y el botón) ----
   async function resendInvite(){
-    if(!canResend) return;
+    if(!isEmail(email)) return;
+    if(status==='sending') return;
     setStatus('sending'); setMsg('');
     const body = JSON.stringify({ email });
 
@@ -168,6 +173,26 @@ export default function CheckoutSuccess() {
       setStatus('error'); setMsg(e.message); setCooldown(8);
     }
   }
+
+  // ---- NUEVO: auto-envío una sola vez por session_id cuando todo está listo ----
+  useEffect(() => {
+    if (!verifiedOk) return;          // necesitamos verificación OK
+    if (!isEmail(email)) return;      // necesitamos email válido
+    if (!sessionId) return;
+
+    const key = `invite_sent:${sessionId}`;
+    if (localStorage.getItem(key) === '1') return; // ya enviado para esta sesión
+
+    // Dispara invitación y marca como enviada (aunque falle no bloquea el botón)
+    (async () => {
+      try {
+        await resendInvite();
+      } finally {
+        localStorage.setItem(key, '1');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verifiedOk, email, sessionId]);
 
   function copyEmail(){
     if (!email) return;

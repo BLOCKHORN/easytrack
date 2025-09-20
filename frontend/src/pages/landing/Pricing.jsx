@@ -76,7 +76,7 @@ function useAnimatedNumber(value, duration = 380) {
 
 export default function Pricing() {
   const [rawPlans, setRawPlans] = useState(FALLBACK);
-  const [selected, setSelected] = useState("prepaid_12m"); // selector (no navega)
+  const [selected, setSelected] = useState("prepaid_12m");
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
@@ -152,7 +152,6 @@ export default function Pricing() {
 
   const animMonthly = useAnimatedNumber(plan.uiMonthly || 0);
 
-  // ✅ Enviar a /precios (no /planes) para evitar 404 del servidor
   function goToPricing(planCode) {
     try { localStorage.setItem("preferred_plan", planCode); } catch {}
     window.location.assign(`/precios?plan=${encodeURIComponent(planCode)}`);
@@ -205,7 +204,6 @@ export default function Pricing() {
       {/* HERO con precio y promo */}
       <div className={`pp-hero ${selected === "prepaid_12m" ? "pop" : ""}`} aria-live="polite">
         <div className="price-wrap">
-          {/* Si la promo aplica (mensual), mostramos precio dual */}
           {plan.promoEligible ? (
             <div className="price-duo" aria-label="Promoción: primer mes gratis">
               <div className="now-free">
@@ -249,25 +247,25 @@ export default function Pricing() {
         </div>
       </div>
 
-      {/* Features + nota legal */}
+      {/* Features + nota legal (limpiadas) */}
       <article className="pp-card">
         <ul className="features">
-          <li><i className="ico"><ICheck/></i>Orden instantáneo: zonas virtuales, etiquetas A4+QR y foto al ingreso</li>
-          <li><i className="ico"><ICheck/></i>Mapa de ocupación y reubicación guiada para liberar espacio</li>
-          <li><i className="ico"><ICheck/></i>Recordatorios 24/48/72 h (100 créditos/mes) para acelerar retiradas</li>
-          <li><i className="ico"><ICheck/></i>Checklist diario, radar de incidencias y exportes contables básicos</li>
-          <li><i className="ico"><ICheck/></i>Usuarios sin límite bajo fair-use. Soporte priorizado.</li>
+          <li><i className="ico"><ICheck/></i>Ubicación por estante/balda y alta en segundos</li>
+          <li><i className="ico"><ICheck/></i>Mapa de ocupación y reubicación guiada</li>
+          <li><i className="ico"><ICheck/></i>Conciliación básica con transportistas sin Excel</li>
+          <li><i className="ico"><ICheck/></i>Checklist diario e incidencias</li>
+          <li><i className="ico"><ICheck/></i>Usuarios sin límite bajo fair-use. Soporte por email.</li>
         </ul>
         <p className="fine">
           Mostramos <b>precios IVA incluido</b>. En el checkout, Stripe recogerá tus datos fiscales (empresa/VAT).
         </p>
       </article>
 
-      {/* Fila de confianza (iconos grandes) */}
+      {/* Fila de confianza */}
       <div className="pp-trust" aria-label="Garantías">
         <div className="titem"><i className="ico"><IShield/></i>RGPD y datos alojados en la UE</div>
         <div className="titem"><i className="ico"><IReceipt/></i>Sin cortes ni sorpresas en la factura</div>
-        <div className="titem"><i className="ico"><IChat/></i>Soporte cercano por WhatsApp / email</div>
+        <div className="titem"><i className="ico"><IChat/></i>Soporte cercano por email</div>
       </div>
     </section>
   );

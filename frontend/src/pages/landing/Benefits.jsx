@@ -1,40 +1,31 @@
-// src/components/Benefits.jsx
 import {
   FaClock,
   FaClipboardCheck,
-  FaWhatsapp,
   FaBell,
   FaSearch,
   FaEdit,
   FaCheckCircle,
   FaBoxOpen,
-  FaTrashAlt
+  FaTrashAlt,
+  FaCubes
 } from 'react-icons/fa'
 import './Benefits.scss'
 
-// Demo de resultados de búsqueda
+// Demo de resultados de búsqueda (mock UI)
 const resultadosDemo = [
-  { id: 'PK-1023', cliente: 'Ana Martínez',  empresa: 'InPost', est: 'B', balda: '3', estado: 'pendiente', dias: 2, tel: '600123123' },
-  { id: 'PK-1024', cliente: 'Carlos García', empresa: 'SEUR',   est: 'A', balda: '1', estado: 'pendiente', dias: 6, tel: '600456456' },
-  { id: 'PK-1025', cliente: 'Lucía Pérez',   empresa: 'GLS',    est: 'C', balda: '2', estado: 'entregado', dias: 0, tel: '600789789' }
+  { id: 'PK-1023', cliente: 'Ana Martínez',  empresa: 'InPost', est: 'B', balda: '3', estado: 'pendiente', dias: 2 },
+  { id: 'PK-1024', cliente: 'Carlos García', empresa: 'SEUR',   est: 'A', balda: '1', estado: 'pendiente', dias: 6 },
+  { id: 'PK-1025', cliente: 'Lucía Pérez',   empresa: 'GLS',    est: 'C', balda: '2', estado: 'entregado', dias: 0 }
 ]
 
-const buildWaURL = (tel, texto) =>
-  `https://wa.me/34${(tel || '').replace(/\D/g,'') || '600000000'}?text=${encodeURIComponent(texto)}`
-
-const NEGOCIO = 'tu negocio'
-
 export default function Benefits() {
-  const ejemploTextoWA = (r) =>
-    `Hola ${r.cliente}, tu paquete (${r.empresa}, ref. ${r.id}) está listo para recoger en ${NEGOCIO}. Gracias.`
-
   return (
     <section className="ep-bnf" id="beneficios" aria-labelledby="benefits-title">
       <header className="ep-bnf__head">
         <h2 id="benefits-title">
           <span className="ep-bnf__gradient">¿Por qué elegir EasyTrack?</span>
         </h2>
-        <p>Beneficios reales, sin humo. Lo que ves es lo que tendrás desde el día uno.</p>
+        <p>Beneficios reales desde el día uno: menos esperas, menos errores y más rotación.</p>
       </header>
 
       {/* 1. Alta y entrega sin fricción */}
@@ -49,7 +40,7 @@ export default function Benefits() {
           </ul>
           <div className="ep-bnf__chips">
             <span className="ep-bnf__pill ep-bnf__pill--ok"><FaClock /> ~30 seg/paquete</span>
-            <span className="ep-bnf__pill"><FaClipboardCheck /> Flujo simple</span>
+            <span className="ep-bnf__pill"><FaClipboardCheck /> Menos errores</span>
           </div>
         </div>
 
@@ -85,7 +76,7 @@ export default function Benefits() {
           </ul>
           <div className="ep-bnf__chips">
             <span className="ep-bnf__pill"><FaSearch /> Búsqueda potente</span>
-            <span className="ep-bnf__pill ep-bnf__pill--ok"><FaCheckCircle /> Menos errores</span>
+            <span className="ep-bnf__pill ep-bnf__pill--ok"><FaCheckCircle /> Menos incidencias</span>
           </div>
         </div>
 
@@ -135,60 +126,33 @@ export default function Benefits() {
         </div>
       </article>
 
-      {/* 3. Recordatorios prácticos (sin email) */}
+      {/* 3. Visor de ocupación y seguimiento simple (sin WhatsApp ni recordatorios automáticos) */}
       <article className="ep-bnf__row ep-bnf__animated ep-bnf__animated--d2">
         <div className="ep-bnf__copy">
-          <div className="ep-bnf__eyebrow">Seguimiento simple</div>
-          <h3>Recordatorios prácticos y WhatsApp en un clic</h3>
+          <div className="ep-bnf__eyebrow">Más paquetes, menos tiempo</div>
+          <h3>Visor de ocupación y reubicación guiada</h3>
           <ul className="ep-bnf__points">
-            <li><strong>Alertas internas</strong> de paquetes próximos a caducar.</li>
-            <li>Plantilla de <strong>WhatsApp</strong> para avisar al cliente desde tu número.</li>
-            <li>Resumen claro en el <strong>panel</strong> (día/semana).</li>
+            <li><strong>Mapa de ocupación</strong> por carril/estante para liberar espacio rápido.</li>
+            <li><strong>Seguimiento</strong> desde el panel (día/semana) sin hojas de cálculo.</li>
+            <li>Conciliación básica con <strong>transportistas</strong> sin usar Excel.</li>
           </ul>
           <div className="ep-bnf__chips">
             <span className="ep-bnf__pill ep-bnf__pill--ok"><FaBell /> Menos olvidos</span>
-            <span className="ep-bnf__pill"><FaWhatsapp /> Comunicación directa</span>
+            <span className="ep-bnf__pill"><FaCubes /> Balanceo de carga</span>
           </div>
         </div>
 
         <div className="ep-bnf__demo">
           <div className="ep-bnf__channels">
             <div className="ep-bnf__ch">
-              <div className="ep-bnf__ch-icon"><FaBell /></div>
-              <div className="ep-bnf__ch-body"><strong>Alertas internas</strong><span>Paquetes próximos a caducar.</span></div>
+              <div className="ep-bnf__ch-icon"><FaCubes /></div>
+              <div className="ep-bnf__ch-body"><strong>Mapa de ocupación</strong><span>Detecta huecos y zona caliente.</span></div>
               <div className="ep-bnf__ch-state ep-bnf__ch-state--on">Activo</div>
-            </div>
-            <div className="ep-bnf__ch">
-              <div className="ep-bnf__ch-icon"><FaWhatsapp /></div>
-              <div className="ep-bnf__ch-body">
-                <strong>Plantilla WhatsApp</strong>
-                <span>Envía el aviso desde tu número en un toque.</span>
-              </div>
-              <div className="ep-bnf__ch-state">Manual</div>
             </div>
             <div className="ep-bnf__ch">
               <div className="ep-bnf__ch-icon"><FaSearch /></div>
               <div className="ep-bnf__ch-body"><strong>Resumen en panel</strong><span>Visión del día y semana.</span></div>
               <div className="ep-bnf__ch-state ep-bnf__ch-state--on">Activo</div>
-            </div>
-          </div>
-
-          <div className="ep-bnf__wa">
-            <div className="ep-bnf__wa-title">Mensaje de WhatsApp (ejemplo)</div>
-            <div className="ep-bnf__wa-list">
-              {resultadosDemo.slice(0,2).map((r) => (
-                <div className="ep-bnf__wa-line" key={r.id}>
-                  <div className="ep-bnf__wa-text">{ejemploTextoWA(r)}</div>
-                  <a
-                    className="ep-bnf__btn ep-bnf__btn--primary ep-bnf__btn--xs"
-                    href={buildWaURL(r.tel, ejemploTextoWA(r))}
-                    target="_blank" rel="noreferrer"
-                    aria-label={`Abrir WhatsApp para ${r.cliente}`}
-                  >
-                    <FaWhatsapp /> Abrir en WhatsApp
-                  </a>
-                </div>
-              ))}
             </div>
           </div>
         </div>

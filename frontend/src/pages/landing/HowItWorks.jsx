@@ -1,4 +1,3 @@
-// src/components/HowItWorks.jsx
 import { useNavigate } from 'react-router-dom'
 import { FaClock, FaClipboardCheck, FaStore, FaTruck, FaCheckCircle } from 'react-icons/fa'
 import './HowItWorks.scss'
@@ -7,20 +6,13 @@ export default function HowItWorks({ onOpenDemo }) {
   const navigate = useNavigate()
 
   const startNow = () => {
-    navigate('/precios?cta=hiw', { replace: false }) // /planes -> redirige a /precios
+    navigate('/precios?cta=hiw', { replace: false })
   }
 
   const openDemo = () => {
-    // 1) Si el padre nos pasó un handler, úsalo
     if (typeof onOpenDemo === 'function') onOpenDemo()
-
-    // 2) Evento global (por si el padre escucha esto)
     try { window.dispatchEvent(new CustomEvent('et:open-demo')) } catch {}
-
-    // 3) Handler global opcional
     try { typeof window.__ET_OPEN_DEMO === 'function' && window.__ET_OPEN_DEMO() } catch {}
-
-    // 4) Fallback por querystring, por si tu modal abre leyendo ?demo=1
     try {
       const params = new URLSearchParams(window.location.search)
       if (params.get('demo') !== '1') {
@@ -52,7 +44,7 @@ export default function HowItWorks({ onOpenDemo }) {
       tasks: [
         'Alta en segundos con ubicación',
         'Entrega con verificación',
-        'Recordatorios y WhatsApp en un clic'
+        'Seguimiento en panel (día/semana)'
       ],
       cta: true
     }

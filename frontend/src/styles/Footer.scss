@@ -1,10 +1,13 @@
 /* ==========================================================
-   Footer.scss — EasyTrack
+   Footer.scss — EasyTrack (forced dark mode)
    Scope total en .footer
    ========================================================== */
 
 .footer {
-  /* ===== Tokens locales ===== */
+  /* Fuerza contexto oscuro para controles nativos/UA */
+  color-scheme: dark;
+
+  /* ===== Tokens locales (DARK) ===== */
   --ft-bg-1: #0b1220;
   --ft-bg-2: #0f172a;
   --ft-surface: rgba(255,255,255,0.04);
@@ -269,9 +272,7 @@
 
     /* ===== Botón "Volver arriba" — scope fuerte ===== */
     .to-top {
-      /* Resetea cualquier estilo global del proyecto */
       all: unset;
-
       display: inline-grid;
       place-items: center;
       width: 40px; height: 40px;
@@ -285,12 +286,11 @@
       isolation: isolate;
       transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background-color .18s ease;
 
-      /* el icono no hereda opacidades globales */
       svg {
         width: 18px; height: 18px;
         color: var(--ft-text) !important;
         opacity: 1 !important;
-        filter: drop-shadow(0 0 0 rgba(0,0,0,0)); /* neutraliza filtros globales */
+        filter: drop-shadow(0 0 0 rgba(0,0,0,0));
       }
 
       &:hover {
@@ -308,24 +308,11 @@
     }
   }
 
-  /* ===== Light mode (para webs claras) ===== */
-  @media (prefers-color-scheme: light) {
-    --ft-bg-1: #f8fafc;
-    --ft-bg-2: #eef2f7;
-    --ft-text: #111827;
-    --ft-muted: #475569;
-    --ft-border: rgba(15,23,42,0.08);
-    --ft-surface: rgba(15,23,42,0.03);
-
-    .footer__brand {
-      background: linear-gradient(180deg, rgba(15,23,42,0.02), rgba(15,23,42,0.01));
-      box-shadow: 0 10px 20px rgba(2,6,23,0.06);
-    }
-    .footer__madeby img { background: rgba(15,23,42,0.04); }
-  }
-
-  /* ===== Reduce motion ===== */
-  @media (prefers-reduced-motion: reduce) {
-    * { transition: none !important; animation: none !important; }
-  }
+  /* ===== Importante: NO hay override para light mode.
+     Eliminamos cualquier @media (prefers-color-scheme: light)
+     para que el footer sea SIEMPRE dark. ===== */
 }
+
+/* Extra: si tu layout tiene algún contenedor que aplica filtros globales
+   (invert, mix-blend-mode, etc.), este bloque ayuda a aislar el footer */
+.footer, .footer * { -webkit-tap-highlight-color: transparent; }

@@ -164,3 +164,38 @@
   }
   @keyframes acctShine{ 0%{ background-position:100% 50%; } 100%{ background-position:0% 50%; } }
 }
+/* ===== Billing block ===== */
+.acct__block--billing {
+  .billing__row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 10px;
+    padding: 6px 0;
+  }
+  .billing__k { color: var(--ep-muted, #64748b); }
+  .billing__v { color: var(--ep-text, #0f172a); }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid rgba(148,163,184,.3);
+    background: #f8fafc;
+    &--active { color: #065f46; background: #ecfdf5; border-color: #a7f3d0; }
+    &--trialing { color: #1e40af; background: #eff6ff; border-color: #bfdbfe; }
+    &--past_due, &--unpaid { color: #9a3412; background: #fff7ed; border-color: #fed7aa; }
+    &--canceled, &--incomplete { color: #6b7280; background: #f3f4f6; }
+  }
+
+  .actions {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;
+  }
+  .btn.btn--danger {
+    background: linear-gradient(135deg, #ef4444, #f97316);
+    color: #fff;
+    border: 0;
+  }
+}

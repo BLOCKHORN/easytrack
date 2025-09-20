@@ -6,9 +6,9 @@ function Avatar({ email, url, size = 'md', ring = true }) {
   const colors = ['#4F46E5', '#2563EB', '#059669', '#DC2626', '#0EA5E9', '#9333EA']
   const color = colors[letter.charCodeAt(0) % colors.length]
   return (
-    <span className={`account__avatar ${size} ${ring ? 'ring' : ''}`}>
+    <span className={`account__avatar ${size} ${ring ? 'ring' : ''}`} aria-hidden="true">
       {url ? (
-        <img src={url} alt="avatar" />
+        <img src={url} alt="" />
       ) : (
         <div className="navbar__avatar-fallback" style={{ backgroundColor: color }}>
           {letter}
