@@ -26,9 +26,9 @@ async function getLayoutMeta(tenantId) {
       .maybeSingle();
 
     if (!data) return { mode: null, rows: 0, cols: 0, payload: null };
-    const mode   = data.mode || data?.payload?.layout_mode || null;
-    const rows   = data.rows || data?.payload?.grid?.rows || 0;
-    const cols   = data.cols || data?.payload?.grid?.cols || 0;
+    const mode    = data.mode || data?.payload?.layout_mode || null;
+    const rows    = data.rows || data?.payload?.grid?.rows || 0;
+    const cols    = data.cols || data?.payload?.grid?.cols || 0;
     const payload = data.payload || null;
     return { mode, rows, cols, payload };
   } catch {
@@ -246,6 +246,10 @@ exports.guardarEstructura = async (req, res) => {
   try {
     const tenantId = (req.tenant && req.tenant.id) || await resolveTenantId(req);
     if (!tenantId) return res.status(403).json({ error: 'Tenant no resuelto' });
+
+    // Asegura nomenclatura por si esta ruta se usa sin pasar por el front
+    const { error: ensureErr } = await supabase.rpc('ensure_nomenclatura_secure_v2', { p_tenant: tenantId });
+    if (ensureErr) throw ensureErr;
 
     const { estantes, sync = true } = req.body || {};
     if (!Array.isArray(estantes) || estantes.length === 0) {
