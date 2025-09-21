@@ -5,84 +5,55 @@ import '../styles/CrearPassword.scss';
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/,'');
 
-export default function CrearPassword() {
-  const [loadingUser, setLoadingUser] = useState(true);
-  const [user, setUser]               = useState(null);
+export default function CreatePassword() {
+  const [loadingUser, setLoadingUser]   = useState(true);
+  const [user, setUser]                 = useState(null);
 
-  const [pwd, setPwd]                 = useState('');
-  const [pwd2, setPwd2]               = useState('');
-  const [show, setShow]               = useState(false);
-  const [saving, setSaving]           = useState(false);
+  const [pwd, setPwd]                   = useState('');
+  const [pwd2, setPwd2]                 = useState('');
+  const [show, setShow]                 = useState(false);
+  const [saving, setSaving]             = useState(false);
 
-  const [ok, setOk]                   = useState(false);
-  const [err, setErr]                 = useState('');
-  const [linkErr, setLinkErr]         = useState(''); // error proveniente del link (otp_expired, etc.)
-  const [resending, setResending]     = useState(false);
-  const [resentMsg, setResentMsg]     = useState('');
+  const [ok, setOk]                     = useState(false);
+  const [err, setErr]                   = useState('');
+  const [hashErr, setHashErr]           = useState('');
+  const [resending, setResending]       = useState(false);
+  const [resentMsg, setResentMsg]       = useState('');
 
   const signupEmail = useMemo(() => (localStorage.getItem('signup_email') || ''), []);
 
-  // 1) Procesar el enlace (query y hash) -> crear sesión si viene code o tokens
+  // 1) Procesar hash y también ?error=... de Supabase
   useEffect(() => {
     (async () => {
       try {
-        // --- A) ?code=... (nuevo flujo)
-        const qs = new URLSearchParams(window.location.search);
-        const code = qs.get('code');
-        const qErrCode = qs.get('error_code') || qs.get('error');
-        const qErrDesc = qs.get('error_description') || qs.get('error_message');
-
-        if (code) {
-          try {
-            await supabase.auth.exchangeCodeForSession(code);
-          } catch (e) {
-            setLinkErr(e?.message || 'El enlace ha expirado o no es válido.');
-          } finally {
-            // Limpia la URL (evita reintentos al refrescar)
-            ['code','type','next','error','error_code','error_description','error_message']
-              .forEach(k => qs.delete(k));
-            const newQs = qs.toString();
-            const newUrl = window.location.pathname + (newQs ? `?${newQs}` : '') + window.location.hash;
-            history.replaceState({}, document.title, newUrl);
-          }
-        } else if (qErrCode) {
-          setLinkErr(decodeURIComponent(qErrDesc || qErrCode));
-        }
-
-        // --- B) #access_token=#... (flujo clásico)
-        const h = window.location.hash.startsWith('#')
+        // Hash params (cuando viene con tokens)
+        const hash = window.location.hash.startsWith('#')
           ? new URLSearchParams(window.location.hash.slice(1))
           : new URLSearchParams();
 
-        const access_token  = h.get('access_token');
-        const refresh_token = h.get('refresh_token');
-        const hErrCode      = h.get('error_code');
-        const hErrDesc      = h.get('error_description');
+        const qp = new URLSearchParams(window.location.search);
+
+        const access_token  = hash.get('access_token');
+        const refresh_token = hash.get('refresh_token');
+        const error_code    = hash.get('error_code') || qp.get('error_code') || qp.get('error');
+        const error_desc    = hash.get('error_description') || qp.get('error_description');
 
         if (access_token && refresh_token) {
           try {
             await supabase.auth.setSession({ access_token, refresh_token });
-          } catch {
-            // seguimos y dejamos que getUser decida
-          } finally {
             history.replaceState({}, document.title, window.location.pathname + window.location.search);
-          }
-        } else if (hErrCode) {
-          setLinkErr(decodeURIComponent(hErrDesc || hErrCode));
+          } catch {}
+        } else if (error_code) {
+          setHashErr(`${error_desc || error_code}`);
         }
       } finally {
-        // 2) Cargar usuario en sesión (si ya se estableció)
         const { data, error } = await supabase.auth.getUser();
         if (!error) {
           const u = data?.user || null;
           setUser(u);
 
-          // Guarda email como fallback y notifica a otras pestañas
           if (u?.email) {
             try {
-              if (!localStorage.getItem('signup_email')) {
-                localStorage.setItem('signup_email', u.email);
-              }
               localStorage.setItem('et:email_confirmed', '1');
               setTimeout(() => { try { localStorage.removeItem('et:email_confirmed'); } catch {} }, 1500);
               if ('BroadcastChannel' in window) {
@@ -98,7 +69,7 @@ export default function CrearPassword() {
     })();
   }, []);
 
-  // 3) Reglas de seguridad
+  // Reglas
   const rules = useMemo(() => {
     const L = pwd.length >= 8;
     const U = /[A-Z]/.test(pwd);
@@ -109,7 +80,6 @@ export default function CrearPassword() {
     return { L, U, l, n, s, w };
   }, [pwd]);
 
-  // 4) Indicador de fortaleza
   const strength = useMemo(() => {
     let score = 0;
     if (rules.L) score++;
@@ -121,10 +91,8 @@ export default function CrearPassword() {
     return score; // 0..5
   }, [rules]);
 
-  const allValid =
-    rules.L && rules.U && rules.l && rules.n && rules.w && pwd === pwd2;
+  const allValid = rules.L && rules.U && rules.l && rules.n && rules.w && pwd === pwd2;
 
-  // 5) Guardar contraseña
   async function save(e) {
     e?.preventDefault?.();
     setErr('');
@@ -143,17 +111,15 @@ export default function CrearPassword() {
     setTimeout(() => { window.location.href = '/dashboard'; }, 900);
   }
 
-  // 6) Reenviar invitación / reset si el link salió “otp_expired” o similar
   async function resendInvite() {
-    const email = signupEmail || user?.email || '';
-    if (!email) {
+    if (!signupEmail) {
       setResentMsg('No conozco tu email. Vuelve a la pantalla anterior y solicita reenvío.');
       return;
     }
     setResending(true);
     setResentMsg('');
     try {
-      const body = JSON.stringify({ email });
+      const body = JSON.stringify({ email: signupEmail });
       const endpoints = [
         `${API}/billing/checkout/resend-invite`,
         `${API}/api/billing/checkout/resend-invite`
@@ -165,9 +131,7 @@ export default function CrearPassword() {
           const j = await res.json().catch(() => ({}));
           if (res.ok && j?.ok) { ok = true; kind = j.kind || 'invite'; break; }
           lastErr = j?.error || `HTTP ${res.status}`;
-        } catch (e) {
-          lastErr = e.message;
-        }
+        } catch (e) { lastErr = e.message; }
       }
       if (!ok) throw new Error(lastErr || 'No se pudo reenviar el enlace.');
       setResentMsg(kind === 'reset'
@@ -181,8 +145,6 @@ export default function CrearPassword() {
     }
   }
 
-  /* ===================== UI ===================== */
-
   if (loadingUser) {
     return (
       <section className="pw-setup">
@@ -195,23 +157,21 @@ export default function CrearPassword() {
     );
   }
 
-  // Si no hay sesión y el link trajo error (ej. otp_expired), permitir reenvío
   if (!user) {
     return (
       <section className="pw-setup">
         <div className="card empty">
           <h1>Crear contraseña</h1>
-          {linkErr ? (
+          {hashErr ? (
             <div className="alert error">
-              <FiAlertCircle /> {linkErr}
+              <FiAlertCircle /> {decodeURIComponent(hashErr)}
             </div>
           ) : null}
           <p className="muted">
-            No hay sesión activa. Abre el enlace de invitación más reciente desde este
-            navegador o solicita uno nuevo.
+            No hay sesión activa. Abre el enlace más reciente desde este navegador o solicita uno nuevo.
           </p>
 
-          {(signupEmail) ? (
+          {signupEmail ? (
             <button className="btn primary" onClick={resendInvite} disabled={resending}>
               {resending ? <><FiRefreshCw className="spin" /> Reenviando…</> : 'Reenviar enlace a mi email'}
             </button>
@@ -239,7 +199,6 @@ export default function CrearPassword() {
         </header>
 
         <form className="form" onSubmit={save}>
-          {/* Password */}
           <label className="label" htmlFor="pwd">Nueva contraseña</label>
           <div className="input-wrap">
             <input
@@ -262,10 +221,8 @@ export default function CrearPassword() {
             </button>
           </div>
 
-          {/* Strength meter */}
           <div className={`meter s-${strength}`} aria-hidden="true"><span /></div>
 
-          {/* Checklist */}
           <ul className="checks" aria-live="polite">
             <li className={rules.L ? 'ok' : ''}>Mínimo 8 caracteres</li>
             <li className={rules.U ? 'ok' : ''}>Una mayúscula</li>
@@ -275,7 +232,6 @@ export default function CrearPassword() {
             <li className={rules.s ? 'ok' : ''}>Recomendado: símbolo</li>
           </ul>
 
-          {/* Confirm */}
           <label className="label" htmlFor="pwd2">Confirmar contraseña</label>
           <div className="input-wrap">
             <input
@@ -289,7 +245,6 @@ export default function CrearPassword() {
             />
           </div>
 
-          {/* Feedback */}
           {err && <div className="alert error" role="alert">{err}</div>}
           {ok && <div className="alert success" role="status">Contraseña guardada. Redirigiendo…</div>}
 

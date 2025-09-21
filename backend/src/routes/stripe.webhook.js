@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * IMPORTANTE:
+ * IMPORTANTE en app.js:
  * app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
  */
 
@@ -12,11 +12,7 @@ const { supabase, supabaseAdmin } = require('../utils/supabaseClient');
 const { normalizePlan } = require('../utils/pricing');
 const { slugifyBase, uniqueSlug } = require('../helpers/slug');
 
-const FRONTEND_URL = (process.env.FRONTEND_URL || process.env.APP_BASE_URL || '').replace(/\/$/, '');
-const toEmail = (v) => String(v || '').toLowerCase().trim();
-
 /* ----------------------------- helpers base ----------------------------- */
-
 function mapStripeStatus(s) {
   switch (s) {
     case 'trialing': return 'trialing';
@@ -30,9 +26,8 @@ function mapStripeStatus(s) {
     default: return 'incomplete';
   }
 }
-
-const tsToISO = (unix) =>
-  (typeof unix === 'number' && !Number.isNaN(unix)) ? new Date(unix * 1000).toISOString() : null;
+const tsToISO = (unix) => (typeof unix === 'number' && !Number.isNaN(unix)) ? new Date(unix * 1000).toISOString() : null;
+const toEmail = (v) => String(v || '').toLowerCase().trim();
 
 async function ensureTenantByEmail(email, tenantNameHint = '') {
   const em = toEmail(email);
@@ -84,7 +79,6 @@ async function getPlanIdByCode(planCodeRaw) {
   if (error) throw new Error(`No se encontró billing_plans.code=${code}`);
   return data.id;
 }
-
 async function getPlanByStripePriceId(priceId) {
   if (!priceId) return null;
   const { data, error } = await supabase
@@ -95,7 +89,6 @@ async function getPlanByStripePriceId(priceId) {
   if (error || !data) return null;
   return data;
 }
-
 function getBasePriceIdFromSubscription(sub) {
   const items = sub?.items?.data || [];
   const base = items.find(i => i?.price?.recurring?.usage_type !== 'metered') || items[0];
@@ -137,9 +130,10 @@ async function upsertSubscription({ tenantId, planId, stripeCustomerId, stripeSu
   }
 }
 
-/** Dedupe por event_id (recomendable tener UNIQUE en payment_events.event_id) */
+/** Dedupe por event_id */
 async function dedupeEventOrThrow(event) {
   if (!event?.id) return;
+
   try {
     const { data: exists } = await supabase
       .from('payment_events')
@@ -158,11 +152,12 @@ async function dedupeEventOrThrow(event) {
     payload: event
   };
   const { error } = await supabase.from('payment_events').insert(insert);
-  if (error && error.code === '23505') throw new Error(`EVENT_DUPLICATE:${event.id}`);
-  if (error) throw error;
+  if (error) {
+    if (error.code === '23505') throw new Error(`EVENT_DUPLICATE:${event.id}`);
+    throw error;
+  }
 }
 
-/** Invitación con fallback agresivo a reset */
 async function inviteUserIfPossible(email) {
   try {
     const em = toEmail(email);
@@ -171,26 +166,20 @@ async function inviteUserIfPossible(email) {
     const admin = (supabaseAdmin?.auth?.admin) ? supabaseAdmin : supabase;
     if (!admin?.auth?.admin?.inviteUserByEmail) return;
 
-    // 👇 A la página que crea la contraseña, NO a /billing/success
-    const redirectTo = `${FRONTEND_URL}/create-password`;
+    const redirectTo = `${process.env.FRONTEND_URL}/create-password`;
 
     const { error } = await admin.auth.admin.inviteUserByEmail(em, { redirectTo });
     if (!error) return;
 
-    // Fallback SIEMPRE que falle la invitación (mensajes varían mucho)
+    // fallback → reset
     const { error: rerr } = await supabase.auth.resetPasswordForEmail(em, { redirectTo });
-    if (rerr) {
-      console.warn('[inviteUserIfPossible] both invite and reset failed:', error?.message, rerr?.message);
-    } else {
-      console.log('[inviteUserIfPossible] reset password email sent to', em);
-    }
+    if (rerr) console.warn('[inviteUserIfPossible] reset fallback failed:', rerr.message);
   } catch (e) {
     console.warn('[inviteUserIfPossible] aviso:', e.message);
   }
 }
 
 /* --------------------------------- handler -------------------------------- */
-
 async function stripeWebhook(req, res) {
   if (!process.env.STRIPE_WEBHOOK_SECRET) {
     console.error('[Stripe webhook] Falta STRIPE_WEBHOOK_SECRET');
@@ -229,32 +218,25 @@ async function stripeWebhook(req, res) {
         const paidEnough =
           session.payment_status === 'paid' ||
           (subscription && ['active', 'trialing'].includes(subscription.status));
-        if (!paidEnough) {
-          console.log('[webhook] invite suppressed (not paid yet):', session.id, subscription?.status);
-          break;
-        }
+        if (!paidEnough) break;
 
-        const signupEmail =
-          session.customer_details?.email ||
-          session.customer_email ||
-          session.metadata?.signup_email ||
-          '';
+        const signupEmail = session.customer_details?.email || session.customer_email || session.metadata?.signup_email || '';
         const tenantName = session.metadata?.tenant_name || '';
         const tenant = await ensureTenantByEmail(signupEmail, tenantName);
 
         await upsertTenantStripeCustomer(tenant?.id, subscription.customer);
 
+        // Plan
         let planId = null;
         const metaCode = normalizePlan(subscription.metadata?.plan_code || session.metadata?.plan_code || '');
-        if (metaCode) {
-          try { planId = await getPlanIdByCode(metaCode); } catch {}
-        }
+        if (metaCode) { try { planId = await getPlanIdByCode(metaCode); } catch {} }
         if (!planId) {
           const basePriceId = getBasePriceIdFromSubscription(subscription);
           const planByPrice = await getPlanByStripePriceId(basePriceId);
           planId = planByPrice?.id || null;
         }
 
+        // Upsert by provider_session_id si existe, si no upsert por provider_subscription_id
         const patch = {
           tenant_id: tenant?.id || null,
           plan_id: planId || null,
@@ -273,28 +255,25 @@ async function stripeWebhook(req, res) {
           .update(patch)
           .eq('provider', 'stripe')
           .eq('provider_session_id', session.id)
-          .select('id, tenant_id, plan_id')
+          .select('id')
           .maybeSingle();
-
-        const tenantId = upd?.data?.tenant_id || tenant?.id || null;
 
         if (!upd?.data?.id) {
           await upsertSubscription({
-            tenantId,
+            tenantId: tenant?.id || null,
             planId,
             stripeCustomerId: subscription.customer,
             stripeSubscription: subscription
           });
         }
 
+        await inviteUserIfPossible(signupEmail);
         console.log('[webhook:cs.completed]', {
           subId: subscription.id,
           priceId: getBasePriceIdFromSubscription(subscription),
           planId,
-          tenantId
+          tenantId: tenant?.id || null
         });
-
-        await inviteUserIfPossible(signupEmail);
         break;
       }
 
@@ -305,9 +284,7 @@ async function stripeWebhook(req, res) {
 
         let planId = null;
         const metaCode = normalizePlan(s.metadata?.plan_code || '');
-        if (metaCode) {
-          try { planId = await getPlanIdByCode(metaCode); } catch {}
-        }
+        if (metaCode) { try { planId = await getPlanIdByCode(metaCode); } catch {} }
         if (!planId) {
           const sub = typeof s.items?.data?.[0]?.price?.id === 'string'
             ? s
@@ -317,6 +294,7 @@ async function stripeWebhook(req, res) {
           planId = planByPrice?.id || null;
         }
 
+        // Tenant
         let tenantId;
         const { data: subRow } = await supabase
           .from('subscriptions')
@@ -345,13 +323,6 @@ async function stripeWebhook(req, res) {
           stripeSubscription: s
         });
 
-        console.log('[webhook:sub.updated]', {
-          subId: s.id,
-          priceId: getBasePriceIdFromSubscription(s),
-          planId,
-          tenantId
-        });
-
         if (['active', 'trialing'].includes(s.status)) {
           try {
             const cust = typeof s.customer === 'string'
@@ -363,6 +334,13 @@ async function stripeWebhook(req, res) {
             console.warn('[webhook] optional invite on subscription.updated failed:', e.message);
           }
         }
+
+        console.log('[webhook:sub.updated]', {
+          subId: s.id,
+          priceId: getBasePriceIdFromSubscription(s),
+          planId,
+          tenantId
+        });
         break;
       }
 

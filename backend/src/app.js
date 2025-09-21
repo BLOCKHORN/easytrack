@@ -37,10 +37,10 @@ const envOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
 const defaultsDev = [
   process.env.FRONTEND_URL,
   process.env.APP_BASE_URL,
-  'http://localhost:5173', 'http://127.0.0.1:5173',
-  'http://localhost:5174', 'http://127.0.0.1:5174',
-  'http://localhost:4173', 'http://127.0.0.1:4173',
-  'http://localhost:4174', 'http://127.0.0.1:4174',
+  'http://localhost:5173','http://127.0.0.1:5173',
+  'http://localhost:5174','http://127.0.0.1:5174',
+  'http://localhost:4173','http://127.0.0.1:4173',
+  'http://localhost:4174','http://127.0.0.1:4174',
 ].filter(Boolean);
 
 const ALLOWED_ORIGINS = Array.from(new Set([
@@ -49,7 +49,7 @@ const ALLOWED_ORIGINS = Array.from(new Set([
 ]));
 
 function originChecker(origin, cb) {
-  if (!origin) return cb(null, true); // curl/cron/Stripe webhooks no mandan Origin
+  if (!origin) return cb(null, true);
   if (ALLOWED_ORIGINS.includes('*')) return cb(null, true);
   try {
     const u = new URL(origin);
@@ -58,8 +58,9 @@ function originChecker(origin, cb) {
       ALLOWED_ORIGINS.includes(origin) ||
       host === 'localhost' || host === '127.0.0.1' ||
       host.endsWith('.devtunnels.ms') ||
-      host.endsWith('.vercel.app');
-    if (ok) return cb(null, true);
+      host.endsWith('.vercel.app') ||
+      host.endsWith('.onrender.com');
+    return cb(null, ok);
   } catch {}
   return cb(new Error('Not allowed by CORS'));
 }
@@ -67,8 +68,8 @@ function originChecker(origin, cb) {
 const corsOptions = {
   origin: originChecker,
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Stripe-Signature'],
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization','Stripe-Signature'],
   optionsSuccessStatus: 204,
 };
 
@@ -80,13 +81,11 @@ app.get('/health', (_, res) => res.json({ ok: true }));
 app.get('/.well-known/health', (_, res) => res.json({ ok: true }));
 
 /* =========================================================
-   STRIPE WEBHOOK (RAW) — antes de express.json()
+   STRIPE WEBHOOK (RAW) — SIEMPRE antes de express.json()
    ========================================================= */
-// MUY IMPORTANTE: estos endpoints van ANTES de cualquier parser
 const rawJson = express.raw({ type: 'application/json' });
-app.post('/webhooks/stripe', rawJson, stripeWebhook);
-// mantengo este alias por si ya lo tenías configurado en Stripe
 app.post('/billing/stripe/webhook', rawJson, stripeWebhook);
+app.post('/webhooks/stripe', rawJson, stripeWebhook);
 
 /* ============== Parsers JSON normales ============== */
 app.use(express.json({ limit: '1mb' }));
@@ -101,8 +100,7 @@ app.use('/api/metrics', metricsRouter);
 app.use('/admin', adminRoutes);
 
 /* =========================================================
-   Billing (Stripe) — SIEMPRE accesible (antes del firewall)
-   (dentro de billing.routes, /portal ya usa requireAuth)
+   Billing (Stripe) — accesible sin firewall
    ========================================================= */
 app.use('/billing', billingRoutes);
 app.use('/api/billing', billingRoutes);
@@ -111,11 +109,9 @@ app.use('/api/billing', billingRoutes);
    Helpers de montaje
    ========================================================= */
 function gate(path, router) {
-  // Login + cortafuegos (suscripción activa)
   app.use(path, requireAuth, subscriptionFirewall(), router);
 }
 function authOnly(path, router) {
-  // Solo login, SIN cortafuegos
   app.use(path, requireAuth, router);
 }
 

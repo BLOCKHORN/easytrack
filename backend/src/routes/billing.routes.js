@@ -20,32 +20,6 @@ function makeIdemKey(req, keyA, keyB) {
   const bucket = Math.floor(Date.now() / 10000);
   return `co:${keyA || 'anon'}:${keyB || 'plan'}:${bucket}`;
 }
-async function getPlanIdByCode(codeRaw) {
-  const code = normalizePlan(codeRaw || '');
-  if (!code) return null;
-  const { data, error } = await supabase
-    .from('billing_plans')
-    .select('id')
-    .eq('code', code)
-    .maybeSingle();
-  if (error || !data) return null;
-  return data.id;
-}
-async function getPlanIdByStripePriceId(priceId) {
-  if (!priceId) return null;
-  const { data, error } = await supabase
-    .from('billing_plans')
-    .select('id')
-    .eq('stripe_price_id', priceId)
-    .maybeSingle();
-  if (error || !data) return null;
-  return data.id;
-}
-function basePriceIdFromStripeSub(sub) {
-  const items = sub?.items?.data || [];
-  const base = items.find(i => i?.price?.recurring?.usage_type !== 'metered') || items[0];
-  return base?.price?.id || null;
-}
 
 router.get('/plans', async (_req, res) => {
   try {
@@ -57,9 +31,7 @@ router.get('/plans', async (_req, res) => {
   }
 });
 
-/**
- * 🚫 Sin escrituras locales: solo crea Checkout Session.
- */
+/** Sólo crea la Checkout Session (sin escrituras locales) */
 router.post('/checkout/start', async (req, res) => {
   try {
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -125,10 +97,10 @@ router.post('/checkout/start', async (req, res) => {
   }
 });
 
-/* Verificación tras volver del checkout (solo lectura + sync amable) */
+/* Verificación tras volver del checkout */
 router.get('/checkout/verify', async (req, res) => {
   const fail = (code, msg) => {
-    const urlsObj = { portal: '', dashboard: `${FRONTEND_URL}/app`, plans: `${FRONTEND_URL}/planes` };
+    const urlsObj = { portal: '', dashboard: `${FRONTEND_URL}/dashboard`, plans: `${FRONTEND_URL}/planes` };
     const urlsArr = [urlsObj.portal, urlsObj.dashboard, urlsObj.plans].filter(Boolean);
     return res.status(code).json({ ok:false, error: msg, urls: urlsObj, checkoutUrls: urlsArr });
   };
@@ -170,13 +142,13 @@ router.get('/checkout/verify', async (req, res) => {
       try {
         const portal = await stripe.billingPortal.sessions.create({
           customer: customer.id,
-          return_url: `${FRONTEND_URL}/app`
+          return_url: `${FRONTEND_URL}/dashboard`
         });
         portalUrl = portal.url || '';
       } catch (e) { console.warn('[verify] portal url:', e.message); }
     }
 
-    const urlsObj = { portal: portalUrl, dashboard: `${FRONTEND_URL}/app`, plans: `${FRONTEND_URL}/planes` };
+    const urlsObj = { portal: portalUrl, dashboard: `${FRONTEND_URL}/dashboard`, plans: `${FRONTEND_URL}/planes` };
     const urlsArr = [urlsObj.portal, urlsObj.dashboard, urlsObj.plans].filter(Boolean);
 
     const payload = {
@@ -198,6 +170,7 @@ router.get('/checkout/verify', async (req, res) => {
   }
 });
 
+/** Reenvía invitación o reset, SIEMPRE hacia /create-password */
 router.post('/checkout/resend-invite', async (req, res) => {
   try {
     const email = toEmail(req.body?.email);
@@ -208,7 +181,6 @@ router.post('/checkout/resend-invite', async (req, res) => {
       return res.status(503).json({ ok:false, error:'Service role no configurado' });
     }
 
-    // 👇 redirige a la pantalla para crear contraseña
     const redirectTo = `${FRONTEND_URL}/create-password`;
 
     const { error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
@@ -223,7 +195,6 @@ router.post('/checkout/resend-invite', async (req, res) => {
     return res.status(500).json({ ok:false, error: e.message });
   }
 });
-
 
 /* ---------- Portal ---------- */
 async function portalHandler(req, res) {
@@ -244,7 +215,7 @@ async function portalHandler(req, res) {
 
     const portal = await stripe.billingPortal.sessions.create({
       customer: tenant.stripe_customer_id,
-      return_url: `${FRONTEND_URL}/app`
+      return_url: `${FRONTEND_URL}/dashboard`
     });
 
     return res.json({ ok:true, url: portal.url });
@@ -256,7 +227,6 @@ async function portalHandler(req, res) {
 router.get('/portal', requireAuth, portalHandler);
 router.post('/portal', requireAuth, portalHandler);
 
-/* ---------- Diagnóstico mínimo ---------- */
 router.get('/self-status', requireAuth, async (req, res) => {
   try {
     const key = String(process.env.STRIPE_SECRET_KEY || '');
@@ -281,7 +251,6 @@ router.get('/self-status', requireAuth, async (req, res) => {
   }
 });
 
-/* ---------- Renovación (cancel / resume) ---------- */
 router.get('/subscription', requireAuth, async (req, res) => {
   try {
     const tenantId = req.tenant?.id || null;
