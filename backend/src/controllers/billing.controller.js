@@ -1,7 +1,7 @@
 'use strict';
 
 const { supabase, supabaseAdmin } = require('../utils/supabaseClient');
-const { slugifyBase, uniqueSlug } = require('../helpers/slug'); // (no se usa ya para startCheckout, pero mantenido si lo usas en otros sitios)
+const { slugifyBase, uniqueSlug } = require('../helpers/slug'); // si lo usas en otros sitios
 const Stripe = require('stripe');
 
 const PROVIDER     = process.env.PAYMENT_PROVIDER || 'stripe';
@@ -221,7 +221,7 @@ async function cancelAtPeriodEnd(req, res) {
 
     return res.json({ ok:true });
   } catch (e) {
-    console.error('[billing] cancelAtPeriodEnd:', e);
+    console.error('[billing] cancelAtPeriodEnd]:', e);
     return res.status(500).json({ ok:false, error:'No se pudo programar la cancelación.' });
   }
 }
@@ -237,7 +237,7 @@ async function resendInvite(req, res) {
       return res.status(503).json({ ok:false, error:'Service role no configurado en el servidor' });
     }
 
-    const redirectTo = `${FRONTEND_URL}/crear-password`;
+    const redirectTo = `${FRONTEND_URL}/billing/success`;
 
     // 1) INVITE
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });

@@ -9,6 +9,7 @@ const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\
 
 const isEmail = (v='') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
+// Detección simple de inbox por dominio
 function guessInboxUrl(email=''){
   const d = email.split('@')[1]?.toLowerCase() || '';
   if (d.includes('gmail')) return 'https://mail.google.com/mail/u/0/#inbox';
@@ -18,6 +19,7 @@ function guessInboxUrl(email=''){
   if (d.includes('icloud') || d.includes('me.com')) return 'https://www.icloud.com/mail';
   return null;
 }
+
 function fmtDate(iso){
   if (!iso) return '—';
   try{
@@ -180,14 +182,50 @@ export default function CheckoutSuccess() {
   const inboxUrl  = guessInboxUrl(email);
   const canResend = isEmail(email) && status!=='sending' && cooldown===0;
 
-  // Countdown del botón
+  // -------- (A) CONSUMIR TOKEN DEL EMAIL EN ESTA MISMA PÁGINA --------
+  useEffect(() => {
+    const KEY = 'et_token_consumed';
+    const once = localStorage.getItem(KEY) === '1';
+
+    async function maybeConsumeAuthFromUrl() {
+      // 1) hash tokens (#access_token & #refresh_token)
+      const h = window.location.hash || '';
+      const get = (k) => decodeURIComponent((h.match(new RegExp(`${k}=([^&]+)`))||[])[1] || '');
+      const access_token  = get('access_token');
+      const refresh_token = get('refresh_token');
+
+      // 2) fallback ?code= (PKCE)
+      const code = new URLSearchParams(window.location.search).get('code');
+
+      try {
+        if (!once && access_token && refresh_token) {
+          await supabase.auth.setSession({ access_token, refresh_token });
+          localStorage.setItem(KEY, '1');
+          // limpiar hash sin recargar
+          history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        } else if (!once && code) {
+          await supabase.auth.exchangeCodeForSession(code);
+          localStorage.setItem(KEY, '1');
+          const qs = new URLSearchParams(window.location.search);
+          qs.delete('code'); qs.delete('type'); qs.delete('error'); qs.delete('error_code'); qs.delete('error_description');
+          history.replaceState({}, document.title, window.location.pathname + (qs.toString() ? `?${qs.toString()}` : ''));
+        }
+      } catch (e) {
+        console.warn('[success] token consume failed:', e?.message);
+      }
+    }
+
+    maybeConsumeAuthFromUrl();
+  }, []);
+
+  // -------- (B) Countdown del botón Reenviar --------
   useEffect(() => {
     if (!cooldown) return;
     const t = setInterval(() => setCooldown(c => Math.max(0, c - 1)), 1000);
     return () => clearInterval(t);
   }, [cooldown]);
 
-  // 1) Verifica checkout/session y rellena datos
+  // -------- (C) Verifica checkout/session y rellena datos --------
   useEffect(() => {
     async function verifyWith(id){
       const endpoints = [
@@ -217,7 +255,7 @@ export default function CheckoutSuccess() {
           setVerifiedOk(true);
           setLoading(false);
           return true;
-        } catch { /* siguiente endpoint */ }
+        } catch { /* probar siguiente endpoint */ }
       }
       return false;
     }
@@ -236,7 +274,7 @@ export default function CheckoutSuccess() {
     })();
   }, [sessionId, email]);
 
-  // 2) Reenvío automático (una sola vez) tras verificar checkout
+  // -------- (D) Reenvío automático (una sola vez) tras verificar checkout --------
   useEffect(() => {
     if (!verifiedOk) return;
     if (!isEmail(email)) return;
@@ -252,17 +290,14 @@ export default function CheckoutSuccess() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verifiedOk, email, sessionId]);
 
-  // 3) Detectar sesión de Supabase (misma pestaña o otra) y cambiar a modo "create"
+  // -------- (E) Detectar sesión de Supabase (misma/otra pestaña) --------
   useEffect(() => {
-    // Chequeo inicial
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setAuthedUser(data.user);
     });
-    // Evento de cambios
     const sub = supabase.auth.onAuthStateChange((_ev, session) => {
       if (session?.user) setAuthedUser(session.user);
     });
-    // Si otra pestaña setea la sesión, escuchamos storage y re-consultamos
     const onStorage = () => {
       supabase.auth.getUser().then(({ data }) => {
         if (data?.user) setAuthedUser(data.user);
@@ -398,7 +433,7 @@ export default function CheckoutSuccess() {
                 <div className="dot">3</div>
                 <div className="txt">
                   <strong>Crea tu contraseña</strong>
-                  <span>El enlace te lleva a <code>/crear-password</code></span>
+                  <span>El enlace te lleva de vuelta aquí para completarlo</span>
                 </div>
               </li>
             </ol>
@@ -410,9 +445,12 @@ export default function CheckoutSuccess() {
                 <div className="subj">Si no aparece, revisa Promociones/SPAM.</div>
               </div>
               {inboxUrl ? (
-                <a className="et-btn et-btn--primary" href={inboxUrl} /* mismo tab */>
+                <button
+                  className="et-btn et-btn--primary"
+                  onClick={() => { window.location.href = inboxUrl; }} // misma pestaña
+                >
                   <FiMail/> Abrir correo <FiExternalLink/>
-                </a>
+                </button>
               ) : (
                 <button className="et-btn" disabled title="Proveedor no detectado">
                   <FiMail/> Abrir correo

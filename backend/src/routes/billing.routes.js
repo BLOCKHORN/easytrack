@@ -1,4 +1,3 @@
-// routes/billing.routes.js
 'use strict';
 
 const express = require('express');
@@ -15,7 +14,6 @@ const TRIAL_DAYS = 30;
 
 const toEmail = (v) => String(v || '').trim().toLowerCase();
 
-/* ------------------------ helpers ------------------------ */
 function makeIdemKey(req, keyA, keyB) {
   const hdr = req.get && req.get('x-idem-key');
   if (hdr) return hdr;
@@ -49,8 +47,6 @@ function basePriceIdFromStripeSub(sub) {
   return base?.price?.id || null;
 }
 
-/* ------------------------------ rutas ------------------------------ */
-
 router.get('/plans', async (_req, res) => {
   try {
     const plans = await getPlans();
@@ -62,8 +58,7 @@ router.get('/plans', async (_req, res) => {
 });
 
 /**
- * 🚫 Sin escrituras locales: no crea tenant ni subscription aquí.
- * Solo crea la Checkout Session en Stripe.
+ * 🚫 Sin escrituras locales: solo crea Checkout Session.
  */
 router.post('/checkout/start', async (req, res) => {
   try {
@@ -76,7 +71,6 @@ router.post('/checkout/start', async (req, res) => {
     if (!plan_code) return res.status(400).json({ ok:false, error:'plan_code es requerido' });
     if (!userEmail) return res.status(400).json({ ok:false, error:'email es requerido' });
 
-    // 1) Plan (solo lectura)
     const planCode = normalizePlan(plan_code);
     const { data: plan, error: perr } = await supabase
       .from('billing_plans')
@@ -87,7 +81,6 @@ router.post('/checkout/start', async (req, res) => {
     if (perr || !plan) return res.status(404).json({ ok:false, error:'Plan no encontrado' });
     if (!plan.stripe_price_id) return res.status(500).json({ ok:false, error:'stripe_price_id ausente en plan' });
 
-    // 2) ¿Existe tenant por ese email? Solo lectura, para reusar customer y decidir trial.
     let stripeCustomerId;
     let trialDays = TRIAL_DAYS;
     try {
@@ -97,15 +90,10 @@ router.post('/checkout/start', async (req, res) => {
         .eq('email', userEmail)
         .maybeSingle();
       stripeCustomerId = existent?.stripe_customer_id || undefined;
-      if (existent) trialDays = 0; // si ya fue cliente, sin trial
+      if (existent) trialDays = 0;
     } catch {}
 
-    // 3) Checkout Session (sin client_reference_id, sin escritura local)
-    const meta = {
-      signup_email: userEmail,
-      tenant_name : tenant_name || '',
-      plan_code   : plan.code
-    };
+    const meta = { signup_email: userEmail, tenant_name: tenant_name || '', plan_code: plan.code };
 
     const sessionParams = {
       mode: 'subscription',
@@ -137,7 +125,7 @@ router.post('/checkout/start', async (req, res) => {
   }
 });
 
-/* Verificación tras volver del checkout: solo lectura + sync amable */
+/* Verificación tras volver del checkout (solo lectura + sync amable) */
 router.get('/checkout/verify', async (req, res) => {
   const fail = (code, msg) => {
     const urlsObj = { portal: '', dashboard: `${FRONTEND_URL}/app`, plans: `${FRONTEND_URL}/planes` };
@@ -157,7 +145,6 @@ router.get('/checkout/verify', async (req, res) => {
     const sub      = session.subscription || null;
     const customer = session.customer || null;
 
-    // Puede no existir fila local (ya no escribimos en /checkout/start)
     const { data: localSub } = await supabase
       .from('subscriptions')
       .select('id, tenant_id, plan_id, status, provider_subscription_id')
@@ -165,9 +152,9 @@ router.get('/checkout/verify', async (req, res) => {
       .eq('provider_session_id', session.id)
       .maybeSingle();
 
-    const tenantId = localSub?.tenant_id || null; // ya no dependemos de client_reference_id
+    const tenantId = localSub?.tenant_id || null;
 
-    // Actualizaciones amables (no críticas): stripe_customer_id, etc.
+    // Sync amable de stripe_customer_id si hay tenant
     if (tenantId && customer?.id) {
       try {
         const { data: t } = await supabase.from('tenants').select('stripe_customer_id').eq('id', tenantId).maybeSingle();
@@ -177,42 +164,7 @@ router.get('/checkout/verify', async (req, res) => {
       } catch (e) { console.warn('[verify] update tenants.stripe_customer_id:', e.message); }
     }
 
-    // Insert/Update local si podemos resolver plan_id (sigue siendo opcional; el webhook manda)
-    if (sub && tenantId) {
-      const basePriceId     = basePriceIdFromStripeSub(sub);
-      const planIdFromCode  = await getPlanIdByCode(session.metadata?.plan_code || sub?.metadata?.plan_code);
-      const planIdFromPrice = await getPlanIdByStripePriceId(basePriceId);
-      const planId          = planIdFromCode || planIdFromPrice || localSub?.plan_id || null;
-
-      const patch = {
-        status: sub.status || 'incomplete',
-        provider_subscription_id: sub.id || null,
-        current_period_start: sub.current_period_start ? new Date(sub.current_period_start * 1000).toISOString() : null,
-        current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null
-      };
-
-      if (localSub?.id) {
-        try { await supabase.from('subscriptions').update(patch).eq('id', localSub.id); }
-        catch (e) { console.warn('[verify] update local subscription:', e.message); }
-      } else if (planId) {
-        try {
-          await supabase.from('subscriptions').insert([{
-            tenant_id: tenantId,
-            plan_id: planId,
-            provider: 'stripe',
-            status: sub.status || 'incomplete',
-            provider_session_id: session.id,
-            provider_subscription_id: sub.id || null,
-            current_period_start: patch.current_period_start,
-            current_period_end: patch.current_period_end
-          }]);
-        } catch (e) { console.warn('[verify] insert local subscription:', e.message); }
-      } else {
-        console.warn('[verify] no plan_id resolved; skipped insert (rely on webhook).');
-      }
-    }
-
-    // Portal de facturación
+    // Portal
     let portalUrl = '';
     if (customer?.id) {
       try {
