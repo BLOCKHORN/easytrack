@@ -1,8 +1,7 @@
-// backend/src/webhooks/stripe.webhook.js
 'use strict';
 
 /**
- * En server:
+ * IMPORTANTE:
  * app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
  */
 
@@ -13,7 +12,11 @@ const { supabase, supabaseAdmin } = require('../utils/supabaseClient');
 const { normalizePlan } = require('../utils/pricing');
 const { slugifyBase, uniqueSlug } = require('../helpers/slug');
 
-/* ---------- utils ---------- */
+const FRONTEND_URL = (process.env.FRONTEND_URL || process.env.APP_BASE_URL || '').replace(/\/$/, '');
+const toEmail = (v) => String(v || '').toLowerCase().trim();
+
+/* ----------------------------- helpers base ----------------------------- */
+
 function mapStripeStatus(s) {
   switch (s) {
     case 'trialing': return 'trialing';
@@ -27,18 +30,20 @@ function mapStripeStatus(s) {
     default: return 'incomplete';
   }
 }
-const tsToISO = (unix) => (typeof unix === 'number' && !Number.isNaN(unix)) ? new Date(unix * 1000).toISOString() : null;
-const toEmail = (v) => String(v || '').toLowerCase().trim();
+
+const tsToISO = (unix) =>
+  (typeof unix === 'number' && !Number.isNaN(unix)) ? new Date(unix * 1000).toISOString() : null;
 
 async function ensureTenantByEmail(email, tenantNameHint = '') {
   const em = toEmail(email);
   if (!em) return null;
 
-  const { data: tExist } = await supabase
+  const { data: tExist, error: exErr } = await supabase
     .from('tenants')
     .select('id, slug, email, stripe_customer_id')
     .eq('email', em)
     .maybeSingle();
+  if (exErr) throw exErr;
   if (tExist?.id) return tExist;
 
   const base = slugifyBase(tenantNameHint || em.split('@')[0]);
@@ -70,72 +75,69 @@ async function upsertTenantStripeCustomer(tenantId, stripeCustomerId) {
 }
 
 async function getPlanIdByCode(planCodeRaw) {
-  const code = normalizePlan(planCodeRaw || '');
-  if (!code) return null;
-  const { data } = await supabase
+  const code = normalizePlan(planCodeRaw);
+  const { data, error } = await supabase
     .from('billing_plans')
     .select('id')
     .eq('code', code)
-    .maybeSingle();
-  return data?.id || null;
+    .single();
+  if (error) throw new Error(`No se encontró billing_plans.code=${code}`);
+  return data.id;
 }
+
 async function getPlanByStripePriceId(priceId) {
   if (!priceId) return null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('billing_plans')
     .select('id, code')
     .eq('stripe_price_id', priceId)
     .maybeSingle();
-  return data || null;
+  if (error || !data) return null;
+  return data;
 }
+
 function getBasePriceIdFromSubscription(sub) {
   const items = sub?.items?.data || [];
   const base = items.find(i => i?.price?.recurring?.usage_type !== 'metered') || items[0];
   return base?.price?.id || null;
 }
 
-/** insert/update manual (no upsert) para no requerir UNIQUE en la BD */
-async function saveSubscriptionRow({ tenantId, planId, subscription, customerId, providerSessionId = null }) {
-  if (!subscription?.id) throw new Error('subscription.id requerido');
+async function upsertSubscription({ tenantId, planId, stripeCustomerId, stripeSubscription }) {
+  if (!stripeSubscription?.id) throw new Error('stripeSubscription.id requerido');
 
-  if (!planId) {
-    console.error('[saveSub] planId es NULL → no se puede insertar por NOT NULL en tu esquema.');
-    throw new Error('PLAN_ID_NULL');
-  }
-
-  const row = {
+  const payload = {
     tenant_id: tenantId || null,
-    plan_id: planId,
+    plan_id: planId || null,
     provider: 'stripe',
-    provider_customer_id: String(customerId || subscription.customer || ''),
-    provider_subscription_id: subscription.id,
-    status: mapStripeStatus(subscription.status),
-    trial_ends_at: tsToISO(subscription.trial_end),
-    current_period_start: tsToISO(subscription.current_period_start),
-    current_period_end: tsToISO(subscription.current_period_end),
-    cancel_at_period_end: !!subscription.cancel_at_period_end,
-    updated_at: new Date().toISOString(),
+    provider_customer_id: String(stripeCustomerId || stripeSubscription.customer || ''),
+    provider_subscription_id: stripeSubscription.id,
+    status: mapStripeStatus(stripeSubscription.status),
+    trial_ends_at: tsToISO(stripeSubscription.trial_end),
+    current_period_start: tsToISO(stripeSubscription.current_period_start),
+    current_period_end: tsToISO(stripeSubscription.current_period_end),
+    cancel_at_period_end: !!stripeSubscription.cancel_at_period_end,
+    updated_at: new Date().toISOString()
   };
-  if (providerSessionId) row.provider_session_id = providerSessionId;
 
-  // ¿Existe ya?
-  const { data: existing } = await supabase
-    .from('subscriptions')
-    .select('id')
+  const { data: existing, error: exErr } = await supabase
+    .from('subscriptions').select('id')
     .eq('provider', 'stripe')
-    .eq('provider_subscription_id', subscription.id)
+    .eq('provider_subscription_id', stripeSubscription.id)
     .maybeSingle();
+  if (exErr) throw exErr;
 
   if (existing?.id) {
-    await supabase.from('subscriptions').update(row).eq('id', existing.id);
-    console.log('[saveSub] update', existing.id, subscription.id);
+    const { error } = await supabase.from('subscriptions').update(payload).eq('id', existing.id);
+    if (error) throw error;
+    return existing.id;
   } else {
-    await supabase.from('subscriptions').insert([row]);
-    console.log('[saveSub] insert', subscription.id);
+    const { data, error } = await supabase.from('subscriptions').insert([payload]).select('id').single();
+    if (error) throw error;
+    return data.id;
   }
 }
 
-/** dedupe básico */
+/** Dedupe por event_id (recomendable tener UNIQUE en payment_events.event_id) */
 async function dedupeEventOrThrow(event) {
   if (!event?.id) return;
   try {
@@ -148,15 +150,19 @@ async function dedupeEventOrThrow(event) {
   } catch (e) {
     if (String(e.message || '').startsWith('EVENT_DUPLICATE:')) throw e;
   }
-  const { error } = await supabase.from('payment_events').insert({
+
+  const insert = {
     provider: 'stripe',
     event_type: event.type,
     event_id: event.id,
     payload: event
-  });
-  if (error && error.code !== '23505') throw error;
+  };
+  const { error } = await supabase.from('payment_events').insert(insert);
+  if (error && error.code === '23505') throw new Error(`EVENT_DUPLICATE:${event.id}`);
+  if (error) throw error;
 }
 
+/** Invitación con fallback agresivo a reset */
 async function inviteUserIfPossible(email) {
   try {
     const em = toEmail(email);
@@ -165,22 +171,26 @@ async function inviteUserIfPossible(email) {
     const admin = (supabaseAdmin?.auth?.admin) ? supabaseAdmin : supabase;
     if (!admin?.auth?.admin?.inviteUserByEmail) return;
 
-    const redirectTo = `${process.env.FRONTEND_URL || process.env.APP_BASE_URL || ''}/billing/success`;
+    // 👇 A la página que crea la contraseña, NO a /billing/success
+    const redirectTo = `${FRONTEND_URL}/create-password`;
+
     const { error } = await admin.auth.admin.inviteUserByEmail(em, { redirectTo });
     if (!error) return;
 
-    const msg = String(error.message || '').toLowerCase();
-    if (msg.includes('already been registered') || msg.includes('user already registered')) {
-      await supabase.auth.resetPasswordForEmail(em, { redirectTo });
+    // Fallback SIEMPRE que falle la invitación (mensajes varían mucho)
+    const { error: rerr } = await supabase.auth.resetPasswordForEmail(em, { redirectTo });
+    if (rerr) {
+      console.warn('[inviteUserIfPossible] both invite and reset failed:', error?.message, rerr?.message);
     } else {
-      console.warn('[inviteUserIfPossible] invite error:', error.message);
+      console.log('[inviteUserIfPossible] reset password email sent to', em);
     }
   } catch (e) {
     console.warn('[inviteUserIfPossible] aviso:', e.message);
   }
 }
 
-/* ---------- handler ---------- */
+/* --------------------------------- handler -------------------------------- */
+
 async function stripeWebhook(req, res) {
   if (!process.env.STRIPE_WEBHOOK_SECRET) {
     console.error('[Stripe webhook] Falta STRIPE_WEBHOOK_SECRET');
@@ -216,44 +226,75 @@ async function stripeWebhook(req, res) {
           expand: ['items.data.price']
         });
 
+        const paidEnough =
+          session.payment_status === 'paid' ||
+          (subscription && ['active', 'trialing'].includes(subscription.status));
+        if (!paidEnough) {
+          console.log('[webhook] invite suppressed (not paid yet):', session.id, subscription?.status);
+          break;
+        }
+
         const signupEmail =
           session.customer_details?.email ||
           session.customer_email ||
-          session.metadata?.signup_email || '';
+          session.metadata?.signup_email ||
+          '';
         const tenantName = session.metadata?.tenant_name || '';
         const tenant = await ensureTenantByEmail(signupEmail, tenantName);
 
         await upsertTenantStripeCustomer(tenant?.id, subscription.customer);
 
-        // Mapear plan
         let planId = null;
         const metaCode = normalizePlan(subscription.metadata?.plan_code || session.metadata?.plan_code || '');
-        if (metaCode) planId = await getPlanIdByCode(metaCode);
+        if (metaCode) {
+          try { planId = await getPlanIdByCode(metaCode); } catch {}
+        }
         if (!planId) {
           const basePriceId = getBasePriceIdFromSubscription(subscription);
           const planByPrice = await getPlanByStripePriceId(basePriceId);
           planId = planByPrice?.id || null;
         }
 
+        const patch = {
+          tenant_id: tenant?.id || null,
+          plan_id: planId || null,
+          provider: 'stripe',
+          provider_customer_id: String(subscription.customer || ''),
+          provider_subscription_id: subscription.id,
+          status: mapStripeStatus(subscription.status),
+          trial_ends_at: tsToISO(subscription.trial_end),
+          current_period_start: tsToISO(subscription.current_period_start),
+          current_period_end: tsToISO(subscription.current_period_end),
+          cancel_at_period_end: !!subscription.cancel_at_period_end,
+          updated_at: new Date().toISOString()
+        };
+        const upd = await supabase
+          .from('subscriptions')
+          .update(patch)
+          .eq('provider', 'stripe')
+          .eq('provider_session_id', session.id)
+          .select('id, tenant_id, plan_id')
+          .maybeSingle();
+
+        const tenantId = upd?.data?.tenant_id || tenant?.id || null;
+
+        if (!upd?.data?.id) {
+          await upsertSubscription({
+            tenantId,
+            planId,
+            stripeCustomerId: subscription.customer,
+            stripeSubscription: subscription
+          });
+        }
+
         console.log('[webhook:cs.completed]', {
           subId: subscription.id,
-          priceId: subscription?.items?.data?.[0]?.price?.id,
+          priceId: getBasePriceIdFromSubscription(subscription),
           planId,
-          tenantId: tenant?.id
+          tenantId
         });
 
-        // Guardar fila (update/insert)
-        await saveSubscriptionRow({
-          tenantId: tenant?.id || null,
-          planId,
-          subscription,
-          customerId: subscription.customer,
-          providerSessionId: session.id
-        });
-
-        // Invitar solo si ya está pagado/activa/trial
-        const paidEnough = session.payment_status === 'paid' || ['active', 'trialing'].includes(subscription.status);
-        if (paidEnough) await inviteUserIfPossible(signupEmail);
+        await inviteUserIfPossible(signupEmail);
         break;
       }
 
@@ -262,10 +303,11 @@ async function stripeWebhook(req, res) {
       case 'customer.subscription.deleted': {
         const s = event.data.object;
 
-        // Plan
         let planId = null;
         const metaCode = normalizePlan(s.metadata?.plan_code || '');
-        if (metaCode) planId = await getPlanIdByCode(metaCode);
+        if (metaCode) {
+          try { planId = await getPlanIdByCode(metaCode); } catch {}
+        }
         if (!planId) {
           const sub = typeof s.items?.data?.[0]?.price?.id === 'string'
             ? s
@@ -275,38 +317,39 @@ async function stripeWebhook(req, res) {
           planId = planByPrice?.id || null;
         }
 
-        // Tenant
-        let tenantId = null;
+        let tenantId;
         const { data: subRow } = await supabase
           .from('subscriptions')
           .select('tenant_id')
           .eq('provider', 'stripe')
           .eq('provider_subscription_id', s.id)
           .maybeSingle();
-        if (subRow?.tenant_id) {
-          tenantId = subRow.tenant_id;
-        } else {
+        tenantId = subRow?.tenant_id;
+
+        if (!tenantId) {
           const customer = typeof s.customer === 'string'
             ? await stripe.customers.retrieve(s.customer)
             : s.customer;
           const emailForTenant = customer?.email || s.metadata?.signup_email || '';
           const tenant = await ensureTenantByEmail(emailForTenant, s.metadata?.tenant_name || '');
-          tenantId = tenant?.id || null;
+          tenantId = tenant?.id;
+          await upsertTenantStripeCustomer(tenantId, s.customer);
+        } else {
           await upsertTenantStripeCustomer(tenantId, s.customer);
         }
 
-        console.log('[webhook:sub.updated]', {
-          subId: s.id,
-          priceId: s?.items?.data?.[0]?.price?.id,
-          planId,
-          tenantId
-        });
-
-        await saveSubscriptionRow({
+        await upsertSubscription({
           tenantId,
           planId,
-          subscription: s,
-          customerId: s.customer
+          stripeCustomerId: s.customer,
+          stripeSubscription: s
+        });
+
+        console.log('[webhook:sub.updated]', {
+          subId: s.id,
+          priceId: getBasePriceIdFromSubscription(s),
+          planId,
+          tenantId
         });
 
         if (['active', 'trialing'].includes(s.status)) {
@@ -317,14 +360,13 @@ async function stripeWebhook(req, res) {
             const emailOK = cust?.email || s.metadata?.signup_email || '';
             if (emailOK) await inviteUserIfPossible(emailOK);
           } catch (e) {
-            console.warn('[webhook] invite optional failed:', e.message);
+            console.warn('[webhook] optional invite on subscription.updated failed:', e.message);
           }
         }
         break;
       }
 
       default:
-        // ignoramos otros
         break;
     }
 

@@ -208,25 +208,22 @@ router.post('/checkout/resend-invite', async (req, res) => {
       return res.status(503).json({ ok:false, error:'Service role no configurado' });
     }
 
-    const redirectTo = `${FRONTEND_URL}/billing/success`;
+    // 👇 redirige a la pantalla para crear contraseña
+    const redirectTo = `${FRONTEND_URL}/create-password`;
 
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
-    if (!error) return res.json({ ok:true, kind:'invite', data });
+    const { error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
+    if (!error) return res.json({ ok:true, kind:'invite' });
 
-    const msg = String(error.message || '').toLowerCase();
-    const already = msg.includes('already been registered') || msg.includes('user already registered');
-    if (already) {
-      const { error: rerr } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-      if (rerr) return res.status(500).json({ ok:false, error: rerr.message || 'No se pudo enviar el email de restablecer contraseña.' });
-      return res.json({ ok:true, kind:'reset' });
-    }
-
-    return res.status(500).json({ ok:false, error: error.message || 'No se pudo enviar la invitación.' });
+    // Fallback agresivo a reset
+    const { error: rerr } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (rerr) return res.status(500).json({ ok:false, error: rerr.message || 'No se pudo enviar el email de restablecer contraseña.' });
+    return res.json({ ok:true, kind:'reset' });
   } catch (e) {
     console.error('[resend-invite]', e);
     return res.status(500).json({ ok:false, error: e.message });
   }
 });
+
 
 /* ---------- Portal ---------- */
 async function portalHandler(req, res) {

@@ -7,56 +7,82 @@ const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\
 
 export default function CrearPassword() {
   const [loadingUser, setLoadingUser] = useState(true);
-  const [user, setUser]                 = useState(null);
+  const [user, setUser]               = useState(null);
 
-  const [pwd, setPwd]                   = useState('');
-  const [pwd2, setPwd2]                 = useState('');
-  const [show, setShow]                 = useState(false);
-  const [saving, setSaving]             = useState(false);
+  const [pwd, setPwd]                 = useState('');
+  const [pwd2, setPwd2]               = useState('');
+  const [show, setShow]               = useState(false);
+  const [saving, setSaving]           = useState(false);
 
-  const [ok, setOk]                     = useState(false);
-  const [err, setErr]                   = useState('');
-  const [hashErr, setHashErr]           = useState('');   // error proveniente del hash (otp_expired, etc.)
-  const [resending, setResending]       = useState(false);
-  const [resentMsg, setResentMsg]       = useState('');
+  const [ok, setOk]                   = useState(false);
+  const [err, setErr]                 = useState('');
+  const [linkErr, setLinkErr]         = useState(''); // error proveniente del link (otp_expired, etc.)
+  const [resending, setResending]     = useState(false);
+  const [resentMsg, setResentMsg]     = useState('');
 
   const signupEmail = useMemo(() => (localStorage.getItem('signup_email') || ''), []);
 
-  // 1) Procesar el hash devuelto por Supabase (éxito o error)
+  // 1) Procesar el enlace (query y hash) -> crear sesión si viene code o tokens
   useEffect(() => {
     (async () => {
       try {
+        // --- A) ?code=... (nuevo flujo)
+        const qs = new URLSearchParams(window.location.search);
+        const code = qs.get('code');
+        const qErrCode = qs.get('error_code') || qs.get('error');
+        const qErrDesc = qs.get('error_description') || qs.get('error_message');
+
+        if (code) {
+          try {
+            await supabase.auth.exchangeCodeForSession(code);
+          } catch (e) {
+            setLinkErr(e?.message || 'El enlace ha expirado o no es válido.');
+          } finally {
+            // Limpia la URL (evita reintentos al refrescar)
+            ['code','type','next','error','error_code','error_description','error_message']
+              .forEach(k => qs.delete(k));
+            const newQs = qs.toString();
+            const newUrl = window.location.pathname + (newQs ? `?${newQs}` : '') + window.location.hash;
+            history.replaceState({}, document.title, newUrl);
+          }
+        } else if (qErrCode) {
+          setLinkErr(decodeURIComponent(qErrDesc || qErrCode));
+        }
+
+        // --- B) #access_token=#... (flujo clásico)
         const h = window.location.hash.startsWith('#')
           ? new URLSearchParams(window.location.hash.slice(1))
           : new URLSearchParams();
 
-        // Si venimos con tokens (flujo email link), forzamos sesión.
         const access_token  = h.get('access_token');
         const refresh_token = h.get('refresh_token');
-        const error_code    = h.get('error_code');   // p. ej. otp_expired
-        const error_desc    = h.get('error_description');
+        const hErrCode      = h.get('error_code');
+        const hErrDesc      = h.get('error_description');
 
         if (access_token && refresh_token) {
           try {
             await supabase.auth.setSession({ access_token, refresh_token });
-            // limpiar el hash para que no moleste en recargas
+          } catch {
+            // seguimos y dejamos que getUser decida
+          } finally {
             history.replaceState({}, document.title, window.location.pathname + window.location.search);
-          } catch (e) {
-            // si fallase, dejamos que la siguiente fase intente getUser de todos modos
           }
-        } else if (error_code) {
-          setHashErr(`${error_desc || error_code}`); // lo mostramos más abajo y damos opción de reenviar
+        } else if (hErrCode) {
+          setLinkErr(decodeURIComponent(hErrDesc || hErrCode));
         }
       } finally {
-        // 2) Obtener usuario de sesión (si existe)
+        // 2) Cargar usuario en sesión (si ya se estableció)
         const { data, error } = await supabase.auth.getUser();
         if (!error) {
           const u = data?.user || null;
           setUser(u);
 
-          // 🔔 Señaliza a otras pestañas/ventanas que el email ya fue confirmado
+          // Guarda email como fallback y notifica a otras pestañas
           if (u?.email) {
             try {
+              if (!localStorage.getItem('signup_email')) {
+                localStorage.setItem('signup_email', u.email);
+              }
               localStorage.setItem('et:email_confirmed', '1');
               setTimeout(() => { try { localStorage.removeItem('et:email_confirmed'); } catch {} }, 1500);
               if ('BroadcastChannel' in window) {
@@ -117,16 +143,17 @@ export default function CrearPassword() {
     setTimeout(() => { window.location.href = '/dashboard'; }, 900);
   }
 
-  // 6) Reenviar invitación / reset si el link salió "otp_expired"
+  // 6) Reenviar invitación / reset si el link salió “otp_expired” o similar
   async function resendInvite() {
-    if (!signupEmail) {
+    const email = signupEmail || user?.email || '';
+    if (!email) {
       setResentMsg('No conozco tu email. Vuelve a la pantalla anterior y solicita reenvío.');
       return;
     }
     setResending(true);
     setResentMsg('');
     try {
-      const body = JSON.stringify({ email: signupEmail });
+      const body = JSON.stringify({ email });
       const endpoints = [
         `${API}/billing/checkout/resend-invite`,
         `${API}/api/billing/checkout/resend-invite`
@@ -168,15 +195,15 @@ export default function CrearPassword() {
     );
   }
 
-  // Si no hay sesión y el hash trajo un error (p.ej. otp_expired), damos salida elegante
+  // Si no hay sesión y el link trajo error (ej. otp_expired), permitir reenvío
   if (!user) {
     return (
       <section className="pw-setup">
         <div className="card empty">
           <h1>Crear contraseña</h1>
-          {hashErr ? (
+          {linkErr ? (
             <div className="alert error">
-              <FiAlertCircle /> {decodeURIComponent(hashErr)}
+              <FiAlertCircle /> {linkErr}
             </div>
           ) : null}
           <p className="muted">
@@ -184,7 +211,7 @@ export default function CrearPassword() {
             navegador o solicita uno nuevo.
           </p>
 
-          {signupEmail ? (
+          {(signupEmail) ? (
             <button className="btn primary" onClick={resendInvite} disabled={resending}>
               {resending ? <><FiRefreshCw className="spin" /> Reenviando…</> : 'Reenviar enlace a mi email'}
             </button>
