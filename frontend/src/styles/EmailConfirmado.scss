@@ -1,101 +1,42 @@
-.email-confirmado {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  background: linear-gradient(120deg, #e0f7fa, #e3f2fd);
-  font-family: 'Inter', sans-serif;
+.eok {
+  max-width: 640px;
+  margin: 64px auto;
+  padding: 0 16px;
 
-  .mensaje {
-    background: white;
-    padding: 2.5rem 3rem;
-    border-radius: 16px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  .eok-card {
+    background: var(--ep-surface, #fff);
+    border: 1px solid var(--ep-border, #e6ebf2);
+    border-radius: 14px;
+    padding: 24px 22px;
+    box-shadow: 0 6px 24px rgba(15,23,42,0.06);
     text-align: center;
-    max-width: 500px;
-    width: 100%;
-    animation: fadeInSlide 0.7s ease forwards;
-
-    h2 {
-      font-size: 1.8rem;
-      color: #1976d2;
-      margin-bottom: 1rem;
-      position: relative;
-      padding-bottom: 0.5rem;
-
-      &::after {
-        content: '';
-        display: block;
-        width: 60px;
-        height: 4px;
-        background: #64b5f6;
-        margin: 0.5rem auto 0;
-        border-radius: 2px;
-        animation: scaleIn 0.6s ease-out;
-      }
-    }
-
-    p {
-      font-size: 1.1rem;
-      color: #555;
-      margin-top: 1rem;
-    }
   }
-}
 
-// 🎯 Animación para entrada elegante
-@keyframes fadeInSlide {
-  0% {
-    opacity: 0;
-    transform: translateY(40px);
+  .eok-icon-ok {
+    width: 56px; height: 56px; margin: 0 auto 12px;
+    display: grid; place-items: center; border-radius: 50%;
+    background: #ecfdf5; color: #059669;
+    svg { width: 28px; height: 28px; }
   }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
+
+  h1 { margin: 6px 0 4px; font-size: 24px; }
+  .eok-muted { color: var(--ep-muted, #64748b); }
+
+  .eok-actions {
+    margin: 18px 0 8px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
   }
-}
 
-// ✨ Animación decorativa para la línea bajo el título
-@keyframes scaleIn {
-  0% {
-    transform: scaleX(0);
-    opacity: 0;
+  .eok-btn {
+    border-radius: 10px; padding: 10px 14px; border: 1px solid transparent;
+    display: inline-flex; gap: 8px; align-items: center; font-weight: 600;
+    &--primary { background: #0ea5e9; color: #fff; }
+    &--ghost   { background: #fff; color: #0f172a; border-color: #e2e8f0; }
   }
-  100% {
-    transform: scaleX(1);
-    opacity: 1;
+
+  .eok-hint { margin-top: 10px; color: var(--ep-muted, #64748b); }
+  .eok-tips { margin-top: 12px; text-align: left; color: var(--ep-text, #0f172a); }
+  .eok-alert {
+    margin-top: 16px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;
+    padding: 10px 12px; border-radius: 10px; font-size: 14px; text-align: left;
   }
-}
-.mensaje {
-  .icono {
-    font-size: 3.8rem;
-    margin-bottom: 1rem;
-    display: inline-block;
-
-    &.success {
-      color: #2ecc71;
-    }
-
-    &.error {
-      color: #e74c3c;
-    }
-
-    &.warning {
-      color: #f39c12;
-    }
-
-    &.loading {
-      color: #1976d2;
-    }
-
-    &.spin {
-      animation: spin 1.2s linear infinite;
-    }
-  }
-}
-
-// Animación para ícono giratorio (loading)
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }

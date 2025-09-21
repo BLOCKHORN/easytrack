@@ -6,7 +6,6 @@ import { supabase } from '../utils/supabaseClient';
 import '../styles/CheckoutSuccess.scss';
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/,'');
-// A dónde quieres ir tras crear la contraseña:
 const DASHBOARD_URL = (import.meta.env.VITE_DASHBOARD_URL || '/dashboard').replace(/\/$/,'');
 
 const isEmail = (v='') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -30,8 +29,6 @@ function fmtDate(iso){
 }
 
 /* ------------------------- helpers auth/backend ------------------------- */
-
-// Hace ping a tu backend con Authorization: Bearer <token>
 async function pingBackendWithToken(token){
   if (!token) return false;
   try {
@@ -43,8 +40,6 @@ async function pingBackendWithToken(token){
     return false;
   }
 }
-
-// Obtiene el access_token actual
 async function getAccessToken(){
   const { data } = await supabase.auth.getSession();
   return data?.session?.access_token || null;
@@ -77,7 +72,7 @@ function InlineCreatePassword({ userEmail }) {
     if (rules.n) score++;
     if (rules.s) score++;
     if (!rules.w) score = Math.max(0, score - 2);
-    return score; // 0..5
+    return score;
   }, [rules]);
 
   const allValid = rules.L && rules.U && rules.l && rules.n && rules.w && pwd === pwd2;
@@ -98,31 +93,23 @@ function InlineCreatePassword({ userEmail }) {
       return;
     }
 
-    // ✅ Warm-up de sesión + ping al backend con Bearer antes de ir al dashboard
     try {
-      // pequeña espera para que rote la sesión si aplica
       await new Promise(r => setTimeout(r, 200));
       let token = await getAccessToken();
-
-      // si por lo que sea no está, forzamos un refresh
       if (!token) {
         const { data } = await supabase.auth.refreshSession();
         token = data?.session?.access_token || null;
       }
-
-      // haz 1-2 intentos de ping para evitar 401 tempranos al cargar el dashboard
       let alive = await pingBackendWithToken(token);
       if (!alive) {
         await new Promise(r => setTimeout(r, 300));
         token = await getAccessToken();
         alive = await pingBackendWithToken(token);
       }
-    } catch {/* no bloquea la UX */ }
+    } catch {}
 
     setOk(true);
     setSaving(false);
-
-    // Redirección final
     window.location.assign(DASHBOARD_URL);
   }
 
@@ -216,7 +203,6 @@ export default function CheckoutSuccess() {
   const [trialEndsAt, setTrialEndsAt] = useState('');
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState('');
 
-  // Si el usuario ya confirmó el email en esta u otra pestaña
   const [authedUser, setAuthedUser] = useState(null);
   const mode = authedUser ? 'create' : 'steps';
 
@@ -227,14 +213,13 @@ export default function CheckoutSuccess() {
   const inboxUrl  = guessInboxUrl(email);
   const canResend = isEmail(email) && status!=='sending' && cooldown===0;
 
-  // Countdown del botón
   useEffect(() => {
     if (!cooldown) return;
     const t = setInterval(() => setCooldown(c => Math.max(0, c - 1)), 1000);
     return () => clearInterval(t);
   }, [cooldown]);
 
-  // 1) Verifica checkout/session y rellena datos
+  // 1) Verificar checkout/session
   useEffect(() => {
     async function verifyWith(id){
       const endpoints = [
@@ -264,7 +249,7 @@ export default function CheckoutSuccess() {
           setVerifiedOk(true);
           setLoading(false);
           return true;
-        } catch { /* siguiente endpoint */ }
+        } catch {}
       }
       return false;
     }
@@ -283,42 +268,38 @@ export default function CheckoutSuccess() {
     })();
   }, [sessionId, email]);
 
-  // 2) Reenvío automático (una sola vez) tras verificar checkout
+  // 2) Detectar sesión/broadcast y cambiar a modo "create"
   useEffect(() => {
-    if (!verifiedOk) return;
-    if (!isEmail(email)) return;
-    if (!sessionId) return;
-
-    const key = `invite_sent:${sessionId}`;
-    if (localStorage.getItem(key) === '1') return;
-
-    (async () => {
-      try { await resendInvite(); }
-      finally { localStorage.setItem(key, '1'); }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [verifiedOk, email, sessionId]);
-
-  // 3) Detectar sesión de Supabase (misma pestaña o otra) y cambiar a modo "create"
-  useEffect(() => {
-    // Chequeo inicial
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setAuthedUser(data.user);
     });
-    // Evento de cambios
     const sub = supabase.auth.onAuthStateChange((_ev, session) => {
       if (session?.user) setAuthedUser(session.user);
     });
-    // Si otra pestaña setea la sesión, escuchamos storage y re-consultamos
+
     const onStorage = () => {
       supabase.auth.getUser().then(({ data }) => {
         if (data?.user) setAuthedUser(data.user);
       });
     };
     window.addEventListener('storage', onStorage);
+
+    let bc;
+    if ('BroadcastChannel' in window) {
+      bc = new BroadcastChannel('et-auth');
+      bc.onmessage = (ev) => {
+        if (ev?.data?.type === 'EMAIL_CONFIRMED') {
+          supabase.auth.getUser().then(({ data }) => {
+            if (data?.user) setAuthedUser(data.user);
+          });
+        }
+      };
+    }
+
     return () => {
       sub.data?.subscription?.unsubscribe?.();
       window.removeEventListener('storage', onStorage);
+      bc?.close?.();
     };
   }, []);
 
@@ -457,7 +438,6 @@ export default function CheckoutSuccess() {
                 <div className="subj">Si no aparece, revisa Promociones/SPAM.</div>
               </div>
               {inboxUrl ? (
-                // mismo tab
                 <a className="et-btn et-btn--primary" href={inboxUrl}>
                   <FiMail/> Abrir correo <FiExternalLink/>
                 </a>

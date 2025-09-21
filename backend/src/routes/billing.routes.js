@@ -31,7 +31,6 @@ router.get('/plans', async (_req, res) => {
   }
 });
 
-/** Sólo crea la Checkout Session (sin escrituras locales) */
 router.post('/checkout/start', async (req, res) => {
   try {
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -97,7 +96,6 @@ router.post('/checkout/start', async (req, res) => {
   }
 });
 
-/* Verificación tras volver del checkout */
 router.get('/checkout/verify', async (req, res) => {
   const fail = (code, msg) => {
     const urlsObj = { portal: '', dashboard: `${FRONTEND_URL}/dashboard`, plans: `${FRONTEND_URL}/planes` };
@@ -126,7 +124,6 @@ router.get('/checkout/verify', async (req, res) => {
 
     const tenantId = localSub?.tenant_id || null;
 
-    // Sync amable de stripe_customer_id si hay tenant
     if (tenantId && customer?.id) {
       try {
         const { data: t } = await supabase.from('tenants').select('stripe_customer_id').eq('id', tenantId).maybeSingle();
@@ -136,7 +133,6 @@ router.get('/checkout/verify', async (req, res) => {
       } catch (e) { console.warn('[verify] update tenants.stripe_customer_id:', e.message); }
     }
 
-    // Portal
     let portalUrl = '';
     if (customer?.id) {
       try {
@@ -170,7 +166,6 @@ router.get('/checkout/verify', async (req, res) => {
   }
 });
 
-/** Reenvía invitación o reset, SIEMPRE hacia /create-password */
 router.post('/checkout/resend-invite', async (req, res) => {
   try {
     const email = toEmail(req.body?.email);
@@ -181,11 +176,11 @@ router.post('/checkout/resend-invite', async (req, res) => {
       return res.status(503).json({ ok:false, error:'Service role no configurado' });
     }
 
-const redirectTo = `${FRONTEND_URL}/auth/email-confirmado`;
+    const redirectTo = `${FRONTEND_URL}/auth/email-confirmado`;
+
     const { error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
     if (!error) return res.json({ ok:true, kind:'invite' });
 
-    // Fallback agresivo a reset
     const { error: rerr } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
     if (rerr) return res.status(500).json({ ok:false, error: rerr.message || 'No se pudo enviar el email de restablecer contraseña.' });
     return res.json({ ok:true, kind:'reset' });

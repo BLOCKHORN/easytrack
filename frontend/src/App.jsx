@@ -1,4 +1,3 @@
-// frontend/src/App.jsx
 import { BrowserRouter as Router, Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 
@@ -38,7 +37,6 @@ import RequireActive from './components/RequireActive';
 import SubscriptionGate from './pages/SubscriptionGate';
 import PortalBridge from './pages/PortalBridge';
 
-// Util: API base
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
 function ScrollWithHash() {
@@ -70,6 +68,16 @@ function LandingSection({ sectionId }) {
 function Redirect({ to }) {
   const navigate = useNavigate();
   useEffect(() => { navigate(to, { replace: true }); }, [navigate, to]);
+  return null;
+}
+
+// NUEVO: redirección que conserva ?query y #hash
+function RedirectPreserveHash({ to }) {
+  const navigate = useNavigate();
+  const loc = useLocation();
+  useEffect(() => {
+    navigate(`${to}${loc.search || ''}${loc.hash || ''}`, { replace: true });
+  }, [navigate, to, loc.search, loc.hash]);
   return null;
 }
 
@@ -146,8 +154,7 @@ function ProtectedRoute({ children }) {
       }
     })();
 
-    // ✅ No kicks por INITIAL_SESSION: solo actuamos en SIGNED_OUT
-    const s = supabase.auth.onAuthStateChange((event, session) => {
+    const s = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') navigate('/', { replace: true });
     });
     unsub = s?.data?.subscription?.unsubscribe;
@@ -208,6 +215,10 @@ export default function App() {
         <Route path="/billing/cancel" element={<CheckoutCancel />} />
         <Route path="/checkout/cancel" element={<CheckoutCancel />} />
         <Route path="/crear-password" element={<CrearPassword />} />
+        {/* Alias inglés -> español preservando query/hash */}
+        <Route path="/create-password" element={<RedirectPreserveHash to="/crear-password" />} />
+
+        {/* Puente de confirmación */}
         <Route path="/auth/email-confirmado" element={<EmailConfirmado />} />
 
         {/* Reactivación */}

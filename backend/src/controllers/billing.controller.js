@@ -1,7 +1,7 @@
 'use strict';
 
 const { supabase, supabaseAdmin } = require('../utils/supabaseClient');
-const { slugifyBase, uniqueSlug } = require('../helpers/slug'); // si lo usas en otros sitios
+const { slugifyBase, uniqueSlug } = require('../helpers/slug');
 const Stripe = require('stripe');
 
 const PROVIDER     = process.env.PAYMENT_PROVIDER || 'stripe';
@@ -36,7 +36,6 @@ async function listPlans(_req, res) {
 }
 
 /**
- * 🚫 Sin escrituras locales: no crea tenant ni subscription aquí.
  * Solo crea la Checkout Session en Stripe.
  */
 async function startCheckout(req, res) {
@@ -46,7 +45,6 @@ async function startCheckout(req, res) {
 
     const tenantName = String(req.body?.tenant_name || '').trim();
 
-    // 1) Plan
     const planCode = String(req.body?.plan_code || '').trim();
     if (!planCode) return res.status(400).json({ ok:false, error:'plan_code requerido' });
 
@@ -65,7 +63,6 @@ async function startCheckout(req, res) {
       return res.status(500).json({ ok:false, error:'stripe_price_id ausente en el plan' });
     }
 
-    // 2) Consultar si ya existe tenant por email (solo lectura)
     let stripeCustomerId;
     let trialDays = TRIAL_DAYS;
     try {
@@ -75,10 +72,9 @@ async function startCheckout(req, res) {
         .eq('email', email)
         .maybeSingle();
       stripeCustomerId = existing?.stripe_customer_id || undefined;
-      if (existing) trialDays = 0; // sin trial si ya fue cliente
+      if (existing) trialDays = 0;
     } catch {}
 
-    // 3) Checkout Session (sin client_reference_id, sin escribir en BD)
     const meta = { signup_email: email, tenant_name: tenantName, plan_code: plan.code };
 
     const params = {
@@ -100,14 +96,11 @@ async function startCheckout(req, res) {
         metadata: meta
       }
     };
-    if (stripeCustomerId) {
-      params.customer_update = { name: 'auto', address: 'auto' };
-    }
+    if (stripeCustomerId) params.customer_update = { name: 'auto', address: 'auto' };
 
     const idemKey = makeIdemKey(req, email, plan.code);
     const session = await stripe.checkout.sessions.create(params, { idempotencyKey: idemKey });
 
-    // ✅ Nada de inserts locales aquí
     return res.json({ ok:true, flow:'checkout_redirect', url: session.url, session_id: session.id });
   } catch (e) {
     console.error('[billing] startCheckout:', e);
@@ -165,7 +158,7 @@ async function verifyCheckout(req, res) {
 
     const payload = {
       sessionId,
-      tenantId: localSub?.tenant_id || null, // ya no dependemos de client_reference_id
+      tenantId: localSub?.tenant_id || null,
       planCode: session.metadata?.plan_code || sub?.metadata?.plan_code || null,
       customerEmail: (customer && customer.email) || session.customer_email || null,
       status: sub?.status || 'incomplete',
@@ -237,12 +230,11 @@ async function resendInvite(req, res) {
       return res.status(503).json({ ok:false, error:'Service role no configurado en el servidor' });
     }
 
-const redirectTo = `${FRONTEND_URL}/auth/email-confirmado`;
-    // 1) INVITE
+    const redirectTo = `${FRONTEND_URL}/auth/email-confirmado`;
+
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
     if (!error) return res.json({ ok:true, kind:'invite', data });
 
-    // 2) Fallback RESET si ya existe
     const msg = String(error.message || '').toLowerCase();
     const already = msg.includes('already been registered') || msg.includes('user already registered');
     if (already) {
@@ -254,7 +246,6 @@ const redirectTo = `${FRONTEND_URL}/auth/email-confirmado`;
       return res.json({ ok:true, kind:'reset' });
     }
 
-    // 3) Otro error
     console.error('[billing] resendInvite invite error:', error);
     return res.status(500).json({ ok:false, error: error.message || 'No se pudo enviar la invitación.' });
   } catch (e) {
