@@ -177,7 +177,7 @@ async function inviteUserIfPossible(email) {
     const admin = (supabaseAdmin?.auth?.admin) ? supabaseAdmin : supabase;
     if (!admin?.auth?.admin?.inviteUserByEmail) return;
 
-    const redirectTo = `${process.env.FRONTEND_URL || process.env.APP_BASE_URL || ''}/crear-password`;
+    const redirectTo = `${process.env.FRONTEND_URL || process.env.APP_BASE_URL || ''}/billing/success`;
 
     const { error } = await admin.auth.admin.inviteUserByEmail(em, { redirectTo });
     if (!error) return;
