@@ -1,7 +1,7 @@
 'use strict';
 
 const { supabase, supabaseAdmin } = require('../utils/supabaseClient');
-const { slugifyBase, uniqueSlug } = require('../helpers/slug');
+const { slugifyBase, uniqueSlug } = require('../helpers/slug'); // (no se usa ya para startCheckout, pero mantenido si lo usas en otros sitios)
 const Stripe = require('stripe');
 
 const PROVIDER     = process.env.PAYMENT_PROVIDER || 'stripe';
@@ -12,9 +12,9 @@ const stripe       = STRIPE_KEY ? new Stripe(STRIPE_KEY, { apiVersion: '2024-06-
 const TRIAL_DAYS = 30;
 
 function toEmail(v){ return String(v || '').toLowerCase().trim(); }
-function makeIdemKey(req, tenantId, planCode){
+function makeIdemKey(req, keyA, keyB){
   const hdr = req.get && req.get('x-idem-key'); if (hdr) return hdr;
-  const bucket = Math.floor(Date.now()/10000); return `co:${tenantId}:${planCode}:${bucket}`;
+  const bucket = Math.floor(Date.now()/10000); return `co:${keyA || 'anon'}:${keyB || 'plan'}:${bucket}`;
 }
 
 /* ------------------------------- ENDPOINTS ------------------------------- */
@@ -35,6 +35,10 @@ async function listPlans(_req, res) {
   }
 }
 
+/**
+ * 🚫 Sin escrituras locales: no crea tenant ni subscription aquí.
+ * Solo crea la Checkout Session en Stripe.
+ */
 async function startCheckout(req, res) {
   try {
     const email = toEmail(req.user?.email || req.body?.email);
@@ -42,34 +46,7 @@ async function startCheckout(req, res) {
 
     const tenantName = String(req.body?.tenant_name || '').trim();
 
-    // 1) Tenant (y customer asociado si ya existiera)
-    let tenantId = req.user?.tenant_id || null;
-    let stripeCustomerId = null;
-
-    if (!tenantId) {
-      const { data: existing } = await supabase
-        .from('tenants')
-        .select('id, stripe_customer_id')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (existing?.id) {
-        tenantId = existing.id;
-        stripeCustomerId = existing.stripe_customer_id || null;
-      } else {
-        const base = slugifyBase(tenantName || email.split('@')[0]);
-        const slug = await uniqueSlug(supabase, base);
-        const { data: created, error: terr } = await supabase
-          .from('tenants')
-          .insert([{ email, nombre_empresa: base, slug }])
-          .select('id')
-          .single();
-        if (terr) return res.status(500).json({ ok:false, error: terr.message });
-        tenantId = created.id;
-      }
-    }
-
-    // 2) Plan
+    // 1) Plan
     const planCode = String(req.body?.plan_code || '').trim();
     if (!planCode) return res.status(400).json({ ok:false, error:'plan_code requerido' });
 
@@ -88,69 +65,49 @@ async function startCheckout(req, res) {
       return res.status(500).json({ ok:false, error:'stripe_price_id ausente en el plan' });
     }
 
-    // 3) Trial solo 1 vez por tenant
+    // 2) Consultar si ya existe tenant por email (solo lectura)
+    let stripeCustomerId;
     let trialDays = TRIAL_DAYS;
     try {
-      const { data: subs } = await supabase
-        .from('subscriptions')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .limit(1);
-      if (subs && subs.length > 0) trialDays = 0;
+      const { data: existing } = await supabase
+        .from('tenants')
+        .select('stripe_customer_id')
+        .eq('email', email)
+        .maybeSingle();
+      stripeCustomerId = existing?.stripe_customer_id || undefined;
+      if (existing) trialDays = 0; // sin trial si ya fue cliente
     } catch {}
 
-    // 4) Checkout Session
-    const meta = { tenant_id: tenantId, plan_code: plan.code, signup_email: email, tenant_name: tenantName };
+    // 3) Checkout Session (sin client_reference_id, sin escribir en BD)
+    const meta = { signup_email: email, tenant_name: tenantName, plan_code: plan.code };
 
     const params = {
       mode: 'subscription',
       locale: 'es',
-
-      // ⚠️ customer o customer_email (NO ambos)
       customer: stripeCustomerId || undefined,
       customer_email: stripeCustomerId ? undefined : email,
-
       line_items: [{ price: plan.stripe_price_id, quantity: 1 }],
-
       payment_method_collection: 'always',
-
-      // Impuestos y Tax IDs
       automatic_tax: { enabled: true },
       tax_id_collection: { enabled: true },
-
       billing_address_collection: 'auto',
       allow_promotion_codes: true,
-
       success_url: `${FRONTEND_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${FRONTEND_URL}/planes?plan=${encodeURIComponent(plan.code)}&cancel=1`,
-
-      client_reference_id: String(tenantId),
       metadata: meta,
-
       subscription_data: {
         trial_period_days: trialDays || undefined,
         metadata: meta
       }
     };
-
-    // 👇 Solo si ya existe un Customer en Stripe
     if (stripeCustomerId) {
       params.customer_update = { name: 'auto', address: 'auto' };
     }
 
-    const idemKey = makeIdemKey(req, tenantId, plan.code);
+    const idemKey = makeIdemKey(req, email, plan.code);
     const session = await stripe.checkout.sessions.create(params, { idempotencyKey: idemKey });
 
-    // 5) Guardamos intención local
-    await supabase.from('subscriptions').insert([{
-      tenant_id: tenantId,
-      plan_id: plan.id,
-      provider: 'stripe',
-      status: 'incomplete',
-      provider_session_id: session.id,
-      current_period_start: new Date(),
-    }]);
-
+    // ✅ Nada de inserts locales aquí
     return res.json({ ok:true, flow:'checkout_redirect', url: session.url, session_id: session.id });
   } catch (e) {
     console.error('[billing] startCheckout:', e);
@@ -208,7 +165,7 @@ async function verifyCheckout(req, res) {
 
     const payload = {
       sessionId,
-      tenantId: localSub?.tenant_id || session.client_reference_id || null,
+      tenantId: localSub?.tenant_id || null, // ya no dependemos de client_reference_id
       planCode: session.metadata?.plan_code || sub?.metadata?.plan_code || null,
       customerEmail: (customer && customer.email) || session.customer_email || null,
       status: sub?.status || 'incomplete',
@@ -282,13 +239,11 @@ async function resendInvite(req, res) {
 
     const redirectTo = `${FRONTEND_URL}/crear-password`;
 
-    // 1) Intentar INVITE
+    // 1) INVITE
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
-    if (!error) {
-      return res.json({ ok:true, kind:'invite', data });
-    }
+    if (!error) return res.json({ ok:true, kind:'invite', data });
 
-    // 2) Si ya existe → fallback RESET
+    // 2) Fallback RESET si ya existe
     const msg = String(error.message || '').toLowerCase();
     const already = msg.includes('already been registered') || msg.includes('user already registered');
     if (already) {

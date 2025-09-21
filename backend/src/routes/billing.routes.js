@@ -5,7 +5,6 @@ const express = require('express');
 const Stripe  = require('stripe');
 const { supabase, supabaseAdmin } = require('../utils/supabaseClient');
 const { getPlans, normalizePlan } = require('../utils/pricing');
-const { slugifyBase, uniqueSlug } = require('../helpers/slug');
 const requireAuth = require('../middlewares/requireAuth');
 
 const router = express.Router();
@@ -16,40 +15,13 @@ const TRIAL_DAYS = 30;
 
 const toEmail = (v) => String(v || '').trim().toLowerCase();
 
-/* ------------------------ helpers de datos ------------------------ */
-async function upsertTenantByEmail(email, businessName) {
-  const low = toEmail(email);
-
-  const { data: exist, error: exErr } = await supabase
-    .from('tenants')
-    .select('id, slug, nombre_empresa, email, stripe_customer_id')
-    .eq('email', low)
-    .maybeSingle();
-
-  if (exErr) throw exErr;
-  if (exist?.id) return exist;
-
-  const base = slugifyBase(businessName || low.split('@')[0]);
-  const slug = await uniqueSlug(supabase, base);
-
-  const { data, error } = await supabase
-    .from('tenants')
-    .insert([{ email: low, nombre_empresa: businessName || base, slug }])
-    .select('id, slug, nombre_empresa, email, stripe_customer_id')
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-function makeIdemKey(req, tenantId, planCode) {
+/* ------------------------ helpers ------------------------ */
+function makeIdemKey(req, keyA, keyB) {
   const hdr = req.get && req.get('x-idem-key');
   if (hdr) return hdr;
   const bucket = Math.floor(Date.now() / 10000);
-  return `co:${tenantId || 'anon'}:${planCode}:${bucket}`;
+  return `co:${keyA || 'anon'}:${keyB || 'plan'}:${bucket}`;
 }
-
-/* Resolver plan_id por code o por price_id */
 async function getPlanIdByCode(codeRaw) {
   const code = normalizePlan(codeRaw || '');
   if (!code) return null;
@@ -89,6 +61,10 @@ router.get('/plans', async (_req, res) => {
   }
 });
 
+/**
+ * 🚫 Sin escrituras locales: no crea tenant ni subscription aquí.
+ * Solo crea la Checkout Session en Stripe.
+ */
 router.post('/checkout/start', async (req, res) => {
   try {
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -100,34 +76,36 @@ router.post('/checkout/start', async (req, res) => {
     if (!plan_code) return res.status(400).json({ ok:false, error:'plan_code es requerido' });
     if (!userEmail) return res.status(400).json({ ok:false, error:'email es requerido' });
 
+    // 1) Plan (solo lectura)
     const planCode = normalizePlan(plan_code);
-
     const { data: plan, error: perr } = await supabase
       .from('billing_plans')
       .select('id, code, stripe_price_id')
       .eq('code', planCode)
       .eq('active', true)
       .single();
-
     if (perr || !plan) return res.status(404).json({ ok:false, error:'Plan no encontrado' });
     if (!plan.stripe_price_id) return res.status(500).json({ ok:false, error:'stripe_price_id ausente en plan' });
 
-    const tenant = await upsertTenantByEmail(userEmail, tenant_name);
-    const tenantId = tenant.id;
-    const stripeCustomerId = tenant.stripe_customer_id || undefined;
-
-    // trial una vez por tenant
+    // 2) ¿Existe tenant por ese email? Solo lectura, para reusar customer y decidir trial.
+    let stripeCustomerId;
     let trialDays = TRIAL_DAYS;
     try {
-      const { data: subs } = await supabase
-        .from('subscriptions')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .limit(1);
-      if (subs && subs.length > 0) trialDays = 0;
+      const { data: existent } = await supabase
+        .from('tenants')
+        .select('stripe_customer_id')
+        .eq('email', userEmail)
+        .maybeSingle();
+      stripeCustomerId = existent?.stripe_customer_id || undefined;
+      if (existent) trialDays = 0; // si ya fue cliente, sin trial
     } catch {}
 
-    const meta = { tenant_id: tenantId, plan_code: plan.code, signup_email: userEmail, tenant_name: tenant_name || '' };
+    // 3) Checkout Session (sin client_reference_id, sin escritura local)
+    const meta = {
+      signup_email: userEmail,
+      tenant_name : tenant_name || '',
+      plan_code   : plan.code
+    };
 
     const sessionParams = {
       mode: 'subscription',
@@ -142,7 +120,6 @@ router.post('/checkout/start', async (req, res) => {
       billing_address_collection: 'auto',
       success_url: `${FRONTEND_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${FRONTEND_URL}/planes?plan=${encodeURIComponent(plan.code)}&cancel=1`,
-      client_reference_id: String(tenantId),
       metadata: meta,
       subscription_data: { trial_period_days: trialDays || undefined, metadata: meta }
     };
@@ -150,27 +127,17 @@ router.post('/checkout/start', async (req, res) => {
       sessionParams.customer_update = { name: 'auto', address: 'auto' };
     }
 
-    const idemKey = makeIdemKey(req, tenantId, plan.code);
+    const idemKey = makeIdemKey(req, userEmail, plan.code);
     const session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: idemKey });
 
-    // Crea fila local INCOMPLETE ya con plan_id (NOT NULL)
-    await supabase.from('subscriptions').insert([{
-      tenant_id: tenantId,
-      plan_id: plan.id,
-      provider: 'stripe',
-      status: 'incomplete',
-      provider_session_id: session.id,
-      current_period_start: new Date()
-    }]);
-
-    res.json({ ok: true, checkout_url: session.url, session_id: session.id });
+    return res.json({ ok: true, checkout_url: session.url, session_id: session.id });
   } catch (err) {
     console.error('[POST /billing/checkout/start]', err);
     res.status(500).json({ ok: false, error: err.message || 'Internal Server Error' });
   }
 });
 
-/* Verificación tras volver del checkout: sincroniza customer + sub local */
+/* Verificación tras volver del checkout: solo lectura + sync amable */
 router.get('/checkout/verify', async (req, res) => {
   const fail = (code, msg) => {
     const urlsObj = { portal: '', dashboard: `${FRONTEND_URL}/app`, plans: `${FRONTEND_URL}/planes` };
@@ -190,7 +157,7 @@ router.get('/checkout/verify', async (req, res) => {
     const sub      = session.subscription || null;
     const customer = session.customer || null;
 
-    // Sub local creada en /checkout/start (puede no existir si algo falló)
+    // Puede no existir fila local (ya no escribimos en /checkout/start)
     const { data: localSub } = await supabase
       .from('subscriptions')
       .select('id, tenant_id, plan_id, status, provider_subscription_id')
@@ -198,26 +165,24 @@ router.get('/checkout/verify', async (req, res) => {
       .eq('provider_session_id', session.id)
       .maybeSingle();
 
-    const tenantId = localSub?.tenant_id || (session.client_reference_id ? String(session.client_reference_id) : null);
+    const tenantId = localSub?.tenant_id || null; // ya no dependemos de client_reference_id
 
-    // 1) Guardar stripe_customer_id en tenants
+    // Actualizaciones amables (no críticas): stripe_customer_id, etc.
     if (tenantId && customer?.id) {
       try {
         const { data: t } = await supabase.from('tenants').select('stripe_customer_id').eq('id', tenantId).maybeSingle();
         if (!t || t.stripe_customer_id !== customer.id) {
           await supabase.from('tenants').update({ stripe_customer_id: customer.id }).eq('id', tenantId);
         }
-      } catch (e) {
-        console.warn('[verify] update tenants.stripe_customer_id:', e.message);
-      }
+      } catch (e) { console.warn('[verify] update tenants.stripe_customer_id:', e.message); }
     }
 
-    // 2) Actualizar/crear subscriptions (respetando plan_id NOT NULL)
+    // Insert/Update local si podemos resolver plan_id (sigue siendo opcional; el webhook manda)
     if (sub && tenantId) {
-      const basePriceId = basePriceIdFromStripeSub(sub);
-      const planIdFromCode = await getPlanIdByCode(session.metadata?.plan_code || sub?.metadata?.plan_code);
+      const basePriceId     = basePriceIdFromStripeSub(sub);
+      const planIdFromCode  = await getPlanIdByCode(session.metadata?.plan_code || sub?.metadata?.plan_code);
       const planIdFromPrice = await getPlanIdByStripePriceId(basePriceId);
-      const planId = planIdFromCode || planIdFromPrice || localSub?.plan_id || null;
+      const planId          = planIdFromCode || planIdFromPrice || localSub?.plan_id || null;
 
       const patch = {
         status: sub.status || 'incomplete',
@@ -227,11 +192,8 @@ router.get('/checkout/verify', async (req, res) => {
       };
 
       if (localSub?.id) {
-        try {
-          await supabase.from('subscriptions').update(patch).eq('id', localSub.id);
-        } catch (e) {
-          console.warn('[verify] update local subscription:', e.message);
-        }
+        try { await supabase.from('subscriptions').update(patch).eq('id', localSub.id); }
+        catch (e) { console.warn('[verify] update local subscription:', e.message); }
       } else if (planId) {
         try {
           await supabase.from('subscriptions').insert([{
@@ -244,16 +206,13 @@ router.get('/checkout/verify', async (req, res) => {
             current_period_start: patch.current_period_start,
             current_period_end: patch.current_period_end
           }]);
-        } catch (e) {
-          console.warn('[verify] insert local subscription:', e.message);
-        }
+        } catch (e) { console.warn('[verify] insert local subscription:', e.message); }
       } else {
-        // No tengo plan_id -> lo dejará el webhook (ya mapea por price_id)
-        console.warn('[verify] no plan_id resolved; skipped insert (will rely on webhook).');
+        console.warn('[verify] no plan_id resolved; skipped insert (rely on webhook).');
       }
     }
 
-    // 3) Portal de facturación
+    // Portal de facturación
     let portalUrl = '';
     if (customer?.id) {
       try {
@@ -300,9 +259,7 @@ router.post('/checkout/resend-invite', async (req, res) => {
     const redirectTo = `${FRONTEND_URL}/crear-password`;
 
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
-    if (!error) {
-      return res.json({ ok:true, kind:'invite', data });
-    }
+    if (!error) return res.json({ ok:true, kind:'invite', data });
 
     const msg = String(error.message || '').toLowerCase();
     const already = msg.includes('already been registered') || msg.includes('user already registered');
