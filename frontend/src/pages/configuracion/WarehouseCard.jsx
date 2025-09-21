@@ -1,5 +1,5 @@
 // src/pages/configuracion/WarehouseCard.jsx
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useLayoutEffect } from "react";
 import { MdAdd, MdRemove, MdInfo, MdWarehouse } from "react-icons/md";
 import "./WarehouseCard.scss";
 
@@ -98,7 +98,6 @@ export default function WarehouseCard({
   const patchNom = (p) => {
     localChangeRef.current = true;
     setNomenclatura?.((prev) => ({ ...(prev || {}), ...p }));
-    // Se vuelve a false al final de cada handler
   };
 
   const renumerar = (arr) => arr.map((it, idx) => ({ ...it, estante: idx + 1 }));
@@ -203,6 +202,46 @@ export default function WarehouseCard({
     }
     return map;
   }, [estructura]);
+
+  /* ---------- Auto-fit / Zoom ---------- */
+  const vpRef = useRef(null);
+  const [autoFit, setAutoFit] = useState(true);
+  const [autoScale, setAutoScale] = useState(1);
+  const [manualScale, setManualScale] = useState(1);
+
+  // Anchuras "naturales" por celda según modo (coinciden con min de CSS)
+  const CELL_W_RACKS = 220; // px (min de minmax en CSS)
+  const CELL_W_LANES = 140; // px
+  const GRID_GAP = 12;      // px (coincide con CSS)
+  const BOARD_PADDING_X = 24; // px (padding 12 + 12 del board)
+
+  const naturalWidth = useMemo(() => {
+    const cols = isRacks ? N.rack_cols : N.lanes_cols;
+    const cellW = isRacks ? CELL_W_RACKS : CELL_W_LANES;
+    // width = celdas + gaps + padding interno
+    return (cols * cellW) + ((cols - 1) * GRID_GAP) + BOARD_PADDING_X;
+  }, [isRacks, N.rack_cols, N.lanes_cols]);
+
+  useLayoutEffect(() => {
+    if (!autoFit) return;
+    const el = vpRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      // restamos un pequeño margen para evitar saltos
+      const available = Math.max(0, el.clientWidth - 2);
+      const s = available > 0 ? Math.min(1, available / naturalWidth) : 1;
+      // limitamos para que no baje de 0.5 (seguirá habiendo scroll si hace falta)
+      setAutoScale(Math.max(0.5, Math.round(s * 100) / 100));
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [autoFit, naturalWidth]);
+
+  const currentScale = autoFit ? autoScale : manualScale;
 
   /* ---------- Render ---------- */
   return (
@@ -329,180 +368,232 @@ export default function WarehouseCard({
             </>
           )}
 
+          {/* ---- Zoom / Auto-fit ---- */}
+          <div className="tool-col tool-zoom">
+            <div className="tool-title">Vista</div>
+            <label className="chk-inline">
+              <input
+                type="checkbox"
+                checked={autoFit}
+                onChange={(e)=>setAutoFit(e.target.checked)}
+              />
+              Ajuste automático
+            </label>
+
+            <div className="zoom-row">
+              <button
+                className="iconbtn"
+                onClick={()=> setManualScale(s => clamp(Math.round((s - 0.05)*20)/20, 0.5, 1.2))}
+                disabled={autoFit}
+                title="Zoom -"
+              >
+                <MdRemove/>
+              </button>
+              <input
+                type="range"
+                min={50}
+                max={120}
+                step={5}
+                value={Math.round((autoFit ? currentScale : manualScale) * 100)}
+                onChange={(e)=> setManualScale(clamp(+e.target.value / 100, 0.5, 1.2))}
+                disabled={autoFit}
+                aria-label="Zoom"
+              />
+              <button
+                className="iconbtn"
+                onClick={()=> setManualScale(s => clamp(Math.round((s + 0.05)*20)/20, 0.5, 1.2))}
+                disabled={autoFit}
+                title="Zoom +"
+              >
+                <MdAdd/>
+              </button>
+              <span className="zoom-val">{Math.round(currentScale * 100)}%</span>
+            </div>
+          </div>
+
           <div className="tool-spacer" />
         </div>
 
-        {/* -------- LAYOUT -------- */}
-        {isRacks ? (
+        {/* -------- VIEWPORT + LAYOUT -------- */}
+        <div className="boardViewport" ref={vpRef}>
           <div
-            className="racksBoard"
-            style={{
-              gridTemplateColumns: `repeat(${N.rack_cols}, minmax(220px, 1fr))`,
-              gridTemplateRows: `repeat(${N.rack_rows}, auto)`
-            }}
+            className="boardScale"
+            style={{ transform: `scale(${currentScale})` }}
           >
-            {Array.from({ length: N.rack_rows }).flatMap((_, rIdx) =>
-              Array.from({ length: N.rack_cols }).map((_, cIdx) => {
-                const r = rIdx + 1;
-                const c = cIdx + 1;
-                const id = byCell.get(`${r}-${c}`);
-                const rack = id ? estructura.find(e => e.estante === id) : null;
-                if (!rack) return <div key={`rackcell-${r}-${c}`} className="cell" />;
+            {isRacks ? (
+              <div
+                className="racksBoard"
+                style={{
+                  width: `${naturalWidth}px`,
+                  gridTemplateColumns: `repeat(${N.rack_cols}, minmax(220px, 1fr))`,
+                  gridTemplateRows: `repeat(${N.rack_rows}, auto)`
+                }}
+              >
+                {Array.from({ length: N.rack_rows }).flatMap((_, rIdx) =>
+                  Array.from({ length: N.rack_cols }).map((_, cIdx) => {
+                    const r = rIdx + 1;
+                    const c = cIdx + 1;
+                    const id = byCell.get(`${r}-${c}`);
+                    const rack = id ? estructura.find(e => e.estante === id) : null;
+                    if (!rack) return <div key={`rackcell-${r}-${c}`} className="cell" />;
 
-                const label = rackLabel(rack.estante);
-                const shelves = Math.max(1, rack.baldas || 1);
+                    const label = rackLabel(rack.estante);
+                    const shelves = Math.max(1, rack.baldas || 1);
 
-                return (
-                  <div key={`rackcell-${r}-${c}`} className="cell">
-                    <section className="rackCard">
-                      <header className="rackHead" title={manualNaming ? "Doble clic para renombrar" : "Activa renombrado manual para editar"}>
-                        {manualNaming ? (
-                          <button
-                            className="rackHead__name"
-                            onDoubleClick={()=>{
-                              const v = prompt("Nombre del estante", rackAlias[rack.estante] ?? label) ?? "";
-                              const trimmed = v.trim();
-                              if (trimmed !== (rackAlias[rack.estante] ?? "")) {
-                                setRackAlias(p=>({ ...p, [rack.estante]: trimmed }));
-                              }
-                            }}
-                          >
-                            Estante {rackAlias[rack.estante] ?? label}
-                          </button>
-                        ) : (
-                          <span className="rackHead__name rackHead__name--static">Estante {label}</span>
-                        )}
-
-                        <div className="shelfOps">
-                          <button className="iconbtn" onClick={()=>{
-                            setStruct(estructura.map(e=> e.estante===rack.estante ? { ...e, baldas: Math.max(1, (e.baldas||1)-1) } : e));
-                            ensureShelfArrays();
-                          }} title="Quitar balda"><MdRemove/></button>
-
-                          <span className="shelf-pill">{shelves}</span>
-
-                          <button className="iconbtn" onClick={()=>{
-                            setStruct(estructura.map(e=> e.estante===rack.estante ? { ...e, baldas: (e.baldas||1)+1 } : e));
-                            ensureShelfArrays();
-                          }} title="Añadir balda"><MdAdd/></button>
-                        </div>
-                      </header>
-
-                      <div className="rackBody">
-                        {Array.from({ length: shelves }).map((_, j) => {
-                          const idx1 = j + 1;
-                          const auto =
-                            N.col_scheme === "alpha"
-                              ? `${label}${idx1}`         // B1, B2…
-                              : `${label}-${idx1}`;        // 2-1, 2-2…
-                          const manualValue = (shelfNames[rack.estante] || [])[j] ?? "";
-
-                          return (
-                            <div key={idx1} className="rackSlot">
-                              <input
-                                className="slotInput"
-                                readOnly={!manualNaming}
-                                placeholder={manualNaming ? "Escribe un nombre…" : auto}
-                                value={manualNaming ? manualValue : ""}
-                                onChange={(e)=>{
-                                  const val = e.target.value;
-                                  setShelfNames(prev => {
-                                    const arr = [...(prev[rack.estante] || [])];
-                                    arr[j] = val;
-                                    return { ...prev, [rack.estante]: arr };
-                                  });
+                    return (
+                      <div key={`rackcell-${r}-${c}`} className="cell">
+                        <section className="rackCard">
+                          <header className="rackHead" title={manualNaming ? "Doble clic para renombrar" : "Activa renombrado manual para editar"}>
+                            {manualNaming ? (
+                              <button
+                                className="rackHead__name"
+                                onDoubleClick={()=>{
+                                  const v = prompt("Nombre del estante", rackAlias[rack.estante] ?? label) ?? "";
+                                  const trimmed = v.trim();
+                                  if (trimmed !== (rackAlias[rack.estante] ?? "")) {
+                                    setRackAlias(p=>({ ...p, [rack.estante]: trimmed }));
+                                  }
                                 }}
-                              />
+                              >
+                                Estante {rackAlias[rack.estante] ?? label}
+                              </button>
+                            ) : (
+                              <span className="rackHead__name rackHead__name--static">Estante {label}</span>
+                            )}
+
+                            <div className="shelfOps">
+                              <button className="iconbtn" onClick={()=>{
+                                setStruct(estructura.map(e=> e.estante===rack.estante ? { ...e, baldas: Math.max(1, (e.baldas||1)-1) } : e));
+                                ensureShelfArrays();
+                              }} title="Quitar balda"><MdRemove/></button>
+
+                              <span className="shelf-pill">{shelves}</span>
+
+                              <button className="iconbtn" onClick={()=>{
+                                setStruct(estructura.map(e=> e.estante===rack.estante ? { ...e, baldas: (e.baldas||1)+1 } : e));
+                                ensureShelfArrays();
+                              }} title="Añadir balda"><MdAdd/></button>
                             </div>
-                          );
-                        })}
+                          </header>
+
+                          <div className="rackBody">
+                            {Array.from({ length: shelves }).map((_, j) => {
+                              const idx1 = j + 1;
+                              const auto =
+                                N.col_scheme === "alpha"
+                                  ? `${label}${idx1}`         // B1, B2…
+                                  : `${label}-${idx1}`;        // 2-1, 2-2…
+                              const manualValue = (shelfNames[rack.estante] || [])[j] ?? "";
+
+                              return (
+                                <div key={idx1} className="rackSlot">
+                                  <input
+                                    className="slotInput"
+                                    readOnly={!manualNaming}
+                                    placeholder={manualNaming ? "Escribe un nombre…" : auto}
+                                    value={manualNaming ? manualValue : ""}
+                                    onChange={(e)=>{
+                                      const val = e.target.value;
+                                      setShelfNames(prev => {
+                                        const arr = [...(prev[rack.estante] || [])];
+                                        arr[j] = val;
+                                        return { ...prev, [rack.estante]: arr };
+                                      });
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </section>
                       </div>
-                    </section>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        ) : (
-          <>
-            <div
-              className="lanesBoard"
-              style={{
-                gridTemplateColumns: `repeat(${N.lanes_cols}, minmax(140px, 1fr))`,
-                gridTemplateRows: `repeat(${N.lanes_rows}, 96px)`
-              }}
-            >
-              {Array.from({ length: N.lanes_rows }).flatMap((_, rIdx) =>
-                Array.from({ length: N.lanes_cols }).map((_, cIdx) => {
-                  const r = rIdx + 1;
-                  const c = cIdx + 1;
-                  const id = byCell.get(`${r}-${c}`);
-                  const lane = id ? estructura.find(e => e.estante === id) : null;
+                    );
+                  })
+                )}
+              </div>
+            ) : (
+              <>
+                <div
+                  className="lanesBoard"
+                  style={{
+                    width: `${naturalWidth}px`,
+                    gridTemplateColumns: `repeat(${N.lanes_cols}, minmax(140px, 1fr))`,
+                    gridTemplateRows: `repeat(${N.lanes_rows}, 96px)`
+                  }}
+                >
+                  {Array.from({ length: N.lanes_rows }).flatMap((_, rIdx) =>
+                    Array.from({ length: N.lanes_cols }).map((_, cIdx) => {
+                      const r = rIdx + 1;
+                      const c = cIdx + 1;
+                      const id = byCell.get(`${r}-${c}`);
+                      const lane = id ? estructura.find(e => e.estante === id) : null;
 
-                  return (
-                    <div key={`cell-${r}-${c}`} className="cell">
-                      {lane && (
-                        <div className="laneCard" style={{ ["--tape"]: lane.color || DEFAULT_LANE_COLOR }}>
-                          <div className="laneRow">
-                            <span className="laneName">Carril {laneLabel(lane)}</span>
+                      return (
+                        <div key={`cell-${r}-${c}`} className="cell">
+                          {lane && (
+                            <div className="laneCard" style={{ ["--tape"]: lane.color || DEFAULT_LANE_COLOR }}>
+                              <div className="laneRow">
+                                <span className="laneName">Carril {laneLabel(lane)}</span>
 
-                            {/* Color swatch + popover */}
-                            <button
-                              className="laneSwatch"
-                              style={{ background: lane.color || DEFAULT_LANE_COLOR }}
-                              onClick={(e)=>{ e.stopPropagation(); setPaletteFor(paletteFor===lane.estante?null:lane.estante); }}
-                              aria-label="Cambiar color" title="Cambiar color"
-                            />
-                            {paletteFor === lane.estante && (
-                              <div className="lanePalette" onMouseLeave={()=>setPaletteFor(null)}>
-                                {recentColors.length > 0 && (
-                                  <>
-                                    <div className="palette-title">Recientes</div>
-                                    <div className="palette-row">
-                                      {recentColors.map(c => (
-                                        <button key={`r-${c}`} className="chip-color" style={{ background:c }}
-                                                onClick={()=>chooseColor(lane.estante, c)} title={c}/>
+                                {/* Color swatch + popover */}
+                                <button
+                                  className="laneSwatch"
+                                  style={{ background: lane.color || DEFAULT_LANE_COLOR }}
+                                  onClick={(e)=>{ e.stopPropagation(); setPaletteFor(paletteFor===lane.estante?null:lane.estante); }}
+                                  aria-label="Cambiar color" title="Cambiar color"
+                                />
+                                {paletteFor === lane.estante && (
+                                  <div className="lanePalette" onMouseLeave={()=>setPaletteFor(null)}>
+                                    {recentColors.length > 0 && (
+                                      <>
+                                        <div className="palette-title">Recientes</div>
+                                        <div className="palette-row">
+                                          {recentColors.map(c => (
+                                            <button key={`r-${c}`} className="chip-color" style={{ background:c }}
+                                                    onClick={()=>chooseColor(lane.estante, c)} title={c}/>
+                                          ))}
+                                        </div>
+                                      </>
+                                    )}
+                                    <div className="palette-title">Paleta</div>
+                                    <div className="palette-grid">
+                                      {LANE_COLORS.map(c => (
+                                        <button key={c}
+                                          className={`chip-color ${ (lane.color||DEFAULT_LANE_COLOR)===c ? "is-active":""}`}
+                                          style={{ background:c }}
+                                          onClick={()=>chooseColor(lane.estante, c)}
+                                          title={COLOR_NAME[c] || c}
+                                        />
                                       ))}
                                     </div>
-                                  </>
+                                    <div className="palette-actions">
+                                      <button className="btn btn--ghost btn--xs" onClick={()=>colorInputRef.current?.click()}>
+                                        Personalizar…
+                                      </button>
+                                    </div>
+                                  </div>
                                 )}
-                                <div className="palette-title">Paleta</div>
-                                <div className="palette-grid">
-                                  {LANE_COLORS.map(c => (
-                                    <button key={c}
-                                      className={`chip-color ${ (lane.color||DEFAULT_LANE_COLOR)===c ? "is-active":""}`}
-                                      style={{ background:c }}
-                                      onClick={()=>chooseColor(lane.estante, c)}
-                                      title={COLOR_NAME[c] || c}
-                                    />
-                                  ))}
-                                </div>
-                                <div className="palette-actions">
-                                  <button className="btn btn--ghost btn--xs" onClick={()=>colorInputRef.current?.click()}>
-                                    Personalizar…
-                                  </button>
-                                </div>
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                      );
+                    })
+                  )}
+                </div>
 
-            {/* Color picker nativo (oculto) */}
-            <input
-              ref={colorInputRef}
-              type="color"
-              defaultValue={DEFAULT_LANE_COLOR}
-              style={{ display:"none" }}
-              onChange={(e)=>{ if (paletteFor) chooseColor(paletteFor, e.target.value); }}
-            />
-          </>
-        )}
+                {/* Color picker nativo (oculto) */}
+                <input
+                  ref={colorInputRef}
+                  type="color"
+                  defaultValue={DEFAULT_LANE_COLOR}
+                  style={{ display:"none" }}
+                  onChange={(e)=>{ if (paletteFor) chooseColor(paletteFor, e.target.value); }}
+                />
+              </>
+            )}
+          </div>
+        </div>
 
         {/* Footer */}
         <div className="wh-footerbar">

@@ -1,5 +1,6 @@
 /* ==========================================================================
    WarehouseCard — Estantes (rejilla + renombrado) & Carriles (palette) + Guardar
+   Con viewport + auto-fit/zoom para no cortar filas largas
    ========================================================================== */
 .warehouse-card{
   --bd: var(--border, #e6e9ef);
@@ -90,6 +91,19 @@
   .seg:hover{ background:#f8fafc; }
   .seg.is-active{ background:#eef4ff; border-color:#dbe7ff; }
 
+  /* Zoom tools */
+  .tool-zoom{
+    .chk-inline{
+      display:flex; align-items:center; gap:8px; font-weight:700; color:#0b1220;
+      input{ width:16px; height:16px; }
+    }
+    .zoom-row{
+      display:flex; align-items:center; gap:8px;
+      input[type="range"]{ width:160px; }
+      .zoom-val{ min-width:42px; text-align:right; font-variant-numeric: tabular-nums; font-weight:800; color:#0f172a; }
+    }
+  }
+
   .tool-spacer{ flex:1 1 auto; }
   @media (max-width: 1160px){
     .wh-toolbar{ grid-template-columns: 1fr; }
@@ -97,9 +111,26 @@
     .mode-actions{ width:100%; justify-content:space-between; }
   }
 
+  /* === Viewport/Scaling (lo importante para evitar cortes) === */
+  .boardViewport{
+    position: relative;
+    overflow: auto;            /* Scroll de seguridad si hiciera falta */
+    max-height: min(70vh, 800px);
+    border:1px solid var(--bd); border-radius:14px;
+    background:#fff;
+    padding:0;                 /* sin padding aquí; el del board se calcula */
+  }
+  .boardScale{
+    transform-origin: top left;
+    will-change: transform;
+    /* Evita que hijos creen stacking raro al escalar */
+    isolation: isolate;
+  }
+
   /* Boards */
   .racksBoard, .lanesBoard{
-    border:1px solid var(--bd); border-radius:14px; background:#fff; padding:12px;
+    border:0; /* el marco lo pone el viewport */
+    padding:12px;               /* ojo: usado en el cálculo JS (BOARD_PADDING_X) */
     display:grid; gap:12px;
   }
   .cell{
@@ -214,8 +245,9 @@
     .racksBoard{ grid-template-columns: 1fr !important; }
   }
   @media (max-width: 720px){
-    .lanesBoard, .racksBoard{ gap:10px; padding:10px; }
+    .lanesBoard, .racksBoard{ gap:10px; padding:12px; }
     .palette-grid{ grid-template-columns: repeat(8, 18px); }
     .mode-actions{ flex-wrap:wrap; gap:8px; }
+    .boardViewport{ max-height: 60vh; }
   }
 }
