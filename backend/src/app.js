@@ -41,7 +41,6 @@ const defaultsDev = [
   'http://localhost:5174', 'http://127.0.0.1:5174',
   'http://localhost:4173', 'http://127.0.0.1:4173',
   'http://localhost:4174', 'http://127.0.0.1:4174',
-  'https://8r7cj2hr-5173.uks1.devtunnels.ms',
 ].filter(Boolean);
 
 const ALLOWED_ORIGINS = Array.from(new Set([
@@ -50,7 +49,7 @@ const ALLOWED_ORIGINS = Array.from(new Set([
 ]));
 
 function originChecker(origin, cb) {
-  if (!origin) return cb(null, true);          // curl/cron/healthchecks
+  if (!origin) return cb(null, true); // curl/cron/Stripe webhooks no mandan Origin
   if (ALLOWED_ORIGINS.includes('*')) return cb(null, true);
   try {
     const u = new URL(origin);
@@ -83,9 +82,11 @@ app.get('/.well-known/health', (_, res) => res.json({ ok: true }));
 /* =========================================================
    STRIPE WEBHOOK (RAW) — antes de express.json()
    ========================================================= */
+// MUY IMPORTANTE: estos endpoints van ANTES de cualquier parser
 const rawJson = express.raw({ type: 'application/json' });
-app.post('/billing/stripe/webhook', rawJson, stripeWebhook);
 app.post('/webhooks/stripe', rawJson, stripeWebhook);
+// mantengo este alias por si ya lo tenías configurado en Stripe
+app.post('/billing/stripe/webhook', rawJson, stripeWebhook);
 
 /* ============== Parsers JSON normales ============== */
 app.use(express.json({ limit: '1mb' }));
@@ -114,12 +115,11 @@ function gate(path, router) {
   app.use(path, requireAuth, subscriptionFirewall(), router);
 }
 function authOnly(path, router) {
-  // Solo login, SIN cortafuegos (para vistas que no deben romperse)
+  // Solo login, SIN cortafuegos
   app.use(path, requireAuth, router);
 }
 
 /* ============== Rutas protegidas (solo login) ============== */
-/* Dashboard, Imágenes y Estantes sin firewall para evitar 402 en ocupación */
 authOnly('/api/dashboard', dashboardRoutes);
 authOnly('/api/imagenes', imagenesRoutes);
 authOnly('/api/estantes', estantesRoutes);
