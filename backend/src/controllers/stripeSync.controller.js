@@ -158,8 +158,9 @@ async function inviteUser(email) {
     if (!email) return;
     if (!supabase?.auth?.admin?.inviteUserByEmail) return; // si no es service-role
     await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${process.env.APP_BASE_URL || process.env.FRONTEND_URL || ''}/crear-password`
-    });
+  redirectTo: `${process.env.APP_BASE_URL || process.env.FRONTEND_URL || ''}/auth/email-confirmado`
+});
+
   } catch (e) {
     // No abortes el flujo por un fail de invitación; déjalo logueado.
     console.warn('[inviteUser] error:', e?.message || e);

@@ -181,8 +181,7 @@ router.post('/checkout/resend-invite', async (req, res) => {
       return res.status(503).json({ ok:false, error:'Service role no configurado' });
     }
 
-    const redirectTo = `${FRONTEND_URL}/create-password`;
-
+const redirectTo = `${FRONTEND_URL}/auth/email-confirmado`;
     const { error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
     if (!error) return res.json({ ok:true, kind:'invite' });
 

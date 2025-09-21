@@ -237,8 +237,7 @@ async function resendInvite(req, res) {
       return res.status(503).json({ ok:false, error:'Service role no configurado en el servidor' });
     }
 
-    const redirectTo = `${FRONTEND_URL}/billing/success`;
-
+const redirectTo = `${FRONTEND_URL}/auth/email-confirmado`;
     // 1) INVITE
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
     if (!error) return res.json({ ok:true, kind:'invite', data });

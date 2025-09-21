@@ -1,318 +1,48 @@
-/* ==========================================================
-   Footer.scss — EasyTrack (forced dark mode)
-   Scope total en .footer
-   ========================================================== */
+.email-ok {
+  max-width: 640px;
+  margin: 64px auto;
+  padding: 0 16px;
 
-.footer {
-  /* Fuerza contexto oscuro para controles nativos/UA */
-  color-scheme: dark;
-
-  /* ===== Tokens locales (DARK) ===== */
-  --ft-bg-1: #0b1220;
-  --ft-bg-2: #0f172a;
-  --ft-surface: rgba(255,255,255,0.04);
-  --ft-text: #e5e7eb;
-  --ft-muted: #94a3b8;
-  --ft-border: rgba(148,163,184,0.22);
-  --ft-accent: #60a5fa;
-  --ft-accent-2: #a78bfa;
-  --ft-success: #22c55e;
-
-  --ft-maxw: 1200px;
-  --ft-pad-x: clamp(16px, 4vw, 28px);
-  --ft-pad-y: clamp(28px, 5vw, 56px);
-
-  position: relative;
-  color: var(--ft-text);
-  background:
-    radial-gradient(1200px 600px at 10% -20%, rgba(96,165,250,0.12), transparent 60%),
-    radial-gradient(1200px 600px at 100% 120%, rgba(167,139,250,0.12), transparent 60%),
-    linear-gradient(180deg, var(--ft-bg-1), var(--ft-bg-2));
-  overflow: hidden;
-
-  &::before {
-    content: "";
-    position: absolute; inset: 0;
-    background-image: repeating-linear-gradient(
-      90deg,
-      rgba(255,255,255,0.04) 0,
-      rgba(255,255,255,0.04) 1px,
-      transparent 1px,
-      transparent 3px
-    );
-    opacity: .08;
-    pointer-events: none;
+  .card {
+    background: var(--ep-surface, #fff);
+    border: 1px solid var(--ep-border, #e6ebf2);
+    border-radius: 14px;
+    padding: 24px 22px;
+    box-shadow: 0 6px 24px rgba(15,23,42,0.06);
+    text-align: center;
   }
 
-  /* ===== Contenedor ===== */
-  &__container {
-    max-width: var(--ft-maxw);
-    margin-inline: auto;
-    padding: var(--ft-pad-y) var(--ft-pad-x);
-    position: relative;
-    z-index: 1;
-  }
-
-  /* ===== Grid superior (brand + nav) ===== */
-  &__grid {
+  .icon-ok {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 12px;
     display: grid;
-    grid-template-columns: minmax(260px, .9fr) minmax(420px, 1.1fr);
-    gap: clamp(24px, 4vw, 48px);
-    align-items: start;
+    place-items: center;
+    border-radius: 50%;
+    background: #ecfdf5;
+    color: #059669;
+    svg { width: 28px; height: 28px; }
+  }
 
-    @media (max-width: 980px) {
-      grid-template-columns: 1fr;
+  h1 { margin: 6px 0 4px; font-size: 24px; }
+  .muted { color: var(--ep-muted, #64748b); }
+
+  .actions {
+    margin: 18px 0 8px;
+    display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+
+    .btn {
+      border-radius: 10px; padding: 10px 14px; border: 1px solid transparent;
+      display: inline-flex; gap: 8px; align-items: center; font-weight: 600;
+      &.primary { background: #0ea5e9; color: #fff; }
+      &.ghost   { background: #fff; color: #0f172a; border-color: #e2e8f0; }
     }
   }
 
-  /* ===== Branding ===== */
-  &__brand {
-    display: grid;
-    align-content: start;
-    gap: 16px;
-    padding: 18px;
-    border: 1px solid var(--ft-border);
-    border-radius: 16px;
-    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-    box-shadow: 0 10px 30px rgba(2,6,23,0.35);
+  .hint { margin-top: 10px; color: var(--ep-muted, #64748b); }
+  .tips { margin-top: 12px; text-align: left; color: var(--ep-text, #0f172a); }
+  .alert {
+    margin-top: 16px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;
+    padding: 10px 12px; border-radius: 10px; font-size: 14px; text-align: left;
   }
-
-  &__brand-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    text-decoration: none;
-    color: inherit;
-
-    &:focus-visible {
-      outline: 2px solid var(--ft-accent);
-      outline-offset: 4px;
-      border-radius: 10px;
-    }
-  }
-
-  &__logo {
-    width: clamp(120px, 24vw, 160px);
-    height: auto;
-    display: block;
-    filter: drop-shadow(0 2px 10px rgba(2,6,23,0.4));
-    transition: transform .25s ease;
-
-    .footer__brand-link:hover & {
-      transform: translateY(-1px) scale(1.02);
-    }
-  }
-
-  &__tagline {
-    margin: 4px 0 2px;
-    color: var(--ft-muted);
-    line-height: 1.6;
-    font-size: .98rem;
-  }
-
-  &__badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-radius: 999px;
-    background: rgba(34,197,94,0.12);
-    border: 1px solid rgba(34,197,94,0.3);
-    color: #bbf7d0;
-
-    svg {
-      font-size: 14px;
-      color: var(--ft-success);
-      filter: drop-shadow(0 0 10px rgba(34,197,94,0.35));
-    }
-    span { font-weight: 600; font-size: .92rem; letter-spacing: .2px; }
-  }
-
-  &__social {
-    display: flex;
-    gap: 10px;
-    margin-top: 2px;
-
-    a {
-      width: 40px; height: 40px;
-      display: inline-grid; place-items: center;
-      border-radius: 12px;
-      background: var(--ft-surface);
-      border: 1px solid var(--ft-border);
-      text-decoration: none;
-      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-
-      svg { font-size: 17px; color: var(--ft-text); opacity: .9; }
-
-      &:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 20px rgba(2,6,23,0.35), inset 0 0 0 1px rgba(255,255,255,0.06);
-        border-color: rgba(96,165,250,0.5);
-      }
-      &:focus-visible {
-        outline: 2px solid var(--ft-accent);
-        outline-offset: 3px;
-      }
-      &:active { transform: translateY(0); }
-    }
-  }
-
-  &__madeby {
-    display: grid;
-    grid-template-columns: 40px 1fr;
-    gap: 12px;
-    align-items: center;
-    padding-top: 14px;
-    margin-top: 6px;
-    border-top: 1px dashed var(--ft-border);
-    color: var(--ft-muted);
-
-    img {
-      width: 40px; height: 40px; object-fit: contain;
-      filter: drop-shadow(0 2px 8px rgba(2,6,23,0.4));
-      border-radius: 8px;
-      background: rgba(255,255,255,0.06);
-    }
-    strong { color: var(--ft-text); }
-    small { display: block; margin-top: 2px; font-size: .85rem; }
-  }
-
-  /* ===== Navegación (2 columnas internas) ===== */
-  &__nav {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(220px,1fr));
-    gap: clamp(16px, 3vw, 28px);
-
-    @media (max-width: 720px) { grid-template-columns: 1fr; }
-  }
-
-  &__column {
-    h4 {
-      margin: 0 0 10px;
-      font-size: 0.95rem;
-      font-weight: 700;
-      letter-spacing: .4px;
-      color: #c7d2fe;
-      text-transform: uppercase;
-    }
-  }
-
-  &__links {
-    display: grid;
-    gap: 8px;
-
-    a {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--ft-text);
-      text-decoration: none;
-      opacity: .86;
-      font-size: .98rem;
-      padding: 6px 0;
-      transition: opacity .18s ease, transform .18s ease;
-
-      &:hover { opacity: 1; transform: translateX(2px); }
-      &:focus-visible {
-        outline: 2px solid var(--ft-accent-2);
-        outline-offset: 3px;
-        border-radius: 6px;
-      }
-
-      &::after {
-        content: "";
-        position: absolute;
-        left: 0; right: 80%;
-        bottom: 0; height: 1px;
-        background: linear-gradient(90deg, var(--ft-accent), var(--ft-accent-2));
-        opacity: 0; transform: translateY(2px);
-        transition: right .24s ease, opacity .24s ease, transform .24s ease;
-      }
-      &:hover::after { right: 0; opacity: .9; transform: translateY(0); }
-    }
-  }
-
-  /* ===== Línea inferior ===== */
-  &__bottom {
-    margin-top: clamp(22px, 4vw, 42px);
-    padding-top: 16px;
-    border-top: 1px solid var(--ft-border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-
-    p {
-      margin: 0;
-      color: var(--ft-muted);
-      font-size: .92rem;
-    }
-  }
-
-  &__bottom-links {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-
-    a {
-      color: var(--ft-text);
-      text-decoration: none;
-      opacity: .85;
-      font-size: .92rem;
-
-      &:hover { opacity: 1; text-decoration: underline; text-underline-offset: 2px; }
-      &:focus-visible {
-        outline: 2px solid var(--ft-accent);
-        outline-offset: 3px;
-        border-radius: 6px;
-      }
-    }
-
-    /* ===== Botón "Volver arriba" — scope fuerte ===== */
-    .to-top {
-      all: unset;
-      display: inline-grid;
-      place-items: center;
-      width: 40px; height: 40px;
-      border-radius: 999px;
-      box-sizing: border-box;
-      line-height: 1;
-      border: 1px solid var(--ft-border);
-      background: var(--ft-surface);
-      color: var(--ft-text);
-      cursor: pointer;
-      isolation: isolate;
-      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background-color .18s ease;
-
-      svg {
-        width: 18px; height: 18px;
-        color: var(--ft-text) !important;
-        opacity: 1 !important;
-        filter: drop-shadow(0 0 0 rgba(0,0,0,0));
-      }
-
-      &:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 18px rgba(2,6,23,0.35), inset 0 0 0 1px rgba(255,255,255,0.06);
-        border-color: rgba(96,165,250,0.5);
-        background-color: rgba(255,255,255,0.06);
-      }
-      &:active { transform: translateY(0); }
-      &:focus-visible {
-        outline: 2px solid var(--ft-accent);
-        outline-offset: 3px;
-        border-radius: 999px;
-      }
-    }
-  }
-
-  /* ===== Importante: NO hay override para light mode.
-     Eliminamos cualquier @media (prefers-color-scheme: light)
-     para que el footer sea SIEMPRE dark. ===== */
 }
-
-/* Extra: si tu layout tiene algún contenedor que aplica filtros globales
-   (invert, mix-blend-mode, etc.), este bloque ayuda a aislar el footer */
-.footer, .footer * { -webkit-tap-highlight-color: transparent; }

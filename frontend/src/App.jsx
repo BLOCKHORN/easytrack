@@ -29,6 +29,7 @@ import PortalSuscripcion from './pages/PortalSuscripcion';
 import CheckoutSuccess from './pages/CheckoutSuccess';
 import CheckoutCancel from './pages/CheckoutCancel';
 import CrearPassword from './pages/CrearPassword';
+import EmailConfirmado from './pages/EmailConfirmado';
 
 import { supabase } from './utils/supabaseClient';
 
@@ -207,6 +208,7 @@ export default function App() {
         <Route path="/billing/cancel" element={<CheckoutCancel />} />
         <Route path="/checkout/cancel" element={<CheckoutCancel />} />
         <Route path="/crear-password" element={<CrearPassword />} />
+        <Route path="/auth/email-confirmado" element={<EmailConfirmado />} />
 
         {/* Reactivación */}
         <Route path="/reactivar" element={<SubscriptionGate />} />
