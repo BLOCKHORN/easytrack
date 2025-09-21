@@ -6,10 +6,11 @@ import { supabase } from '../utils/supabaseClient';
 import '../styles/CheckoutSuccess.scss';
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/,'');
+// A dónde quieres ir tras crear la contraseña:
+const DASHBOARD_URL = (import.meta.env.VITE_DASHBOARD_URL || '/dashboard').replace(/\/$/,'');
 
 const isEmail = (v='') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
-// Detección simple de inbox por dominio
 function guessInboxUrl(email=''){
   const d = email.split('@')[1]?.toLowerCase() || '';
   if (d.includes('gmail')) return 'https://mail.google.com/mail/u/0/#inbox';
@@ -19,7 +20,6 @@ function guessInboxUrl(email=''){
   if (d.includes('icloud') || d.includes('me.com')) return 'https://www.icloud.com/mail';
   return null;
 }
-
 function fmtDate(iso){
   if (!iso) return '—';
   try{
@@ -27,6 +27,27 @@ function fmtDate(iso){
       year:'numeric', month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit'
     });
   }catch{ return iso; }
+}
+
+/* ------------------------- helpers auth/backend ------------------------- */
+
+// Hace ping a tu backend con Authorization: Bearer <token>
+async function pingBackendWithToken(token){
+  if (!token) return false;
+  try {
+    const res = await fetch(`${API}/tenants/me`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Obtiene el access_token actual
+async function getAccessToken(){
+  const { data } = await supabase.auth.getSession();
+  return data?.session?.access_token || null;
 }
 
 /* ----------------------------- Inline Create Password ----------------------------- */
@@ -68,17 +89,41 @@ function InlineCreatePassword({ userEmail }) {
       setErr('Revisa los requisitos y que ambas contraseñas coincidan.');
       return;
     }
+
     setSaving(true);
     const { error } = await supabase.auth.updateUser({ password: pwd });
-    setSaving(false);
     if (error) {
+      setSaving(false);
       setErr(error.message || 'No se pudo actualizar la contraseña.');
       return;
     }
+
+    // ✅ Warm-up de sesión + ping al backend con Bearer antes de ir al dashboard
+    try {
+      // pequeña espera para que rote la sesión si aplica
+      await new Promise(r => setTimeout(r, 200));
+      let token = await getAccessToken();
+
+      // si por lo que sea no está, forzamos un refresh
+      if (!token) {
+        const { data } = await supabase.auth.refreshSession();
+        token = data?.session?.access_token || null;
+      }
+
+      // haz 1-2 intentos de ping para evitar 401 tempranos al cargar el dashboard
+      let alive = await pingBackendWithToken(token);
+      if (!alive) {
+        await new Promise(r => setTimeout(r, 300));
+        token = await getAccessToken();
+        alive = await pingBackendWithToken(token);
+      }
+    } catch {/* no bloquea la UX */ }
+
     setOk(true);
-    setTimeout(() => {
-      window.location.href = '/app';
-    }, 900);
+    setSaving(false);
+
+    // Redirección final
+    window.location.assign(DASHBOARD_URL);
   }
 
   return (
@@ -136,7 +181,7 @@ function InlineCreatePassword({ userEmail }) {
         </div>
 
         {err && <div className="alert error" role="alert">{err}</div>}
-        {ok && <div className="alert success" role="status">Contraseña guardada. Redirigiendo…</div>}
+        {ok && <div className="alert success" role="status">Contraseña guardada. Cargando tu panel…</div>}
 
         <div className="actions">
           <button className="et-btn et-btn--primary" disabled={!allValid || saving}>
@@ -182,50 +227,14 @@ export default function CheckoutSuccess() {
   const inboxUrl  = guessInboxUrl(email);
   const canResend = isEmail(email) && status!=='sending' && cooldown===0;
 
-  // -------- (A) CONSUMIR TOKEN DEL EMAIL EN ESTA MISMA PÁGINA --------
-  useEffect(() => {
-    const KEY = 'et_token_consumed';
-    const once = localStorage.getItem(KEY) === '1';
-
-    async function maybeConsumeAuthFromUrl() {
-      // 1) hash tokens (#access_token & #refresh_token)
-      const h = window.location.hash || '';
-      const get = (k) => decodeURIComponent((h.match(new RegExp(`${k}=([^&]+)`))||[])[1] || '');
-      const access_token  = get('access_token');
-      const refresh_token = get('refresh_token');
-
-      // 2) fallback ?code= (PKCE)
-      const code = new URLSearchParams(window.location.search).get('code');
-
-      try {
-        if (!once && access_token && refresh_token) {
-          await supabase.auth.setSession({ access_token, refresh_token });
-          localStorage.setItem(KEY, '1');
-          // limpiar hash sin recargar
-          history.replaceState({}, document.title, window.location.pathname + window.location.search);
-        } else if (!once && code) {
-          await supabase.auth.exchangeCodeForSession(code);
-          localStorage.setItem(KEY, '1');
-          const qs = new URLSearchParams(window.location.search);
-          qs.delete('code'); qs.delete('type'); qs.delete('error'); qs.delete('error_code'); qs.delete('error_description');
-          history.replaceState({}, document.title, window.location.pathname + (qs.toString() ? `?${qs.toString()}` : ''));
-        }
-      } catch (e) {
-        console.warn('[success] token consume failed:', e?.message);
-      }
-    }
-
-    maybeConsumeAuthFromUrl();
-  }, []);
-
-  // -------- (B) Countdown del botón Reenviar --------
+  // Countdown del botón
   useEffect(() => {
     if (!cooldown) return;
     const t = setInterval(() => setCooldown(c => Math.max(0, c - 1)), 1000);
     return () => clearInterval(t);
   }, [cooldown]);
 
-  // -------- (C) Verifica checkout/session y rellena datos --------
+  // 1) Verifica checkout/session y rellena datos
   useEffect(() => {
     async function verifyWith(id){
       const endpoints = [
@@ -255,7 +264,7 @@ export default function CheckoutSuccess() {
           setVerifiedOk(true);
           setLoading(false);
           return true;
-        } catch { /* probar siguiente endpoint */ }
+        } catch { /* siguiente endpoint */ }
       }
       return false;
     }
@@ -274,7 +283,7 @@ export default function CheckoutSuccess() {
     })();
   }, [sessionId, email]);
 
-  // -------- (D) Reenvío automático (una sola vez) tras verificar checkout --------
+  // 2) Reenvío automático (una sola vez) tras verificar checkout
   useEffect(() => {
     if (!verifiedOk) return;
     if (!isEmail(email)) return;
@@ -290,14 +299,17 @@ export default function CheckoutSuccess() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verifiedOk, email, sessionId]);
 
-  // -------- (E) Detectar sesión de Supabase (misma/otra pestaña) --------
+  // 3) Detectar sesión de Supabase (misma pestaña o otra) y cambiar a modo "create"
   useEffect(() => {
+    // Chequeo inicial
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setAuthedUser(data.user);
     });
+    // Evento de cambios
     const sub = supabase.auth.onAuthStateChange((_ev, session) => {
       if (session?.user) setAuthedUser(session.user);
     });
+    // Si otra pestaña setea la sesión, escuchamos storage y re-consultamos
     const onStorage = () => {
       supabase.auth.getUser().then(({ data }) => {
         if (data?.user) setAuthedUser(data.user);
@@ -433,7 +445,7 @@ export default function CheckoutSuccess() {
                 <div className="dot">3</div>
                 <div className="txt">
                   <strong>Crea tu contraseña</strong>
-                  <span>El enlace te lleva de vuelta aquí para completarlo</span>
+                  <span>El enlace te lleva a <code>/crear-password</code></span>
                 </div>
               </li>
             </ol>
@@ -445,12 +457,10 @@ export default function CheckoutSuccess() {
                 <div className="subj">Si no aparece, revisa Promociones/SPAM.</div>
               </div>
               {inboxUrl ? (
-                <button
-                  className="et-btn et-btn--primary"
-                  onClick={() => { window.location.href = inboxUrl; }} // misma pestaña
-                >
+                // mismo tab
+                <a className="et-btn et-btn--primary" href={inboxUrl}>
                   <FiMail/> Abrir correo <FiExternalLink/>
-                </button>
+                </a>
               ) : (
                 <button className="et-btn" disabled title="Proveedor no detectado">
                   <FiMail/> Abrir correo
