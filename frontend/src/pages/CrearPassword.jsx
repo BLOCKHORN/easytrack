@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
-import { FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiEye, FiEyeOff, FiAlertCircle, FiCheck, FiRefreshCw } from 'react-icons/fi';
 import '../styles/CrearPassword.scss';
 
+const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/,'');
+
 export default function CrearPassword() {
-  const [loadingUser, setLoadingUser]   = useState(true);
+  const [loadingUser, setLoadingUser] = useState(true);
   const [user, setUser]                 = useState(null);
 
   const [pwd, setPwd]                   = useState('');
@@ -14,37 +16,63 @@ export default function CrearPassword() {
 
   const [ok, setOk]                     = useState(false);
   const [err, setErr]                   = useState('');
+  const [hashErr, setHashErr]           = useState('');   // error proveniente del hash (otp_expired, etc.)
+  const [resending, setResending]       = useState(false);
+  const [resentMsg, setResentMsg]       = useState('');
 
-  // Al entrar desde el link de invitación, ya venimos con sesión válida.
-  // Aquí leemos el usuario y señalizamos a la otra pestaña que el email está confirmado.
+  const signupEmail = useMemo(() => (localStorage.getItem('signup_email') || ''), []);
+
+  // 1) Procesar el hash devuelto por Supabase (éxito o error)
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (!error) {
-        const u = data?.user || null;
-        setUser(u);
+      try {
+        const h = window.location.hash.startsWith('#')
+          ? new URLSearchParams(window.location.hash.slice(1))
+          : new URLSearchParams();
 
-        // 🔔 Señaliza a otras pestañas/ventanas que el email ya fue confirmado
-        try {
-          // Fallback por localStorage (dispara evento 'storage')
-          localStorage.setItem('et:email_confirmed', '1');
-          setTimeout(() => {
-            try { localStorage.removeItem('et:email_confirmed'); } catch {}
-          }, 2000);
+        // Si venimos con tokens (flujo email link), forzamos sesión.
+        const access_token  = h.get('access_token');
+        const refresh_token = h.get('refresh_token');
+        const error_code    = h.get('error_code');   // p. ej. otp_expired
+        const error_desc    = h.get('error_description');
 
-          // Canal dedicado (más fiable/moderno)
-          if ('BroadcastChannel' in window) {
-            const bc = new BroadcastChannel('et-auth');
-            bc.postMessage({ type: 'EMAIL_CONFIRMED' });
-            bc.close();
+        if (access_token && refresh_token) {
+          try {
+            await supabase.auth.setSession({ access_token, refresh_token });
+            // limpiar el hash para que no moleste en recargas
+            history.replaceState({}, document.title, window.location.pathname + window.location.search);
+          } catch (e) {
+            // si fallase, dejamos que la siguiente fase intente getUser de todos modos
           }
-        } catch {}
+        } else if (error_code) {
+          setHashErr(`${error_desc || error_code}`); // lo mostramos más abajo y damos opción de reenviar
+        }
+      } finally {
+        // 2) Obtener usuario de sesión (si existe)
+        const { data, error } = await supabase.auth.getUser();
+        if (!error) {
+          const u = data?.user || null;
+          setUser(u);
+
+          // 🔔 Señaliza a otras pestañas/ventanas que el email ya fue confirmado
+          if (u?.email) {
+            try {
+              localStorage.setItem('et:email_confirmed', '1');
+              setTimeout(() => { try { localStorage.removeItem('et:email_confirmed'); } catch {} }, 1500);
+              if ('BroadcastChannel' in window) {
+                const bc = new BroadcastChannel('et-auth');
+                bc.postMessage({ type: 'EMAIL_CONFIRMED', email: u.email });
+                bc.close();
+              }
+            } catch {}
+          }
+        }
+        setLoadingUser(false);
       }
-      setLoadingUser(false);
     })();
   }, []);
 
-  // Reglas de seguridad
+  // 3) Reglas de seguridad
   const rules = useMemo(() => {
     const L = pwd.length >= 8;
     const U = /[A-Z]/.test(pwd);
@@ -55,7 +83,7 @@ export default function CrearPassword() {
     return { L, U, l, n, s, w };
   }, [pwd]);
 
-  // Puntuación (0..5) para barra
+  // 4) Indicador de fortaleza
   const strength = useMemo(() => {
     let score = 0;
     if (rules.L) score++;
@@ -70,6 +98,7 @@ export default function CrearPassword() {
   const allValid =
     rules.L && rules.U && rules.l && rules.n && rules.w && pwd === pwd2;
 
+  // 5) Guardar contraseña
   async function save(e) {
     e?.preventDefault?.();
     setErr('');
@@ -85,11 +114,47 @@ export default function CrearPassword() {
       return;
     }
     setOk(true);
-    // Refresco ligero y al panel
-    setTimeout(() => {
-      window.location.href = '/dashboard';
-    }, 900);
+    setTimeout(() => { window.location.href = '/dashboard'; }, 900);
   }
+
+  // 6) Reenviar invitación / reset si el link salió "otp_expired"
+  async function resendInvite() {
+    if (!signupEmail) {
+      setResentMsg('No conozco tu email. Vuelve a la pantalla anterior y solicita reenvío.');
+      return;
+    }
+    setResending(true);
+    setResentMsg('');
+    try {
+      const body = JSON.stringify({ email: signupEmail });
+      const endpoints = [
+        `${API}/billing/checkout/resend-invite`,
+        `${API}/api/billing/checkout/resend-invite`
+      ];
+      let ok = false, kind = 'invite', lastErr = '';
+      for (const url of endpoints) {
+        try {
+          const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+          const j = await res.json().catch(() => ({}));
+          if (res.ok && j?.ok) { ok = true; kind = j.kind || 'invite'; break; }
+          lastErr = j?.error || `HTTP ${res.status}`;
+        } catch (e) {
+          lastErr = e.message;
+        }
+      }
+      if (!ok) throw new Error(lastErr || 'No se pudo reenviar el enlace.');
+      setResentMsg(kind === 'reset'
+        ? 'Tu cuenta ya existía. Te enviamos un email para restablecer la contraseña.'
+        : 'Te enviamos una nueva invitación. Abre el último email recibido (revisa SPAM).'
+      );
+    } catch (e) {
+      setResentMsg(`Error reenviando: ${e.message}`);
+    } finally {
+      setResending(false);
+    }
+  }
+
+  /* ===================== UI ===================== */
 
   if (loadingUser) {
     return (
@@ -103,16 +168,35 @@ export default function CrearPassword() {
     );
   }
 
+  // Si no hay sesión y el hash trajo un error (p.ej. otp_expired), damos salida elegante
   if (!user) {
     return (
       <section className="pw-setup">
         <div className="card empty">
           <h1>Crear contraseña</h1>
+          {hashErr ? (
+            <div className="alert error">
+              <FiAlertCircle /> {decodeURIComponent(hashErr)}
+            </div>
+          ) : null}
           <p className="muted">
-            No hay sesión activa. Abre el enlace de invitación desde este mismo
-            navegador o solicita uno nuevo desde la pantalla anterior.
+            No hay sesión activa. Abre el enlace de invitación más reciente desde este
+            navegador o solicita uno nuevo.
           </p>
-          <a className="btn ghost" href="/planes">Volver a planes</a>
+
+          {signupEmail ? (
+            <button className="btn primary" onClick={resendInvite} disabled={resending}>
+              {resending ? <><FiRefreshCw className="spin" /> Reenviando…</> : 'Reenviar enlace a mi email'}
+            </button>
+          ) : (
+            <a className="btn ghost" href="/planes">Volver a planes</a>
+          )}
+
+          {resentMsg && (
+            <p className="status small">
+              {resentMsg.startsWith('Error') ? <FiAlertCircle/> : <FiCheck/>} {resentMsg}
+            </p>
+          )}
         </div>
       </section>
     );
@@ -152,9 +236,7 @@ export default function CrearPassword() {
           </div>
 
           {/* Strength meter */}
-          <div className={`meter s-${strength}`} aria-hidden="true">
-            <span />
-          </div>
+          <div className={`meter s-${strength}`} aria-hidden="true"><span /></div>
 
           {/* Checklist */}
           <ul className="checks" aria-live="polite">
