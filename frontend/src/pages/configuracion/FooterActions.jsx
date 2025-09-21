@@ -44,9 +44,6 @@ export default function FooterActions({ guardando = false, onGuardar, onExport, 
       </div>
 
       <div className="footer-actions__right">
-        <button className="btn btn--ghost" onClick={toggleAdvanced} aria-expanded={advancedOpen}>
-          Opciones avanzadas
-        </button>
 
         <button
           className="btn btn--lg btn--primary"
@@ -57,56 +54,6 @@ export default function FooterActions({ guardando = false, onGuardar, onExport, 
           {guardando && <span className="spinner" aria-hidden />}
           <MdSave /> {guardando ? 'Guardando…' : 'Guardar configuración'}
         </button>
-      </div>
-
-      {/* Panel avanzado plegable */}
-      <div className={`fa-advanced ${advancedOpen ? 'open' : ''}`} aria-hidden={!advancedOpen}>
-        <div className="fa-advanced__grid">
-          <section className="fa-block">
-            <h5><MdFileDownload /> Exportar configuración</h5>
-            <p>Descarga un archivo <code>.json</code> con tu configuración actual para guardarla o moverla a otro equipo.</p>
-            <button className="btn btn--outline" onClick={onExport}>
-              <MdFileDownload /> Exportar JSON
-            </button>
-          </section>
-
-          <section className="fa-block">
-            <h5><MdFileUpload /> Importar configuración</h5>
-            <p>Arrastra aquí un archivo <code>.json</code> exportado anteriormente o pulsa para seleccionarlo.</p>
-
-            <div
-              className={`dropzone ${dragOver ? 'is-dragover' : ''}`}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onDrop={onDrop}
-              onClick={triggerBrowse}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && triggerBrowse()}
-              aria-label="Zona para arrastrar y soltar archivo .json"
-            >
-              <div className="dz-inner">
-                <MdFileUpload aria-hidden />
-                <span className="dz-text">
-                  Arrastra el archivo aquí o <u>examinar</u>
-                </span>
-              </div>
-
-              {lastFileName && (
-                <div className="dz-file">Último archivo: <strong>{lastFileName}</strong></div>
-              )}
-            </div>
-
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/json"
-              className="sr-only"
-              onChange={onInputChange}
-              aria-label="Seleccionar archivo .json"
-            />
-          </section>
-        </div>
       </div>
     </footer>
   );

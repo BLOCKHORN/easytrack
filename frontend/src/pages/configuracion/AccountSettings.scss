@@ -164,6 +164,7 @@
   }
   @keyframes acctShine{ 0%{ background-position:100% 50%; } 100%{ background-position:0% 50%; } }
 }
+
 /* ===== Billing block ===== */
 .acct__block--billing {
   .billing__row {
@@ -184,6 +185,8 @@
     font-size: 12px;
     border: 1px solid rgba(148,163,184,.3);
     background: #f8fafc;
+    text-transform: lowercase;
+
     &--active { color: #065f46; background: #ecfdf5; border-color: #a7f3d0; }
     &--trialing { color: #1e40af; background: #eff6ff; border-color: #bfdbfe; }
     &--past_due, &--unpaid { color: #9a3412; background: #fff7ed; border-color: #fed7aa; }

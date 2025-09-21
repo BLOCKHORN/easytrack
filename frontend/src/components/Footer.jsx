@@ -1,10 +1,10 @@
-import { Link } from 'react-router-dom'
-import { useMemo } from 'react'
-import { FaTwitter, FaLinkedin, FaGithub, FaArrowUp, FaShieldAlt } from 'react-icons/fa'
-import '../styles/Footer.scss'
+import { Link } from 'react-router-dom';
+import { useMemo } from 'react';
+import { FaTwitter, FaLinkedin, FaGithub, FaArrowUp, FaShieldAlt } from 'react-icons/fa';
+import '../styles/Footer.scss';
 
 export default function Footer() {
-  const year = new Date().getFullYear()
+  const year = new Date().getFullYear();
 
   // Rutas coherentes con App.jsx (SEO-friendly)
   const links = useMemo(() => ({
@@ -24,29 +24,29 @@ export default function Footer() {
       { to: '/legal/terminos', label: 'Términos' },
       { to: '/legal/cookies', label: 'Cookies' },
     ]
-  }), [])
+  }), []);
 
-  const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
+  const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   return (
-    <footer className="footer" role="contentinfo">
-      <div className="footer__container">
-        <div className="footer__grid">
+    <footer className="et-footer" role="contentinfo">
+      <div className="et-footer__container">
+        <div className="et-footer__grid">
           {/* Branding */}
-          <div className="footer__brand">
-            <Link to="/" className="footer__brand-link" aria-label="Inicio EasyTrack">
-              <img src="/easypack.png" alt="EasyTrack logo" className="footer__logo" loading="lazy" />
+          <div className="et-footer__brand">
+            <Link to="/" className="et-footer__brand-link" aria-label="Inicio EasyTrack">
+              <img src="/easypack.png" alt="EasyTrack logo" className="et-footer__logo" loading="lazy" />
             </Link>
 
-            <p className="footer__tagline">
+            <p className="et-footer__tagline">
               Plataforma de gestión de paquetería moderna, segura y escalable.
             </p>
 
-            <div className="footer__badge" aria-label="Disponibilidad del servicio">
+            <div className="et-footer__badge" aria-label="Disponibilidad del servicio">
               <FaShieldAlt /> <span>Objetivo 99,9% de disponibilidad</span>
             </div>
 
-            <div className="footer__social" aria-label="Redes sociales">
+            <div className="et-footer__social" aria-label="Redes sociales">
               <a href="https://twitter.com" target="_blank" rel="noreferrer" aria-label="Twitter">
                 <FaTwitter />
               </a>
@@ -58,7 +58,7 @@ export default function Footer() {
               </a>
             </div>
 
-            <div className="footer__madeby" aria-label="Hecho por Blockhorn">
+            <div className="et-footer__madeby" aria-label="Hecho por Blockhorn">
               <img src="/blockhorn.png" alt="Blockhorn logo" loading="lazy" />
               <div>
                 <span>Una solución de <strong>Blockhorn</strong></span>
@@ -68,21 +68,21 @@ export default function Footer() {
           </div>
 
           {/* Navegación */}
-          <nav className="footer__nav" aria-label="Mapa del sitio">
-            <div className="footer__column">
-              <h4>Producto</h4>
-              <div className="footer__links">
+          <nav className="et-footer__nav" aria-label="Mapa del sitio">
+            <div className="et-footer__column">
+              <h4 className="et-footer__heading">Producto</h4>
+              <div className="et-footer__links">
                 {links.producto.map(l => (
-                  <Link key={l.to} to={l.to}>{l.label}</Link>
+                  <Link key={l.to} to={l.to} className="et-footer__link">{l.label}</Link>
                 ))}
               </div>
             </div>
 
-            <div className="footer__column">
-              <h4>Ayuda</h4>
-              <div className="footer__links">
+            <div className="et-footer__column">
+              <h4 className="et-footer__heading">Ayuda</h4>
+              <div className="et-footer__links">
                 {links.ayuda.map(l => (
-                  <Link key={l.to} to={l.to}>{l.label}</Link>
+                  <Link key={l.to} to={l.to} className="et-footer__link">{l.label}</Link>
                 ))}
               </div>
             </div>
@@ -90,18 +90,24 @@ export default function Footer() {
         </div>
 
         {/* Línea inferior */}
-        <div className="footer__bottom">
-          <p>&copy; {year} EasyTrack. Todos los derechos reservados.</p>
-          <div className="footer__bottom-links">
+        <div className="et-footer__bottom">
+          <p className="et-footer__copyright">&copy; {year} EasyTrack. Todos los derechos reservados.</p>
+          <div className="et-footer__bottom-links">
             {links.legalBottom.map(l => (
-              <Link key={l.to} to={l.to}>{l.label}</Link>
+              <Link key={l.to} to={l.to} className="et-footer__link et-footer__link--sm">{l.label}</Link>
             ))}
-            <button className="to-top" onClick={scrollTop} aria-label="Volver arriba">
+            <button
+              type="button"
+              className="et-footer__to-top"
+              onClick={scrollTop}
+              aria-label="Volver arriba"
+              title="Volver arriba"
+            >
               <FaArrowUp />
             </button>
           </div>
         </div>
       </div>
     </footer>
-  )
+  );
 }

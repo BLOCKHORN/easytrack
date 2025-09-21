@@ -1,108 +1,165 @@
 // src/pages/account/AccountSettings.jsx
 import { useEffect, useMemo, useState } from "react";
 import {
-  MdMail,
-  MdPassword,
-  MdSecurity,
-  MdLogout,
-  MdSave,
-  MdInfo,
-  MdVisibility,
-  MdVisibilityOff,
-  MdAutorenew,
-  MdCancel,
-  MdReceiptLong,
+  MdMail, MdPassword, MdSecurity, MdLogout, MdSave, MdInfo,
+  MdVisibility, MdVisibilityOff, MdAutorenew, MdCancel,
 } from "react-icons/md";
 import { supabase } from "../../utils/supabaseClient";
+import { getTenantIdOrThrow } from "../../utils/tenant";
 import "./AccountSettings.scss";
 
-/* ========= API base ========= */
+/* ===== (opcional) endpoints para cancelar/reanudar si los tienes en tu API ===== */
 const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
 
-/* ========= Reauth helpers ========= */
-async function reauthWithPassword(currentEmail, password) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: currentEmail,
-    password,
-  });
+/* ===== Reauth helpers ===== */
+async function reauthWithPassword(email, password){
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
   return data?.session;
 }
-
-async function updateEmailSecured(currentEmail, newEmail) {
+async function updateEmailSecured(currentEmail, newEmail){
   const pwd = window.prompt("Confirma tu contraseña para cambiar el email:");
   if (!pwd) return { error: new Error("Operación cancelada por el usuario") };
   await reauthWithPassword(currentEmail, pwd);
   return await supabase.auth.updateUser({ email: newEmail });
 }
-
-async function updatePasswordSecured(currentEmail, newPassword) {
+async function updatePasswordSecured(currentEmail, newPassword){
   const pwd = window.prompt("Introduce tu contraseña actual:");
   if (!pwd) return { error: new Error("Operación cancelada por el usuario") };
   await reauthWithPassword(currentEmail, pwd);
   return await supabase.auth.updateUser({ password: newPassword });
 }
 
-/* ========= UI utils ========= */
-const initialFromEmail = (email = "") => (email.trim()[0] || "U").toUpperCase();
+/* ===== UI utils ===== */
+const initialFromEmail = (email="") => (email.trim()[0] || "U").toUpperCase();
 const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).trim());
-
-function scorePassword(pwd) {
-  let score = 0;
-  if (!pwd) return { score: 0, label: "Muy débil" };
-  const len = pwd.length;
-  const hasLower = /[a-z]/.test(pwd);
-  const hasUpper = /[A-Z]/.test(pwd);
-  const hasDigit = /[0-9]/.test(pwd);
-  const hasSymb = /[^A-Za-z0-9]/.test(pwd);
-
-  score += Math.min(len, 12);
-  score += hasLower ? 2 : 0;
-  score += hasUpper ? 3 : 0;
-  score += hasDigit ? 3 : 0;
-  score += hasSymb ? 4 : 0;
-
-  const pct = Math.min(100, Math.round((score / 24) * 100));
-  let label = "Muy débil";
-  if (pct >= 75) label = "Fuerte";
-  else if (pct >= 50) label = "Media";
-  else if (pct >= 25) label = "Débil";
-
-  return { score: pct, label };
+function scorePassword(pwd){
+  let score = 0; if (!pwd) return { score:0, label:"Muy débil" };
+  const len = pwd.length, hasLower=/[a-z]/.test(pwd), hasUpper=/[A-Z]/.test(pwd), hasDigit=/[0-9]/.test(pwd), hasSymb=/[^A-Za-z0-9]/.test(pwd);
+  score += Math.min(len,12) + (hasLower?2:0) + (hasUpper?3:0) + (hasDigit?3:0) + (hasSymb?4:0);
+  const pct = Math.min(100, Math.round((score/24)*100));
+  const label = pct>=75?"Fuerte":pct>=50?"Media":pct>=25?"Débil":"Muy débil";
+  return { score:pct, label };
 }
-const strengthClass = (label) =>
-  label === "Fuerte" ? "strong" : label === "Media" ? "medium" : label === "Débil" ? "weak" : "very-weak";
+const strengthClass = (label) => label==="Fuerte"?"strong":label==="Media"?"medium":label==="Débil"?"weak":"very-weak";
 
-/* ========= Billing helpers ========= */
-function eur0(c) {
-  if (!Number.isFinite(+c)) return "—";
-  return (c / 100).toLocaleString("es-ES", { maximumFractionDigits: 0 });
-}
-function fmtDate(iso) {
-  if (!iso) return "—";
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
-  } catch {
-    return iso;
+/* ===== Billing formatters ===== */
+const eur0 = (c) => (Number.isFinite(+c) ? (c/100).toLocaleString("es-ES",{maximumFractionDigits:0}) : "—");
+const fmtDate = (iso) => { if(!iso) return "—"; const d=new Date(iso); return isNaN(+d)?"—":d.toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}); };
+const humanRemaining = (iso) => { if(!iso) return "—"; const ms=new Date(iso).getTime()-Date.now(); if(ms<=0) return "hoy"; const days=Math.ceil(ms/86400000); return days>60?`en ${Math.round(days/30)} meses`:`en ${days} día${days!==1?"s":""}`; };
+const periodLabel = (m) => (m===12?"1 año":m===1?"1 mes":`${m} meses`);
+
+/* ===== Carga desde Supabase con fallback por memberships ===== */
+async function fetchSubscriptionFromDB(userId){
+  // 1) tenant “actual” (si falla, probamos todos los tenants del usuario)
+  let primaryTenant = null;
+  try { primaryTenant = await getTenantIdOrThrow(); } catch {}
+  let tenantIds = [];
+  if (primaryTenant) tenantIds.push(primaryTenant);
+
+  if (!userId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    userId = user?.id || null;
   }
+
+  // 2) añade todos los tenants en los que el usuario es miembro (por si el “actual” no coincide)
+  try {
+    if (userId) {
+      const { data: memRows } = await supabase
+        .from("memberships")
+        .select("tenant_id")
+        .eq("user_id", userId);
+      const extra = (memRows||[]).map(r => r.tenant_id).filter(Boolean);
+      tenantIds = Array.from(new Set([...tenantIds, ...extra]));
+    }
+  } catch {}
+
+  if (tenantIds.length === 0) return null;
+
+  // helper para obtener la fila + plan
+  const getWithPlan = async (subRow) => {
+    if (!subRow) return null;
+    let plan = null;
+    try {
+      const { data: p } = await supabase
+        .from("billing_plans")
+        .select("id,name,base_price_cents,period_months")
+        .eq("id", subRow.plan_id)
+        .maybeSingle();
+      plan = p || null;
+    } catch {}
+    const base = Number(plan?.base_price_cents)||0;
+    const months = Number(plan?.period_months)||1;
+    const perMonth = months>0 ? Math.round(base/months) : base;
+
+    const isTrial = String(subRow.status||"").toLowerCase()==="trialing" && subRow.trial_ends_at;
+    const nextAt = isTrial ? subRow.trial_ends_at : subRow.current_period_end;
+
+    return {
+      id: subRow.id,
+      provider: subRow.provider,
+      status: subRow.status,
+      cancel_at_period_end: !!subRow.cancel_at_period_end,
+      trial_ends_at: subRow.trial_ends_at,
+      current_period_start: subRow.current_period_start,
+      current_period_end: subRow.current_period_end,
+
+      plan_label: plan?.name || "Plan",
+      price_cents: base,
+      price_month_cents: perMonth,
+      period_months: months,
+      period_label: periodLabel(months),
+
+      next_label: isTrial ? "Fin de prueba" : "Próxima facturación",
+      next_billing_at: nextAt,
+      remaining_label: humanRemaining(nextAt),
+
+      period_start: isTrial ? (subRow.created_at || subRow.current_period_start) : subRow.current_period_start,
+      period_end: isTrial ? subRow.trial_ends_at : subRow.current_period_end,
+    };
+  };
+
+  // 3) primero intentamos por el tenant principal
+  if (primaryTenant) {
+    try {
+      const { data: sub } = await supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("tenant_id", primaryTenant)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (sub) return await getWithPlan(sub);
+    } catch {}
+  }
+
+  // 4) si no hay nada, buscamos en cualquiera de los tenants del usuario
+  try {
+    const { data: subsAny } = await supabase
+      .from("subscriptions")
+      .select("*")
+      .in("tenant_id", tenantIds)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (subsAny && subsAny.length) return await getWithPlan(subsAny[0]);
+  } catch {}
+
+  return null;
 }
-async function authedFetch(path, opts = {}) {
+
+/* ===== API para cancelar/reanudar (si la tienes) ===== */
+async function authedFetch(path, opts = {}){
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
   if (!token) throw new Error("No auth");
   return fetch(`${API_BASE}${path}`, {
     method: opts.method || "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(opts.headers || {}),
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(opts.headers||{}) },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
 }
 
-export default function AccountSettings() {
+export default function AccountSettings(){
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -122,149 +179,86 @@ export default function AccountSettings() {
   const pwdStrength = useMemo(() => scorePassword(pwd1), [pwd1]);
   const pwdStrengthCls = strengthClass(pwdStrength.label);
 
-  const provider = useMemo(() => {
-    const p = user?.app_metadata?.provider;
-    if (p) return p;
-    return user?.identities?.[0]?.provider || "email";
-  }, [user]);
+  const provider = useMemo(() => user?.app_metadata?.provider || user?.identities?.[0]?.provider || "email", [user]);
 
-  /* ===== Suscripción ===== */
+  // suscripción
   const [sub, setSub] = useState(null);
   const [subLoading, setSubLoading] = useState(true);
   const [subMsg, setSubMsg] = useState("");
 
-  async function loadSubscription() {
-    setSubLoading(true);
-    setSubMsg("");
+  async function loadSubscription(){
+    setSubLoading(true); setSubMsg("");
     try {
-      const r = await authedFetch("/api/billing/subscription");
-      if (!r.ok) throw new Error(await r.text().catch(() => "No se pudo cargar la suscripción"));
-      const j = await r.json();
-      setSub(j || null);
+      const s = await fetchSubscriptionFromDB(user?.id);
+      setSub(s || null);
     } catch (e) {
-      setSubMsg(e.message || "No se pudo cargar la suscripción.");
+      console.error("[AccountSettings] loadSubscription:", e);
       setSub(null);
+      setSubMsg("No se pudo cargar la suscripción.");
     } finally {
       setSubLoading(false);
     }
   }
 
-  async function cancelAtPeriodEnd() {
+  async function cancelAtPeriodEnd(){
     if (!window.confirm("¿Cancelar la renovación automática? Se mantendrá activo hasta el fin del periodo actual.")) return;
-    setSubMsg("");
     try {
-      const r = await authedFetch("/api/billing/cancel-renewal", { method: "POST" });
-      if (!r.ok) throw new Error(await r.text().catch(() => "No se pudo cancelar la renovación"));
-      const j = await r.json();
-      setSub(j);
+      const r = await authedFetch("/api/billing/cancel-renewal", { method:"POST" });
+      if (!r.ok) throw new Error(await r.text().catch(()=> "No se pudo cancelar"));
+      await loadSubscription();
       setSubMsg("La suscripción no se renovará. Seguirá activa hasta la fecha indicada.");
-    } catch (e) {
-      setSubMsg(e.message || "No se pudo cancelar la renovación.");
-    }
+    } catch (e) { setSubMsg(e.message || "No se pudo cancelar la renovación."); }
   }
-
-  async function resumeRenewal() {
+  async function resumeRenewal(){
     if (!window.confirm("¿Reactivar la renovación automática?")) return;
-    setSubMsg("");
     try {
-      const r = await authedFetch("/api/billing/resume", { method: "POST" });
-      if (!r.ok) throw new Error(await r.text().catch(() => "No se pudo reactivar la renovación"));
-      const j = await r.json();
-      setSub(j);
+      const r = await authedFetch("/api/billing/resume", { method:"POST" });
+      if (!r.ok) throw new Error(await r.text().catch(()=> "No se pudo reactivar"));
+      await loadSubscription();
       setSubMsg("Renovación automática reactivada.");
-    } catch (e) {
-      setSubMsg(e.message || "No se pudo reactivar la renovación.");
-    }
+    } catch (e) { setSubMsg(e.message || "No se pudo reactivar la renovación."); }
   }
 
-  async function openPortal() {
-    try {
-      const r = await authedFetch("/api/billing/portal", { method: "POST", body: { return_to: window.location.href } });
-      if (!r.ok) throw new Error(await r.text().catch(() => "No se pudo abrir el portal"));
-      const j = await r.json();
-      if (j?.url) window.open(j.url, "_blank", "noopener");
-    } catch (e) {
-      setSubMsg(e.message || "No se pudo abrir el portal de facturación.");
-    }
-  }
-
-  /* ===== Carga inicial ===== */
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const { data, error } = await supabase.auth.getUser();
+      const { data } = await supabase.auth.getUser();
       if (mounted) {
         setUser(data?.user || null);
         setEmail(data?.user?.email || "");
         setLoading(false);
-        if (error) console.error(error);
       }
     })();
-    loadSubscription().catch(() => {});
+    // carga la suscripción al montar
+    loadSubscription().catch(()=>{});
     return () => { mounted = false; };
   }, []);
 
-  /* ===== Email ===== */
   const updateEmail = async () => {
     setEmailMsg("");
     const current = user?.email || "";
     const next = (email || "").trim();
-
-    if (provider !== "email") {
-      setEmailMsg(`Tu cuenta usa ${provider}. Cambia el email desde ese proveedor.`);
-      return;
-    }
-    if (!next || next === current) {
-      setEmailMsg("Introduce un email distinto.");
-      return;
-    }
-    if (!isValidEmail(next)) {
-      setEmailMsg("Introduce un email válido.");
-      return;
-    }
-
+    if (provider !== "email") return setEmailMsg(`Tu cuenta usa ${provider}. Cambia el email en ese proveedor.`);
+    if (!next || next === current) return setEmailMsg("Introduce un email distinto.");
+    if (!isValidEmail(next)) return setEmailMsg("Introduce un email válido.");
     setSavingEmail(true);
     const { error } = await updateEmailSecured(current, next);
     setSavingEmail(false);
-
-    if (error) {
-      setEmailMsg(error.message || "No se pudo actualizar el email.");
-      return;
-    }
+    if (error) return setEmailMsg(error.message || "No se pudo actualizar el email.");
     setEmailMsg("Te hemos enviado un correo de confirmación. El cambio se aplicará cuando lo confirmes.");
   };
 
-  /* ===== Password ===== */
   const updatePassword = async () => {
     setPwdMsg("");
-    if (provider !== "email") {
-      setPwdMsg(`Tu cuenta usa ${provider}. La contraseña se gestiona en ese proveedor.`);
-      return;
-    }
-    if (!pwd1 || !pwd2) {
-      setPwdMsg("Rellena ambos campos.");
-      return;
-    }
-    if (pwd1.length < 8) {
-      setPwdMsg("La contraseña debe tener al menos 8 caracteres.");
-      return;
-    }
-    if (pwd1 !== pwd2) {
-      setPwdMsg("Las contraseñas no coinciden.");
-      return;
-    }
-
+    if (provider !== "email") return setPwdMsg(`Tu cuenta usa ${provider}. La contraseña se gestiona en ese proveedor.`);
+    if (!pwd1 || !pwd2) return setPwdMsg("Rellena ambos campos.");
+    if (pwd1.length < 8) return setPwdMsg("La contraseña debe tener al menos 8 caracteres.");
+    if (pwd1 !== pwd2) return setPwdMsg("Las contraseñas no coinciden.");
     setSavingPwd(true);
     const { error } = await updatePasswordSecured(user?.email || "", pwd1);
     setSavingPwd(false);
-
-    if (error) {
-      setPwdMsg(error.message || "No se pudo actualizar la contraseña.");
-      return;
-    }
-    setPwd1("");
-    setPwd2("");
-    setPwdMsg("Contraseña actualizada correctamente.");
+    if (error) return setPwdMsg(error.message || "No se pudo actualizar la contraseña.");
+    setPwd1(""); setPwd2(""); setPwdMsg("Contraseña actualizada correctamente.");
   };
 
   const signOutAll = async () => {
@@ -273,11 +267,7 @@ export default function AccountSettings() {
   };
 
   if (loading) {
-    return (
-      <div className="acct card">
-        <div className="acct__skeleton" />
-      </div>
-    );
+    return (<div className="acct card"><div className="acct__skeleton" /></div>);
   }
 
   return (
@@ -285,22 +275,16 @@ export default function AccountSettings() {
       {/* Header */}
       <header className="card__header acct__header">
         <div className="acct__left">
-          <div className="acct__avatar" aria-hidden>
-            {initialFromEmail(user?.email)}
-          </div>
+          <div className="acct__avatar" aria-hidden>{initialFromEmail(user?.email)}</div>
           <div className="acct__meta">
             <h3 className="acct__title">Tu cuenta</h3>
-            <p className="acct__email">
-              {user?.email}
-              <span className={`chip chip--prov chip--${provider}`}>{provider}</span>
-            </p>
+            <p className="acct__email">{user?.email}<span className={`chip chip--prov chip--${provider}`}>{provider}</span></p>
           </div>
         </div>
       </header>
 
       {/* Contenido */}
       <div className="acct__stack">
-
         {/* Suscripción */}
         <section className="acct__block acct__block--billing">
           <div className="blk__head">
@@ -313,20 +297,17 @@ export default function AccountSettings() {
               <div className="billing__row">
                 <div className="billing__k">Plan</div>
                 <div className="billing__v">
-                  <strong>{sub.plan_label || "Plan único"}</strong>
-                  {" · "}
-                  {eur0(sub.price_cents)} €/mes
-                  {sub.interval_label ? ` · ${sub.interval_label}` : ""}
+                  <strong>{sub.plan_label}</strong> · {eur0(sub.price_month_cents)} €/mes
+                  <span className="muted"> ({eur0(sub.price_cents)} € / {sub.period_label})</span>
                 </div>
               </div>
 
               <div className="billing__row">
                 <div className="billing__k">Estado</div>
                 <div className="billing__v">
-                  <span className={`badge badge--${sub.status}`}>{sub.status}</span>
-                  {" "}
+                  <span className={`badge badge--${String(sub.status||"").toLowerCase()}`}>{sub.status}</span>{" "}
                   {sub.cancel_at_period_end ? (
-                    <span className="muted">· Se cancelará al finalizar el periodo</span>
+                    <span className="muted">· No se renovará al finalizar el periodo</span>
                   ) : (
                     <span className="muted">· Renovación automática activa</span>
                   )}
@@ -334,30 +315,30 @@ export default function AccountSettings() {
               </div>
 
               <div className="billing__row">
-                <div className="billing__k">Fin de periodo</div>
-                <div className="billing__v">{fmtDate(sub.current_period_end)}</div>
+                <div className="billing__k">Proveedor</div>
+                <div className="billing__v">{sub.provider || "—"}</div>
+              </div>
+
+              <div className="billing__row">
+                <div className="billing__k">Periodo actual</div>
+                <div className="billing__v">{fmtDate(sub.period_start)} → {fmtDate(sub.period_end)}</div>
+              </div>
+
+              <div className="billing__row">
+                <div className="billing__k">{sub.next_label}</div>
+                <div className="billing__v">{fmtDate(sub.next_billing_at)} <span className="muted">({sub.remaining_label})</span></div>
               </div>
 
               <div className="actions">
                 {!sub.cancel_at_period_end ? (
-                  <button className="btn btn--danger" onClick={cancelAtPeriodEnd}>
-                    <MdCancel /> Cancelar renovación
-                  </button>
+                  <button className="btn btn--danger" onClick={cancelAtPeriodEnd}><MdCancel /> Cancelar renovación</button>
                 ) : (
-                  <button className="btn btn--primary" onClick={resumeRenewal}>
-                    <MdAutorenew /> Reanudar renovación
-                  </button>
+                  <button className="btn btn--primary" onClick={resumeRenewal}><MdAutorenew /> Reanudar renovación</button>
                 )}
-                <button className="btn btn--outline" onClick={openPortal}>
-                  <MdReceiptLong /> Ver facturas / cambiar tarjeta
-                </button>
+                {/* Sin botón de “Ver facturas / cambiar tarjeta” por ahora */}
               </div>
 
-              {subMsg && (
-                <div className="note" role="status">
-                  <MdInfo aria-hidden /> {subMsg}
-                </div>
-              )}
+              {subMsg && <div className="note" role="status"><MdInfo aria-hidden /> {subMsg}</div>}
             </>
           ) : subLoading ? null : (
             <div className="note">
@@ -378,32 +359,18 @@ export default function AccountSettings() {
           <div className="form-row">
             <label className="field">
               <span className="label">Nuevo email</span>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="tu@email.com"
-                autoComplete="email"
-                disabled={provider !== "email" || savingEmail}
-                aria-invalid={!!emailMsg}
-              />
+              <input type="email" value={email} onChange={(e)=>setEmail(e.target.value)}
+                     placeholder="tu@email.com" autoComplete="email"
+                     disabled={provider!=="email" || savingEmail} aria-invalid={!!emailMsg}/>
               <span className="field__hint" />
             </label>
 
-            <button
-              className="btn btn--primary"
-              onClick={updateEmail}
-              disabled={provider !== "email" || savingEmail}
-            >
+            <button className="btn btn--primary" onClick={updateEmail} disabled={provider!=="email" || savingEmail}>
               {savingEmail ? "Guardando…" : (<><MdSave /> Guardar</>)}
             </button>
           </div>
 
-          {emailMsg && (
-            <div className="note" role="status">
-              <MdInfo aria-hidden /> {emailMsg}
-            </div>
-          )}
+          {emailMsg && <div className="note" role="status"><MdInfo aria-hidden /> {emailMsg}</div>}
         </section>
 
         {/* Password */}
@@ -414,35 +381,18 @@ export default function AccountSettings() {
           </div>
 
           {provider !== "email" ? (
-            <div className="note">
-              <MdInfo aria-hidden />
-              Tu cuenta usa <strong>{provider}</strong>. La contraseña se gestiona en ese proveedor.
-            </div>
+            <div className="note"><MdInfo aria-hidden /> Tu cuenta usa <strong>{provider}</strong>. La contraseña se gestiona en ese proveedor.</div>
           ) : (
             <>
               <div className="form-col2">
                 <label className="field">
                   <span className="label">Nueva contraseña</span>
                   <div className="has-right-icon">
-                    <input
-                      type={showPwd1 ? "text" : "password"}
-                      value={pwd1}
-                      onChange={(e) => setPwd1(e.target.value)}
-                      autoComplete="new-password"
-                      placeholder="********"
-                      aria-describedby="pwd-strength"
-                    />
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      onClick={() => setShowPwd1((v) => !v)}
-                      aria-label={showPwd1 ? "Ocultar contraseña" : "Mostrar contraseña"}
-                    >
-                      <MdVisibilityOff style={{ display: showPwd1 ? "block" : "none" }} />
-                      <MdVisibility style={{ display: showPwd1 ? "none" : "block" }} />
+                    <input type={showPwd1?"text":"password"} value={pwd1} onChange={(e)=>setPwd1(e.target.value)} autoComplete="new-password" placeholder="********" aria-describedby="pwd-strength"/>
+                    <button type="button" className="icon-btn" onClick={()=>setShowPwd1(v=>!v)} aria-label={showPwd1?"Ocultar contraseña":"Mostrar contraseña"}>
+                      <MdVisibilityOff style={{display:showPwd1?"block":"none"}}/><MdVisibility style={{display:showPwd1?"none":"block"}}/>
                     </button>
                   </div>
-
                   <div id="pwd-strength" className="strength" aria-live="polite">
                     <div className={`bar bar--${pwdStrengthCls}`} style={{ width: `${pwdStrength.score}%` }} />
                     <span className="strength__label">{pwdStrength.label}</span>
@@ -452,21 +402,9 @@ export default function AccountSettings() {
                 <label className="field">
                   <span className="label">Repetir contraseña</span>
                   <div className="has-right-icon">
-                    <input
-                      type={showPwd2 ? "text" : "password"}
-                      value={pwd2}
-                      onChange={(e) => setPwd2(e.target.value)}
-                      autoComplete="new-password"
-                      placeholder="********"
-                    />
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      onClick={() => setShowPwd2((v) => !v)}
-                      aria-label={showPwd2 ? "Ocultar contraseña" : "Mostrar contraseña"}
-                    >
-                      <MdVisibilityOff style={{ display: showPwd2 ? "block" : "none" }} />
-                      <MdVisibility style={{ display: showPwd2 ? "none" : "block" }} />
+                    <input type={showPwd2?"text":"password"} value={pwd2} onChange={(e)=>setPwd2(e.target.value)} autoComplete="new-password" placeholder="********"/>
+                    <button type="button" className="icon-btn" onClick={()=>setShowPwd2(v=>!v)} aria-label={showPwd2?"Ocultar contraseña":"Mostrar contraseña"}>
+                      <MdVisibilityOff style={{display:showPwd2?"block":"none"}}/><MdVisibility style={{display:showPwd2?"none":"block"}}/>
                     </button>
                   </div>
                   <span className="field__hint" />
@@ -479,11 +417,7 @@ export default function AccountSettings() {
                 </button>
               </div>
 
-              {pwdMsg && (
-                <div className="note" role="status">
-                  <MdInfo aria-hidden /> {pwdMsg}
-                </div>
-              )}
+              {pwdMsg && <div className="note" role="status"><MdInfo aria-hidden /> {pwdMsg}</div>}
             </>
           )}
         </section>

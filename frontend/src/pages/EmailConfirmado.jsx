@@ -3,14 +3,12 @@ import { supabase } from '../utils/supabaseClient';
 import { FiCheck, FiExternalLink, FiLock } from 'react-icons/fi';
 import '../styles/EmailConfirmado.scss';
 
-const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/,'');
 const CHECKOUT_URL   = '/billing/success';
 const CREATE_PWD_URL = '/crear-password';
 
 export default function EmailConfirmado() {
-  const [ok, setOk] = useState(false);
   const [email, setEmail] = useState('');
-  const [info, setInfo] = useState('');
+  const [info, setInfo]   = useState('');
 
   const hasCheckoutSession = useMemo(() => {
     try { return !!localStorage.getItem('last_session_id'); } catch { return false; }
@@ -57,8 +55,6 @@ export default function EmailConfirmado() {
             }
           } catch {}
         }
-
-        setOk(true);
       } catch (e) {
         setInfo(e.message || 'Error inesperado al confirmar el email.');
       }
@@ -68,8 +64,8 @@ export default function EmailConfirmado() {
   return (
     <section className="eok">
       <div className="eok-card">
-        <div className="eok-icon-ok"><FiCheck aria-hidden="true" /></div>
-        <h1>¡Email confirmado!</h1>
+        <div className="eok-icon"><FiCheck aria-hidden="true" /></div>
+        <h1 className="eok-title">¡Email confirmado!</h1>
         <p className="eok-muted">
           {email ? <>Tu usuario <strong>{email}</strong> ya está verificado.</> : 'Tu usuario ya está verificado.'}
         </p>
@@ -87,13 +83,6 @@ export default function EmailConfirmado() {
           <p className="eok-hint">Si tenías abierto el checkout, esa ventana se actualizará automáticamente.</p>
         ) : (
           <p className="eok-hint">Si cerraste el checkout, puedes crear tu contraseña aquí y seguir.</p>
-        )}
-
-        {ok && !hasCheckoutSession && (
-          <details className="eok-tips">
-            <summary>¿No recuerdas tu email?</summary>
-            <p>En <code>{CREATE_PWD_URL}</code> puedes pedir un nuevo enlace con tu email.</p>
-          </details>
         )}
 
         {info && <div className="eok-alert">{info}</div>}

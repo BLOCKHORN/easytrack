@@ -1,5 +1,5 @@
 import "../styles/VerEstantes.scss";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { getTenantIdOrThrow } from "../utils/tenant";
 import { obtenerPaquetesBackend, obtenerEstructuraEstantesYPaquetes } from "../services/paquetesService";
@@ -20,6 +20,12 @@ const hexToRgba = (hex = "#6b7280", a = 0.1) => {
   if (!/^[0-9a-fA-F]{6}$/.test(h)) return `rgba(0,0,0,${a})`;
   const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${a})`;
+};
+const normHex = (hex, fb = "#2563eb") => {
+  const v = String(hex || "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) return v;
+  if (/^[0-9a-fA-F]{6}$/.test(v)) return `#${v}`;
+  return fb;
 };
 const num = (v, d = 0) => Number.isFinite(Number(v)) ? Number(v) : d;
 const isPending = (p) => p?.entregado === false || p?.entregado == null;
@@ -95,7 +101,6 @@ function parseCodigoGenerico(raw) {
 
 /* ===== Extraer estructura de /api/estantes/estructura ===== */
 function extractStructureFromBackend(payload) {
-  // Esperado: { estructura:[{estante, nombre, filas:[{id, idx/codigo/name}]}] }
   const root = payload?.estructura;
   if (!Array.isArray(root)) return [];
   return root.map(est => ({
@@ -110,7 +115,27 @@ function extractStructureFromBackend(payload) {
   })).filter(r => Number.isFinite(r.estante));
 }
 
-/* ===================== Componente ===================== */
+/* ===== Carrier dominante ===== */
+function getDominantCarrierColor(arr = [], colorMap = new Map(), fallback = "#6b7280") {
+  if (!arr.length) return fallback;
+  const counts = new Map();
+  for (const p of arr) {
+    const name = p?.empresa_transporte || p?.compania || "";
+    if (!name) continue;
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  if (!counts.size) return fallback;
+  const [bestName] = [...counts.entries()].sort((a,b)=>b[1]-a[1])[0];
+  const hex = normHex(colorMap.get(bestName), fallback);
+  return hex;
+}
+
+/* ===== Constantes visuales para auto-scale ===== */
+const GAP_PX = 12;             // debe coincidir con SCSS --gap
+const RACK_CELL_W = 340;       // ancho base columna rack (px)
+const LANE_CELL_W = 280;       // ancho base celda lane (px)
+const MIN_SCALE = 0.40;        // no escalar por debajo de 40% para legibilidad
+
 export default function VerEstantes() {
   const [modo, setModo] = useState("lanes"); // "lanes" | "racks"
 
@@ -125,6 +150,10 @@ export default function VerEstantes() {
   const [rackOrder, setRackOrder] = useState([]);
   const [pkgsByBaldaId, setPkgsByBaldaId] = useState({});
 
+  // ---- Carriers (colores)
+  const [coloresCompania, setColoresCompania] = useState(() => new Map());
+  const getCompColor = (name) => normHex(coloresCompania.get(name), "#2563eb");
+
   // ---- UI
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -132,9 +161,17 @@ export default function VerEstantes() {
   const [q, setQ] = useState("");
   const [soloConPkgs, setSoloConPkgs] = useState(false);
 
-  // ---- ready flags para evitar “flash” feo
+  // ---- ready flags
   const [readyLayout, setReadyLayout] = useState(false);
   const [readyEstructura, setReadyEstructura] = useState(false);
+
+  // ---- Escalado dinámico (no overflow)
+  const racksWrapRef = useRef(null);
+  const racksInnerRef = useRef(null);
+  const lanesWrapRef = useRef(null);
+  const lanesInnerRef = useRef(null);
+  const [racksScale, setRacksScale] = useState(1);
+  const [lanesScale, setLanesScale] = useState(1);
 
   /* ===================== Carga ===================== */
   useEffect(() => {
@@ -147,9 +184,16 @@ export default function VerEstantes() {
         if (!token) throw new Error("No hay sesión activa.");
         const tenantId = await getTenantIdOrThrow();
 
-        // Dispara layout y paquetes EN PARALELO
+        // Colores de compañías
+        const empresasPromise = supabase
+          .from("empresas_transporte_tenant")
+          .select("nombre,color")
+          .eq("tenant_id", tenantId)
+          .then(({ data }) => data || [])
+          .catch(() => []);
+
+        // Layout/meta + paquetes
         const layoutPromise = (async () => {
-          // layouts_meta o RPC
           let meta = null;
           try {
             const { data } = await supabase
@@ -170,9 +214,13 @@ export default function VerEstantes() {
 
         const paquetesPromise = obtenerPaquetesBackend(token).catch(() => []);
 
-        // Espera a layout + paquetes
-        const [metaRaw, paquetes] = await Promise.all([layoutPromise, paquetesPromise]);
+        const [empresas, metaRaw, paquetes] = await Promise.all([empresasPromise, layoutPromise, paquetesPromise]);
         if (cancel) return;
+
+        // Set colores compañías
+        const colorMap = new Map();
+        (empresas || []).forEach(e => { colorMap.set(e?.nombre, normHex(e?.color || "#2563eb")); });
+        setColoresCompania(colorMap);
 
         const root = metaRaw?.payload ? metaRaw.payload : metaRaw || {};
         const modeFromMeta = metaRaw?.mode || root?.layout_mode || "racks";
@@ -180,9 +228,32 @@ export default function VerEstantes() {
         const colsHint = num(metaRaw?.cols ?? root?.grid?.cols, 0);
         setModo(modeFromMeta);
 
+        /* ========= Mapas de nombres desde meta.racks y meta.lanes ========= */
+        const racksMeta = Array.isArray(root?.racks) ? root.racks
+                        : Array.isArray(metaRaw?.racks) ? metaRaw.racks : [];
+        const rackNames = new Map();
+        const shelfNamesByPair = new Map();
+        for (const r of (racksMeta || [])) {
+          const rid = num(r?.id, NaN);
+          if (!Number.isFinite(rid)) continue;
+          if (r?.name) rackNames.set(rid, String(r.name));
+          const shelves = Array.isArray(r?.shelves) ? r.shelves : [];
+          for (const s of shelves) {
+            const idx = num(s?.index ?? s?.idx ?? s?.shelf_index, NaN);
+            if (!Number.isFinite(idx)) continue;
+            if (s?.name) shelfNamesByPair.set(`${rid}-${idx}`, String(s.name));
+          }
+        }
+
+        const lanesMeta = Array.isArray(root?.lanes) ? root.lanes : [];
+        const laneNames = new Map();
+        for (const l of lanesMeta) {
+          const lid = num(l?.id ?? l?.lane_id, NaN);
+          if (Number.isFinite(lid) && l?.name) laneNames.set(lid, String(l.name));
+        }
+
         /* ======================= L A N E S ======================= */
         if (modeFromMeta === "lanes") {
-          // Lanza las dos tablas de fallback en paralelo (solo si hiciera falta)
           let arr = Array.isArray(root?.lanes) ? root.lanes : [];
           if (!arr.length) {
             const [q1, q2] = await Promise.all([
@@ -208,7 +279,6 @@ export default function VerEstantes() {
                 color: r.color || "#6b7280",
               }));
             } else {
-              // Inferir desde paquetes
               if (paquetes.length) {
                 const set = new Map(); let idx = 1;
                 for (const p of paquetes) {
@@ -235,9 +305,14 @@ export default function VerEstantes() {
             rowsHint, colsHint
           );
 
-          // map lane name -> id
-          const nameToId = new Map(laid.map(l => [String(l.label || "").toUpperCase(), l.id]));
-          const laneIds = new Set(laid.map(l => l.id));
+          // Aplica nombre desde meta si existe
+          const laidWithNames = laid.map(x => ({
+            ...x,
+            label: laneNames.get(x.id) || x.label
+          }));
+
+          const nameToId = new Map(laidWithNames.map(l => [String(l.label || "").toUpperCase(), l.id]));
+          const laneIds = new Set(laidWithNames.map(l => l.id));
           const byLane = {};
           for (const p of (paquetes || [])) {
             if (!isPending(p)) continue;
@@ -254,8 +329,7 @@ export default function VerEstantes() {
           }
 
           if (cancel) return;
-          // Un único batch de estados
-          setLanes(laid);
+          setLanes(laidWithNames);
           setGridDims({ rows, cols });
           setPkgsByLaneId(byLane);
           setReadyLayout(true);
@@ -264,14 +338,12 @@ export default function VerEstantes() {
         }
 
         /* ======================= R A C K S ======================= */
-        // Dispara estructura backend en paralelo (ya tenemos paquetes)
         const estructuraBackendPromise = obtenerEstructuraEstantesYPaquetes(token).catch(()=>null);
 
         let estructura = [];
         const body = await estructuraBackendPromise;
         if (body) estructura = extractStructureFromBackend(body);
 
-        // Si no hay, intenta RLS baldas
         if (!estructura.length) {
           try {
             const { data: baldasRows } = await supabase
@@ -294,7 +366,6 @@ export default function VerEstantes() {
           } catch {}
         }
 
-        // Tercera vía: inferir desde paquetes
         if (!estructura.length && paquetes.length) {
           const map = new Map();
           let seq = 1;
@@ -322,8 +393,6 @@ export default function VerEstantes() {
 
         // Orden/grid según meta si existe
         const pos = [];
-        const racksMeta = Array.isArray(root?.racks) ? root.racks
-                        : Array.isArray(metaRaw?.racks) ? metaRaw.racks : [];
         for (const r of racksMeta) {
           const rid = num(r?.id, NaN);
           const rr  = num(r?.position?.row ?? r?.row ?? r?.r, NaN);
@@ -351,9 +420,9 @@ export default function VerEstantes() {
           rowsR = Math.ceil(n / colsR);
         }
 
-        // Lookups para mapear paquetes a balda id
+        // Lookups
         const codigoToId = new Map();
-        const pairToId   = new Map(); // "est-balda" -> id
+        const pairToId   = new Map();
         estructura.forEach(r => (r.baldas || []).forEach(b => {
           if (b.codigo) codigoToId.set(String(b.codigo).toUpperCase(), b.id);
           const parsed = b.codigo ? parseCodigoGenerico(b.codigo) : (Number.isFinite(b.idx) ? { estante: r.estante, balda: b.idx } : null);
@@ -384,9 +453,18 @@ export default function VerEstantes() {
           });
         }
 
+        // Aplica nombres desde meta a estructura (rack y baldas por índice)
+        const estructuraNamed = estructura.map(r => ({
+          ...r,
+          nombre: rackNames.get(r.estante) || r.nombre,
+          baldas: (r.baldas || []).map(b => {
+            const nm = shelfNamesByPair.get(`${r.estante}-${b.idx}`);
+            return nm ? { ...b, label: nm, codigo: b.codigo || nm } : b;
+          })
+        }));
+
         if (cancel) return;
-        // Un único batch de estados
-        setEstructuraRacks(estructura);
+        setEstructuraRacks(estructuraNamed);
         setRackOrder(estantesOrden);
         setRackGrid({ rows: rowsR, cols: colsR });
         setPkgsByBaldaId(byBalda);
@@ -399,6 +477,36 @@ export default function VerEstantes() {
       }
     })();
     return () => { cancel = true; };
+  }, []);
+
+  /* ===================== Escalado responsive (auto-fit ancho) ===================== */
+  const recomputeRacksScale = () => {
+    const wrap = racksWrapRef.current;
+    if (!wrap) return;
+    const cols = rackGrid.cols || 1;
+    const contentW = cols * RACK_CELL_W + (cols - 1) * GAP_PX;
+    const avail = wrap.clientWidth - 2;
+    const scale = Math.min(1, Math.max(MIN_SCALE, avail / contentW));
+    setRacksScale(scale);
+  };
+  const recomputeLanesScale = () => {
+    const wrap = lanesWrapRef.current;
+    if (!wrap) return;
+    const cols = gridDims.cols || 1;
+    const contentW = cols * LANE_CELL_W + (cols - 1) * GAP_PX;
+    const avail = wrap.clientWidth - 2;
+    const scale = Math.min(1, Math.max(MIN_SCALE, avail / contentW));
+    setLanesScale(scale);
+  };
+
+  useEffect(() => { recomputeRacksScale(); }, [rackGrid.cols, rackOrder.length, readyEstructura]);
+  useEffect(() => { recomputeLanesScale(); }, [gridDims.cols, lanes.length, readyLayout]);
+
+  useEffect(() => {
+    const ro1 = new ResizeObserver(() => { recomputeRacksScale(); recomputeLanesScale(); });
+    if (racksWrapRef.current) ro1.observe(racksWrapRef.current);
+    if (lanesWrapRef.current) ro1.observe(lanesWrapRef.current);
+    return () => ro1.disconnect();
   }, []);
 
   /* ===================== Derivados / Filtros ===================== */
@@ -421,7 +529,7 @@ export default function VerEstantes() {
   const toggle = (id) => setOpenSet(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
   const clearQ = () => setQ("");
 
-  // Precompute lane grid lookup to avoid Array.find in render
+  // Precompute lane grid lookup
   const laneByRC = useMemo(() => {
     const map = new Map();
     for (const l of lanes) map.set(`${l.row}-${l.col}`, l);
@@ -531,159 +639,202 @@ export default function VerEstantes() {
       ) : !readyLayout ? (
         <div className="skeleton"><div className="row" /><div className="row" /><div className="row" /></div>
       ) : modo === "lanes" ? (
-        <div
-          className="lanes-matrix"
-          style={{ gridTemplateColumns: `repeat(${gridDims.cols || 1}, minmax(260px, 1fr))` }}
-          role="grid"
-        >
-          {Array.from({ length: gridDims.rows || 1 }).flatMap((_, rIdx) =>
-            Array.from({ length: gridDims.cols || 1 }).map((_, cIdx) => {
-              const r = rIdx + 1, c = cIdx + 1;
-              const lane = laneByRC.get(`${r}-${c}`) || null;
-              if (!lane) return <div key={`cell-${r}-${c}`} className="lane-cell empty" role="gridcell" />;
+        <div className="fit-wrapper lanes-fit" ref={lanesWrapRef} style={{ ['--zoom']: lanesScale }}>
+          <div
+            className="lanes-matrix"
+            ref={lanesInnerRef}
+            style={{
+              gridTemplateColumns: `repeat(${gridDims.cols || 1}, var(--lane-cell-w))`,
+              width: `${(gridDims.cols || 1) * LANE_CELL_W + ((gridDims.cols || 1) - 1) * GAP_PX}px`
+            }}
+            role="grid"
+          >
+            {Array.from({ length: gridDims.rows || 1 }).flatMap((_, rIdx) =>
+              Array.from({ length: gridDims.cols || 1 }).map((_, cIdx) => {
+                const r = rIdx + 1, c = cIdx + 1;
+                const lane = laneByRC.get(`${r}-${c}`) || null;
+                if (!lane) return <div key={`cell-${r}-${c}`} className="lane-cell empty" role="gridcell" />;
 
-              const arr = pkgsByLaneId[lane.id] || [];
-              const n = arr.length;
-              const visible = matchLane(lane);
-              if (!visible) return <div key={`cell-${r}-${c}`} className="lane-cell empty" role="gridcell" />;
+                const arr = pkgsByLaneId[lane.id] || [];
+                const n = arr.length;
+                const visible = matchLane(lane);
+                if (!visible) return <div key={`cell-${r}-${c}`} className="lane-cell empty" role="gridcell" />;
 
-              const open = openSet.has(lane.id);
-              const laneColor = lane.color || "#6b7280";
-              const laneTint  = hexToRgba(laneColor, 0.08);
-              const laneRing  = hexToRgba(laneColor, 0.35);
+                const open = openSet.has(lane.id);
+                const laneColor = normHex(lane.color || "#6b7280", "#6b7280");
+                const laneTint  = hexToRgba(laneColor, 0.08);
+                const laneRing  = hexToRgba(laneColor, 0.35);
+                const carrierColor = getDominantCarrierColor(arr, coloresCompania, "#6b7280");
+                const carrierTint  = hexToRgba(carrierColor, 0.14);
 
-              return (
-                <div key={`cell-${r}-${c}`} className={`lane-cell wrap ${open ? "activa" : ""}`} role="gridcell">
-                  <button
-                    type="button"
-                    className={`lane-head ${clsOcupacion(n)}`}
-                    style={{ '--lane': laneColor, '--lane-rgba': laneTint, '--sel-ring': laneRing }}
-                    onClick={() => toggle(lane.id)}
-                    aria-expanded={open}
-                    aria-controls={`vis-lane-${lane.id}`}
-                    title={n === 1 ? "1 paquete" : `${n} paquetes`}
-                  >
-                    <i className="lane-tape" aria-hidden />
-                    <div className="lane-title">{highlight(lane.label || `Carril ${lane.id}`, q)}</div>
-                    <div className={`lane-qty ${n === 0 ? "zero" : "some"}`}><b>{n}</b><i>paquetes</i></div>
-                    <FaChevronDown className="chev" aria-hidden />
-                  </button>
+                return (
+                  <div key={`cell-${r}-${c}`} className={`lane-cell wrap ${open ? "activa" : ""}`} role="gridcell">
+                    <button
+                      type="button"
+                      className={`lane-head ${clsOcupacion(n)}`}
+                      style={{
+                        '--lane': laneColor,
+                        '--lane-rgba': laneTint,
+                        '--sel-ring': laneRing,
+                        '--carrier': carrierColor,
+                        '--carrier-rgba': carrierTint
+                      }}
+                      onClick={() => toggle(lane.id)}
+                      aria-expanded={open}
+                      aria-controls={`vis-lane-${lane.id}`}
+                      title={n === 1 ? "1 paquete" : `${n} paquetes`}
+                    >
+                      <i className="lane-tape" aria-hidden />
+                      <div className="lane-title">{highlight(lane.label || `Carril ${lane.id}`, q)}</div>
+                      <div className={`lane-qty ${n === 0 ? "zero" : "some"}`}><b>{n}</b><i>paquetes</i></div>
+                      <FaChevronDown className="chev" aria-hidden />
+                    </button>
 
-                  <div
-                    id={`vis-lane-${lane.id}`}
-                    className="lane-visor"
-                    style={{ maxHeight: open ? "800px" : "0px", opacity: open ? 1 : 0 }}
-                  >
-                    {n > 0 ? (
-                      <ul className="lista-paquetes">
-                        {arr.map(p => (
-                          <li key={p.id} className="paquete pendiente">
-                            <div className="cliente">{highlight(p?.nombre_cliente || "—", q)}</div>
-                            <div className="meta">
-                              <span className="pill">{p.empresa_transporte || "—"}</span>
-                              <span className="pill">{p.fecha_llegada ? new Date(p.fecha_llegada).toLocaleDateString() : "—"}</span>
-                              <span className="pill estado warn">Pendiente</span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="sin-paquetes">Sin paquetes en este carril.</div>
-                    )}
+                    <div
+                      id={`vis-lane-${lane.id}`}
+                      className="lane-visor"
+                      style={{ maxHeight: open ? "800px" : "0px", opacity: open ? 1 : 0 }}
+                    >
+                      {n > 0 ? (
+                        <ul className="lista-paquetes">
+                          {arr.map(p => {
+                            const cc = getCompColor(p.empresa_transporte);
+                            return (
+                              <li key={p.id} className="paquete pendiente">
+                                <div className="cliente">{highlight(p?.nombre_cliente || "—", q)}</div>
+                                <div className="meta">
+                                  <span
+                                    className="pill pill--carrier"
+                                    style={{ ['--comp']: cc, ['--comp-rgba']: hexToRgba(cc, 0.16) }}
+                                  >
+                                    <i className="dot" />{p.empresa_transporte || "—"}
+                                  </span>
+                                  <span className="pill">{p.fecha_llegada ? new Date(p.fecha_llegada).toLocaleDateString() : "—"}</span>
+                                  <span className="pill estado warn">Pendiente</span>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <div className="sin-paquetes">Sin paquetes en este carril.</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
       ) : !readyEstructura ? (
         <div className="skeleton"><div className="row" /><div className="row" /><div className="row" /></div>
       ) : estructuraFiltradaRacks.length === 0 ? (
         <div className="estado-vacio">No hay estantes que coincidan con el filtro.</div>
       ) : (
-        <div className="grid-estantes" style={{ '--rack-cols': `repeat(${rackGrid.cols || 1}, minmax(340px, 1fr))` }} role="grid">
-          {(() => {
-            const estantesOrdenados = (rackOrder.length ? rackOrder : estructuraRacks.map(r => r.estante).sort((a,b)=>a-b));
-            const totalCells = (rackGrid.rows || 1) * (rackGrid.cols || 1);
-            const cells = Array.from({ length: totalCells }, (_, i) => estantesOrdenados[i] ?? null);
+        <div className="fit-wrapper racks-fit" ref={racksWrapRef} style={{ ['--zoom']: racksScale }}>
+          <div
+            className="grid-estantes"
+            ref={racksInnerRef}
+            style={{
+              '--rack-cols': `repeat(${rackGrid.cols || 1}, var(--rack-cell-w))`,
+              width: `${(rackGrid.cols || 1) * RACK_CELL_W + ((rackGrid.cols || 1) - 1) * GAP_PX}px`
+            }}
+            role="grid"
+          >
+            {(() => {
+              const estantesOrdenados = (rackOrder.length ? rackOrder : estructuraRacks.map(r => r.estante).sort((a,b)=>a-b));
+              const totalCells = (rackGrid.rows || 1) * (rackGrid.cols || 1);
+              const cells = Array.from({ length: totalCells }, (_, i) => estantesOrdenados[i] ?? null);
 
-            return cells.map((est, idx) => {
-              if (est == null) return <div key={`ph-${idx}`} className="columna estante--placeholder" aria-hidden="true" />;
-              if (filteredEstantesSet.size && !filteredEstantesSet.has(est)) return <div key={`filtered-${est}`} className="columna estante--placeholder" aria-hidden="true" />;
+              return cells.map((est, idx) => {
+                if (est == null) return <div key={`ph-${idx}`} className="columna estante--placeholder" aria-hidden="true" />;
+                if (filteredEstantesSet.size && !filteredEstantesSet.has(est)) return <div key={`filtered-${est}`} className="columna estante--placeholder" aria-hidden="true" />;
 
-              const rack = filteredMap.get(est) || racksMap.get(est);
-              if (!rack) return <div key={`missing-${est}`} className="columna estante--placeholder" aria-hidden="true" />;
+                const rack = filteredMap.get(est) || racksMap.get(est);
+                if (!rack) return <div key={`missing-${est}`} className="columna estante--placeholder" aria-hidden="true" />;
 
-              const { nombre, baldas } = rack;
-              const totalEstante = (baldas || []).reduce((acc, b) => acc + (pkgsByBaldaId[b.id]?.length || 0), 0);
-              const ocupadas = (baldas || []).filter(b => (pkgsByBaldaId[b.id]?.length || 0) > 0).length;
-              const pct = (baldas || []).length ? Math.round((ocupadas / baldas.length) * 100) : 0;
+                const { nombre, baldas } = rack;
+                const totalEstante = (baldas || []).reduce((acc, b) => acc + (pkgsByBaldaId[b.id]?.length || 0), 0);
+                const ocupadas = (baldas || []).filter(b => (pkgsByBaldaId[b.id]?.length || 0) > 0).length;
+                const pct = (baldas || []).length ? Math.round((ocupadas / baldas.length) * 100) : 0;
 
-              return (
-                <section key={`est-${est}`} className="columna" aria-label={`Estante ${nombre || est}`}>
-                  <header className="cabecera-estante">
-                    <div className="tit">
-                      <span className="titulo">Estante {nombre || est}</span>
-                      <span className="contador">{totalEstante} pkg</span>
-                    </div>
-                    <div className="mini-progress">
-                      <div className="bar"><span style={{ width: `${pct}%` }} /></div>
-                      <span className="pct">{pct}%</span>
-                    </div>
-                  </header>
+                return (
+                  <section key={`est-${est}`} className="columna" aria-label={`Estante ${nombre || est}`}>
+                    <header className="cabecera-estante">
+                      <div className="tit">
+                        <span className="titulo">Estante {nombre || est}</span>
+                        <span className="contador">{totalEstante} pkg</span>
+                      </div>
+                      <div className="mini-progress">
+                        <div className="bar"><span style={{ width: `${pct}%` }} /></div>
+                        <span className="pct">{pct}%</span>
+                      </div>
+                    </header>
 
-                  <div className="baldas">
-                    {(baldas || []).map(({ codigo, id, label }) => {
-                      const lista = pkgsByBaldaId[id] || [];
-                      const n = lista.length;
-                      const open = openSet.has(id);
-                      const visible = codigo || label || `Balda ${id}`;
+                    <div className="baldas">
+                      {(baldas || []).map(({ codigo, id, label, idx }) => {
+                        const lista = pkgsByBaldaId[id] || [];
+                        const n = lista.length;
+                        const open = openSet.has(id);
+                        const visible = label || codigo || `Fila ${idx}`;
+                        const carrierColor = getDominantCarrierColor(lista, coloresCompania, "#6b7280");
+                        const cTint = hexToRgba(carrierColor, 0.14);
 
-                      return (
-                        <div key={id} className={`balda-wrapper ${open ? "activa" : ""}`}>
-                          <button
-                            type="button"
-                            className={`balda ${clsOcupacion(n)}`}
-                            onClick={() => toggle(id)}
-                            aria-expanded={open}
-                            aria-controls={`visor-${id}`}
-                            title={n === 1 ? "1 paquete" : `${n} paquetes`}
-                          >
-                            <span className="codigo">{highlight(visible, q)}</span>
-                            <span className={`qty ${n === 0 ? "zero" : "some"}`} aria-hidden><b>{n}</b><i>paquetes</i></span>
-                            <FaChevronDown className="chev" aria-hidden />
-                          </button>
+                        return (
+                          <div key={id} className={`balda-wrapper ${open ? "activa" : ""}`}>
+                            <button
+                              type="button"
+                              className={`balda ${clsOcupacion(n)}`}
+                              onClick={() => toggle(id)}
+                              aria-expanded={open}
+                              aria-controls={`visor-${id}`}
+                              title={n === 1 ? "1 paquete" : `${n} paquetes`}
+                              style={{ ['--carrier']: carrierColor, ['--carrier-rgba']: cTint }}
+                            >
+                              <span className="codigo">{highlight(visible, q)}</span>
+                              <span className={`qty ${n === 0 ? "zero" : "some"}`} aria-hidden><b>{n}</b><i>paquetes</i></span>
+                              <FaChevronDown className="chev" aria-hidden />
+                            </button>
 
-                          <div
-                            id={`visor-${id}`}
-                            className="visor-paquetes"
-                            style={{ maxHeight: open ? "800px" : "0px", opacity: open ? 1 : 0 }}
-                          >
-                            {n > 0 ? (
-                              <ul className="lista-paquetes">
-                                {lista.map(p => (
-                                  <li key={p.id} className="paquete pendiente">
-                                    <div className="cliente">{highlight(p?.nombre_cliente || "—", q)}</div>
-                                    <div className="meta">
-                                      <span className="pill">{p.empresa_transporte || "—"}</span>
-                                      <span className="pill">{p.fecha_llegada ? new Date(p.fecha_llegada).toLocaleDateString() : "—"}</span>
-                                      <span className="pill estado warn">Pendiente</span>
-                                    </div>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <div className="sin-paquetes">Sin paquetes en esta balda.</div>
-                            )}
+                            <div
+                              id={`visor-${id}`}
+                              className="visor-paquetes"
+                              style={{ maxHeight: open ? "800px" : "0px", opacity: open ? 1 : 0 }}
+                            >
+                              {n > 0 ? (
+                                <ul className="lista-paquetes">
+                                  {lista.map(p => {
+                                    const cc = getCompColor(p.empresa_transporte);
+                                    return (
+                                      <li key={p.id} className="paquete pendiente">
+                                        <div className="cliente">{highlight(p?.nombre_cliente || "—", q)}</div>
+                                        <div className="meta">
+                                          <span
+                                            className="pill pill--carrier"
+                                            style={{ ['--comp']: cc, ['--comp-rgba']: hexToRgba(cc, 0.16) }}
+                                          >
+                                            <i className="dot" />{p.empresa_transporte || "—"}
+                                          </span>
+                                          <span className="pill">{p.fecha_llegada ? new Date(p.fecha_llegada).toLocaleDateString() : "—"}</span>
+                                          <span className="pill estado warn">Pendiente</span>
+                                        </div>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              ) : (
+                                <div className="sin-paquetes">Sin paquetes en esta balda.</div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              );
-            });
-          })()}
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              });
+            })()}
+          </div>
         </div>
       )}
     </div>

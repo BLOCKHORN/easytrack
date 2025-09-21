@@ -1,16 +1,22 @@
 /* ==========================================================================
-   WarehouseCard — Estantes (rejilla + renombrado) & Carriles (palette) + Guardar
-   Con viewport + auto-fit/zoom para no cortar filas largas
+   WarehouseCard (scoped)
+   - Estantes y Carriles con viewport + auto-fit/zoom
+   - Sin desbordes, con scroll de seguridad y ellipsis donde toca
    ========================================================================== */
-.warehouse-card{
+.warehouse-card {
+  /* scope hardening */
+  box-sizing: border-box;
+  * { box-sizing: inherit; }
+  position: relative;
+  color: var(--ink, #0f172a);
+
+  /* tokens locales */
   --bd: var(--border, #e6e9ef);
   --mut: var(--muted, #64748b);
   --ink: var(--ink, #0f172a);
   --ring: rgba(99, 91, 255, .28);
 
-  color: var(--ink);
-
-  /* Header */
+  /* HEADER --------------------------------------------------------------- */
   .card__header.warehouse-card__header{
     display:grid !important;
     grid-template-columns:auto 1fr !important;
@@ -32,7 +38,7 @@
 
   &__body{ display:grid; gap:14px; }
 
-  /* Botones base */
+  /* BOTONES BASE --------------------------------------------------------- */
   .btn{
     --btn-bd: var(--bd);
     --btn-bg: #ffffff;
@@ -50,7 +56,7 @@
   .btn--primary{ --btn-bg:#2563eb; --btn-bd:#2563eb; --btn-ink:#fff; background:#2563eb; color:#fff; border-color:#2563eb; }
   .btn--primary:hover{ background:#1d4ed8; border-color:#1d4ed8; }
 
-  /* Modo + acciones */
+  /* MODO + ACCIONES ------------------------------------------------------ */
   .mode-banner{
     display:flex; align-items:center; gap:14px;
     margin:10px 0 0; padding:12px;
@@ -68,18 +74,18 @@
   .mode-pill.is-active{
     background:#eef4ff; border-color:#dbe7ff; box-shadow:0 6px 16px rgba(15,23,42,.06);
   }
-  .mode-actions{ margin-left:auto; display:flex; align-items:center; gap:10px; }
-  .mode-status{ color:#475569; }
+  .mode-actions{ margin-left:auto; display:flex; align-items:center; gap:10px; min-width:0; }
+  .mode-status{ color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .mode-status strong{ color:#0f172a; }
 
-  /* Toolbar */
+  /* TOOLBAR -------------------------------------------------------------- */
   .wh-toolbar{
     display:grid; gap:14px;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     border:1px solid var(--bd); border-radius:14px;
     background:#fff; padding:12px; margin-top:4px;
   }
-  .tool-col{ display:grid; gap:8px; align-content:start; }
+  .tool-col{ display:grid; gap:8px; align-content:start; min-width:0; }
   .tool-title{ font-weight:800; color:#111827; font-size:.95rem; }
   .seg-row{ display:flex; flex-wrap:wrap; gap:8px; }
 
@@ -111,36 +117,42 @@
     .mode-actions{ width:100%; justify-content:space-between; }
   }
 
-  /* === Viewport/Scaling (lo importante para evitar cortes) === */
+  /* VIEWPORT / SCALING --------------------------------------------------- */
   .boardViewport{
     position: relative;
-    overflow: auto;            /* Scroll de seguridad si hiciera falta */
-    max-height: min(70vh, 800px);
+    overflow: auto;                 /* scroll de seguridad */
+    overscroll-behavior: contain;   /* no “rebota” */
+    inline-size: 100%;
+    max-inline-size: 100%;
+    max-block-size: min(70vh, 800px);
     border:1px solid var(--bd); border-radius:14px;
     background:#fff;
-    padding:0;                 /* sin padding aquí; el del board se calcula */
+    padding:0;                      /* el padding va en el board */
+    contain: layout paint;          /* aislar composición al escalar */
   }
   .boardScale{
+    display: inline-block;          /* el ancho real es el contenido escalado */
     transform-origin: top left;
     will-change: transform;
-    /* Evita que hijos creen stacking raro al escalar */
     isolation: isolate;
   }
 
-  /* Boards */
+  /* BOARDS --------------------------------------------------------------- */
   .racksBoard, .lanesBoard{
-    border:0; /* el marco lo pone el viewport */
-    padding:12px;               /* ojo: usado en el cálculo JS (BOARD_PADDING_X) */
+    padding:12px;                 /* ojo: coincide con BOARD_PADDING_X del JS */
     display:grid; gap:12px;
+    border:0;
+    min-inline-size: max-content; /* evita compresión extraña al escalar */
   }
   .cell{
     position:relative; border:1px dashed color-mix(in srgb, var(--bd) 75%, transparent);
     border-radius:12px; display:flex; align-items:center; justify-content:center;
+    min-width: 0; /* permite que el contenido haga ellipsis sin romper grid */
     transition:border-color .12s ease, background .12s ease;
     &:hover{ background:#f8fafc; border-color:#dbe7ff; }
   }
 
-  /* -------- Carriles -------- */
+  /* CARRILES ------------------------------------------------------------- */
   .laneCard{
     --tape:#f59e0b;
     --tape-h: 6px;
@@ -152,25 +164,28 @@
     color:#0f172a; padding:12px;
     box-shadow:0 8px 16px rgba(15,23,42,.06);
   }
-  .laneRow{ display:flex; align-items:center; gap:10px; }
+  .laneRow{ display:flex; align-items:center; gap:10px; min-width:0; }
   .laneName{
     font-weight:800; padding:4px 10px; border:1px solid var(--bd); border-radius:999px; background:#fff;
+    max-inline-size: 70%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .laneSwatch{
-    margin-left:auto;
+    margin-inline-start:auto;
     width:16px; height:16px; border-radius:999px; border:2px solid #fff;
     box-shadow:0 0 0 1px var(--bd);
     cursor:pointer;
   }
 
   .lanePalette{
-    position:absolute; right:10px; top:calc(100% + 8px); z-index:3;
-    min-width:240px;
+    position:absolute; inset-inline-end:10px; top:calc(100% + 8px); z-index:3;
+    inline-size: min(90vw, 320px);
+    max-block-size: 260px; overflow:auto;
     background:#fff; border:1px solid var(--bd); border-radius:12px;
     padding:10px; box-shadow:0 14px 30px rgba(15,23,42,.16);
   }
   .lanePalette::before{
-    content:""; position:absolute; right:16px; top:-7px;
+    content:""; position:absolute; inset-inline-end:16px; top:-7px;
     width:12px; height:12px; background:#fff; border-left:1px solid var(--bd); border-top:1px solid var(--bd);
     transform:rotate(45deg);
   }
@@ -187,7 +202,7 @@
   .chip-color.is-active{ box-shadow:0 0 0 2px color-mix(in srgb, var(--ring) 60%, transparent); }
   .palette-actions{ display:flex; justify-content:flex-end; }
 
-  /* -------- Estantes -------- */
+  /* ESTANTES ------------------------------------------------------------- */
   .rackCard{
     width:100%;
     border-radius:12px; border:1px solid var(--bd);
@@ -195,25 +210,30 @@
       linear-gradient(0deg, #93c5fd 0 0) top/100% 6px no-repeat,
       #fff;
     box-shadow:0 6px 14px rgba(15,23,42,.06);
+    overflow: hidden; /* nada se sale del card */
   }
   .rackHead{
     display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px dashed var(--bd);
     background:linear-gradient(90deg, rgba(147,197,253,.18), rgba(186,230,253,.18));
+    min-width:0;
   }
   .rackHead__name{
     font-weight:900; letter-spacing:.2px; border:1px solid var(--bd); border-radius:10px; padding:6px 10px; background:#fff;
     cursor:text;
+    max-inline-size: clamp(120px, 22vw, 260px);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .rackHead__name--static{ cursor:default; }
-  .shelfOps{ margin-left:auto; display:flex; align-items:center; gap:8px; }
+  .shelfOps{ margin-inline-start:auto; display:flex; align-items:center; gap:8px; flex: 0 0 auto; }
   .iconbtn{
-    width:32px; height:32px; border-radius:8px; border:1px solid var(--bd);
+    inline-size:32px; block-size:32px; border-radius:8px; border:1px solid var(--bd);
     background:#fff; display:grid; place-items:center; cursor:pointer;
     transition: background .12s ease, border-color .12s ease;
+    flex: 0 0 auto;
   }
   .iconbtn:hover{ background:#f8fafc; }
   .shelf-pill{
-    min-width:28px; height:28px; padding:0 8px; display:grid; place-items:center;
+    min-inline-size:28px; block-size:28px; padding:0 8px; display:grid; place-items:center;
     border:1px solid var(--bd); border-radius:999px; font-weight:900; background:#fff;
   }
 
@@ -224,23 +244,24 @@
     padding:6px 8px; box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
   }
   .slotInput{
-    width:100%; height:36px; border:0; background:transparent; font-weight:700; letter-spacing:.2px;
+    inline-size:100%; block-size:36px; border:0; background:transparent; font-weight:700; letter-spacing:.2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     &::placeholder{ color:#94a3b8; }
     &:focus-visible{ outline:none; box-shadow:0 0 0 3px var(--ring); border-radius:8px; background:#fff; }
   }
   .slotInput[readonly]{ cursor:default; }
 
-  /* Footer */
+  /* FOOTER --------------------------------------------------------------- */
   .wh-footerbar{
     display:flex; align-items:center; justify-content:space-between; gap:10px;
     margin-top:4px; padding-top:8px; border-top:1px dashed var(--bd);
   }
-  .wh-stats{ color:var(--mut); font-weight:700; }
-  .wh-hint{ color:var(--mut); display:flex; align-items:center; gap:6px; }
+  .wh-stats{ color:var(--mut); font-weight:700; white-space:nowrap; }
+  .wh-hint{ color:var(--mut); display:flex; align-items:center; gap:6px; min-width:0; }
 
   :focus-visible{ outline:2px solid var(--ring); outline-offset:2px; }
 
-  /* Responsive */
+  /* RESPONSIVE ----------------------------------------------------------- */
   @media (max-width: 900px){
     .racksBoard{ grid-template-columns: 1fr !important; }
   }
@@ -248,6 +269,6 @@
     .lanesBoard, .racksBoard{ gap:10px; padding:12px; }
     .palette-grid{ grid-template-columns: repeat(8, 18px); }
     .mode-actions{ flex-wrap:wrap; gap:8px; }
-    .boardViewport{ max-height: 60vh; }
+    .boardViewport{ max-block-size: 60vh; }
   }
 }

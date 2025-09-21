@@ -1,20 +1,55 @@
-import { useMemo } from 'react';
-import { MdChevronRight } from 'react-icons/md';
+import { useEffect, useMemo, useState } from 'react';
+import { MdChevronRight, MdMenuOpen, MdMenu, MdFullscreen, MdFullscreenExit } from 'react-icons/md';
 import './ConfigLayout.scss';
 
 export default function ConfigLayout({ title = 'Configuración', sections = [], active, onChange, children }) {
   const current = useMemo(() => sections.find(s => s.id === active) || sections[0], [sections, active]);
 
+  // Preferencias persistentes
+  const [collapsed, setCollapsed] = useState(() => (localStorage.getItem('cfg:collapsed') === '1'));
+  const [focus, setFocus] = useState(() => (localStorage.getItem('cfg:focus') === '1'));
+
+  useEffect(() => { localStorage.setItem('cfg:collapsed', collapsed ? '1' : '0'); }, [collapsed]);
+  useEffect(() => { localStorage.setItem('cfg:focus', focus ? '1' : '0'); }, [focus]);
+
   return (
-    <div className="cfg">
+    <div className={`cfg ${collapsed ? 'is-collapsed' : ''} ${focus ? 'is-focus' : ''}`}>
       <header className="cfg__head" role="banner">
-        <h2>{title}</h2>
-        {current && (
-          <div className="cfg__crumb" aria-label="Ruta de navegación">
-            <span>Configuración</span> <MdChevronRight aria-hidden />
-            <strong aria-current="page">{current.label}</strong>
+        <div className="cfg__headrow">
+          <div className="cfg__titlegrp">
+            <h2>{title}</h2>
+            {current && (
+              <div className="cfg__crumb" aria-label="Ruta de navegación">
+                <span>Configuración</span> <MdChevronRight aria-hidden />
+                <strong aria-current="page">{current.label}</strong>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Acciones de layout (desktop) */}
+          <div className="cfg__actions" role="group" aria-label="Opciones de diseño">
+            <button
+              type="button"
+              className="cfg__iconbtn"
+              onClick={() => setCollapsed(v => !v)}
+              aria-pressed={collapsed}
+              aria-label={collapsed ? 'Expandir navegación' : 'Contraer navegación'}
+              title={collapsed ? 'Expandir navegación' : 'Contraer navegación'}
+            >
+              {collapsed ? <MdMenu /> : <MdMenuOpen />}
+            </button>
+            <button
+              type="button"
+              className="cfg__iconbtn"
+              onClick={() => setFocus(v => !v)}
+              aria-pressed={focus}
+              aria-label={focus ? 'Salir de modo enfoque' : 'Modo enfoque'}
+              title={focus ? 'Salir de modo enfoque' : 'Modo enfoque'}
+            >
+              {focus ? <MdFullscreenExit /> : <MdFullscreen />}
+            </button>
+          </div>
+        </div>
       </header>
 
       {/* Tabs móviles */}
@@ -47,6 +82,7 @@ export default function ConfigLayout({ title = 'Configuración', sections = [], 
                   role="tab"
                   aria-selected={s.id === current.id}
                   aria-controls={`panel-${s.id}`}
+                  title={s.label} // tooltip útil cuando está colapsado
                 >
                   <s.icon aria-hidden />
                   <span>{s.label}</span>

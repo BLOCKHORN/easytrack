@@ -1,4 +1,3 @@
-// src/pages/configuracion/ConfigPage.jsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../utils/supabaseClient';
 import Toast from '../../components/Toast';
@@ -217,14 +216,20 @@ export default function ConfigPage() {
 
             const fromMeta = shelfCountFromPayload(rData) || 0;
             const fromDb   = baldasMap.get(idx1) || 0;
-
-            // >>> CLAVE: preferimos lo real (DB) y tomamos el máximo.
             const shelvesCount = Math.max(1, fromDb, fromMeta);
+
+            // Alias y nombres manuales desde payload (si existen)
+            const alias = (typeof rData?.name === 'string') ? rData.name : "";
+            const listedNames = Array.isArray(rData?.shelves) ? rData.shelves.map(s => s?.name || "") : [];
+            const shelf_names = listedNames.slice(0, shelvesCount);
+            while (shelf_names.length < shelvesCount) shelf_names.push("");
 
             return {
               estante: idx1,
               baldas: shelvesCount,
-              pos: { r, c }
+              pos: { r, c },
+              alias,
+              shelf_names
             };
           }));
         }
@@ -316,7 +321,7 @@ export default function ConfigPage() {
       }
     })();
     return () => { cancelRef.current = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exexpr
   }, []);
 
   // Dirty tracking
@@ -368,6 +373,7 @@ export default function ConfigPage() {
     return String(idx1);
   };
 
+  /* ======= Builder de payload (con alias + nombres de baldas) ======= */
   const sanitizeAndBuildPayload = () => {
     if ((nomenclatura.layout_mode || 'lanes') === 'lanes') {
       const count = Math.max(1, estructura.length || (nomenclatura.lanes_rows * nomenclatura.lanes_cols));
@@ -413,17 +419,23 @@ export default function ConfigPage() {
       };
     }
 
-    // RACKS
+    // ===== RACKS =====
     const count = Math.max(1, estructura.length || (nomenclatura.rack_rows * nomenclatura.rack_cols));
     const { rows, cols } = fitGrid(count, nomenclatura.rack_rows, nomenclatura.rack_cols);
 
+    // normalizamos estructura (y aseguramos alias/shelf_names)
     const fixedEstructura = Array.from({ length: count }, (_, idx) => {
       const base = estructura[idx] || {};
       const r = Math.floor(idx / cols) + 1;
       const c = (idx % cols) + 1;
+      const baldas = Math.max(1, parseInt(base?.baldas) || 1);
+      const arr = Array.isArray(base?.shelf_names) ? base.shelf_names.slice(0, baldas) : [];
+      while (arr.length < baldas) arr.push("");
       return {
         estante: idx + 1,
-        baldas: Math.max(1, parseInt(base?.baldas) || 1),
+        baldas,
+        alias: base?.alias || "",
+        shelf_names: arr,
         pos: { r, c }
       };
     });
@@ -436,13 +448,29 @@ export default function ConfigPage() {
       col_scheme: nomenclatura.col_scheme || 'alpha'
     };
 
+    // mapa de inicio global por estante para "B1, B2, ..."
+    const starts = (() => {
+      let run = 1;
+      const m = new Map();
+      for (const r of fixedEstructura) {
+        m.set(r.estante, run);
+        run += Math.max(1, r.baldas || 1);
+      }
+      return m;
+    })();
+
     const racks = fixedEstructura.map((r, i) => {
-      const label = (fixedNomen.col_scheme === 'numeric') ? String(i + 1) : (numToAlpha(i + 1) || String(i + 1));
-      const shelves = Array.from({ length: r.baldas }, (_, j) => ({
-        index: j + 1,
-        name: (fixedNomen.col_scheme === 'alpha') ? `${label}${j + 1}` : `${label}-${j + 1}`
-      }));
-      return { id: i + 1, name: label, position: { row: r.pos.r, col: r.pos.c }, shelves };
+      const labelDefault = (fixedNomen.col_scheme === 'numeric') ? String(i + 1) : (numToAlpha(i + 1) || String(i + 1));
+      const rackName = r.alias || labelDefault;
+
+      const shelves = Array.from({ length: r.baldas }, (_, j) => {
+        const idx1 = j + 1;
+        const auto = `B${(starts.get(r.estante) || 1) + j}`;
+        const name = r.shelf_names?.[j] || auto;
+        return { index: idx1, name };
+      });
+
+      return { id: i + 1, name: rackName, position: { row: r.pos.r, col: r.pos.c }, shelves };
     });
 
     return {

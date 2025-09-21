@@ -1,5 +1,6 @@
 /* ===== ConfigLayout.scss =====
    Sub-sidebar + tabs móviles + layout ancho tipo Stripe
+   Añadido: sidebar colapsable + modo enfoque (full-width)
 */
 .cfg {
   --ink: #0f172a;
@@ -12,25 +13,37 @@
   color: var(--ink);
 
   /* ---------- Header ---------- */
-  .cfg__head {
-    margin-bottom: 12px;
+  .cfg__head { margin-bottom: 12px; }
+  .cfg__headrow{
+    display:flex; align-items:flex-start; gap:12px; justify-content:space-between;
+  }
+  .cfg__titlegrp{ min-width:0; }
+  .cfg__actions{
+    display:flex; gap:8px; align-items:center; flex:0 0 auto;
+  }
+  .cfg__iconbtn{
+    inline-size:36px; block-size:36px; display:grid; place-items:center;
+    border-radius:10px; border:1px solid var(--border); background:#fff; cursor:pointer;
+    transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .cfg__iconbtn:hover{ background:#f8fafc; }
+  .cfg__iconbtn:focus-visible{ outline:none; box-shadow:0 0 0 3px var(--ring); }
 
-    h2 {
-      margin: 0 0 6px;
-      font-size: 1.4rem;
-      font-weight: 900;
-      letter-spacing: .2px;
-      line-height: 1.2;
-    }
+  h2 {
+    margin: 0 0 6px;
+    font-size: 1.4rem;
+    font-weight: 900;
+    letter-spacing: .2px;
+    line-height: 1.2;
+  }
 
-    .cfg__crumb {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      color: var(--muted);
-      flex-wrap: wrap; /* evita overflow en migas */
-      svg { opacity: .7; }
-    }
+  .cfg__crumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    flex-wrap: wrap; /* evita overflow en migas */
+    svg { opacity: .7; }
   }
 
   /* ---------- Tabs móviles ---------- */
@@ -134,6 +147,25 @@
   .cfg__content {
     min-height: 320px;
     max-width: none;
+    min-width: 0; /* que nunca desborde */
+  }
+
+  /* ---------- Estado: sidebar colapsado ---------- */
+  &.is-collapsed {
+    .cfg__body { grid-template-columns: 64px minmax(0, 1fr); }
+    .cfg__side { max-width: 64px; padding: 8px; }
+    .cfg__navbtn {
+      justify-content: center;
+      padding: 10px;
+    }
+    .cfg__navbtn span,
+    .cfg__navbtn .cfg__badge { display: none; }
+  }
+
+  /* ---------- Estado: modo enfoque (full-width) ---------- */
+  &.is-focus {
+    .cfg__body { grid-template-columns: 1fr; }
+    .cfg__side { display: none; }
   }
 
   /* ---------- Responsive ---------- */

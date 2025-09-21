@@ -1,3 +1,4 @@
+/* 100% encapsulado: no .btn, .card ni clases genéricas */
 .eok {
   max-width: 640px;
   margin: 64px auto;
@@ -12,31 +13,45 @@
     text-align: center;
   }
 
-  .eok-icon-ok {
+  .eok-icon {
     width: 56px; height: 56px; margin: 0 auto 12px;
     display: grid; place-items: center; border-radius: 50%;
     background: #ecfdf5; color: #059669;
+
     svg { width: 28px; height: 28px; }
   }
 
-  h1 { margin: 6px 0 4px; font-size: 24px; }
+  .eok-title { margin: 6px 0 4px; font-size: 24px; }
   .eok-muted { color: var(--ep-muted, #64748b); }
 
   .eok-actions {
-    margin: 18px 0 8px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+    margin: 18px 0 8px;
+    display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
   }
 
   .eok-btn {
-    border-radius: 10px; padding: 10px 14px; border: 1px solid transparent;
-    display: inline-flex; gap: 8px; align-items: center; font-weight: 600;
+    border-radius: 10px;
+    padding: 10px 14px;
+    border: 1px solid transparent;
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    font-weight: 600;
+    text-decoration: none;
+
     &--primary { background: #0ea5e9; color: #fff; }
     &--ghost   { background: #fff; color: #0f172a; border-color: #e2e8f0; }
   }
 
-  .eok-hint { margin-top: 10px; color: var(--ep-muted, #64748b); }
-  .eok-tips { margin-top: 12px; text-align: left; color: var(--ep-text, #0f172a); }
+  .eok-hint  { margin-top: 10px; color: var(--ep-muted, #64748b); }
   .eok-alert {
-    margin-top: 16px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;
-    padding: 10px 12px; border-radius: 10px; font-size: 14px; text-align: left;
+    margin-top: 16px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    text-align: left;
   }
 }

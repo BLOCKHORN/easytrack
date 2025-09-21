@@ -1,4 +1,3 @@
-// src/pages/configuracion/WarehouseCard.jsx
 import { useMemo, useState, useRef, useLayoutEffect } from "react";
 import { MdAdd, MdRemove, MdInfo, MdWarehouse } from "react-icons/md";
 import "./WarehouseCard.scss";
@@ -51,7 +50,7 @@ function buildLanes(rows, cols, prev = []) {
   return out;
 }
 
-/* Construye rejilla de estantes preservando pos/baldas previos */
+/* Construye rejilla de estantes preservando pos/baldas/alias/nombres previos */
 function buildRacks(rows, cols, prev = []) {
   const byKey = new Map();
   prev.forEach(e => { if (e.pos) byKey.set(`${e.pos.r}-${e.pos.c}`, e); });
@@ -61,8 +60,27 @@ function buildRacks(rows, cols, prev = []) {
     for (let c = 1; c <= cols; c++) {
       const k = `${r}-${c}`;
       const keep = byKey.get(k);
-      if (keep) out.push({ ...keep, estante: counter++, pos: { r, c }, baldas: Math.max(1, keep.baldas || DEFAULT_SHELVES) });
-      else out.push({ estante: counter++, pos: { r, c }, baldas: DEFAULT_SHELVES });
+      if (keep) {
+        const baldas = Math.max(1, keep.baldas || DEFAULT_SHELVES);
+        const arr = Array.isArray(keep.shelf_names) ? keep.shelf_names.slice(0, baldas) : [];
+        while (arr.length < baldas) arr.push("");
+        out.push({
+          ...keep,
+          estante: counter++,
+          pos: { r, c },
+          baldas,
+          alias: keep.alias || "",
+          shelf_names: arr
+        });
+      } else {
+        out.push({
+          estante: counter++,
+          pos: { r, c },
+          baldas: DEFAULT_SHELVES,
+          alias: "",
+          shelf_names: Array(DEFAULT_SHELVES).fill("")
+        });
+      }
     }
   }
   return out;
@@ -92,35 +110,49 @@ export default function WarehouseCard({
   const isRacks = N.layout_mode === "racks";
   const isLanes = !isRacks;
 
-  // Para distinguir cambios locales en los steppers (evita auto-resets)
-  const localChangeRef = useRef(false);
+  const patchNom = (p) => setNomenclatura?.((prev) => ({ ...(prev || {}), ...p }));
+  const renumerar = (arr) => arr.map((it, idx) => ({ ...it, estante: idx + 1 }));
 
-  const patchNom = (p) => {
-    localChangeRef.current = true;
-    setNomenclatura?.((prev) => ({ ...(prev || {}), ...p }));
+  /* ===== setters funcionales para evitar estado obsoleto ===== */
+  const updateRackAndNormalize = (rackId, mutator) => {
+    setEstructura(prev => {
+      const next = prev.map(e => {
+        if (e.estante !== rackId) return e;
+        const changed = mutator({ ...e });
+        const baldas = Math.max(1, parseInt(changed.baldas) || 1);
+        let shelf_names = Array.isArray(changed.shelf_names) ? changed.shelf_names.slice(0, baldas) : [];
+        while (shelf_names.length < baldas) shelf_names.push("");
+        return { ...changed, baldas, shelf_names };
+      });
+      return renumerar(next);
+    });
   };
 
-  const renumerar = (arr) => arr.map((it, idx) => ({ ...it, estante: idx + 1 }));
-  const setStruct  = (arr) => setEstructura(renumerar(arr));
+  const updateLane = (laneId, changes) => {
+    setEstructura(prev => renumerar(prev.map(e => e.estante === laneId ? { ...e, ...changes } : e)));
+  };
+
+  const setStructReplace = (arr) => setEstructura(renumerar(arr));
+
   const unitLabel  = isRacks ? "Estante" : "Carril";
 
-  /* ---------- Cambios de rejilla (sólo por interacción del usuario) ---------- */
+  /* ---------- Cambios de rejilla (solo interacción usuario) ---------- */
   const applyRacksGrid = (rows, cols) => {
-    setStruct(buildRacks(rows, cols, estructura));
+    setStructReplace(buildRacks(rows, cols, estructura));
   };
   const applyLanesGrid = (rows, cols) => {
-    setStruct(buildLanes(rows, cols, estructura));
+    setStructReplace(buildLanes(rows, cols, estructura));
   };
 
-  const decRackRows = () => { const r = clamp((N.rack_rows||1)-1,1,20); patchNom({ rack_rows:r }); applyRacksGrid(r, N.rack_cols); localChangeRef.current=false; };
-  const incRackRows = () => { const r = clamp((N.rack_rows||1)+1,1,20); patchNom({ rack_rows:r }); applyRacksGrid(r, N.rack_cols); localChangeRef.current=false; };
-  const decRackCols = () => { const c = clamp((N.rack_cols||1)-1,1,20); patchNom({ rack_cols:c }); applyRacksGrid(N.rack_rows, c); localChangeRef.current=false; };
-  const incRackCols = () => { const c = clamp((N.rack_cols||1)+1,1,20); patchNom({ rack_cols:c }); applyRacksGrid(N.rack_rows, c); localChangeRef.current=false; };
+  const decRackRows = () => { const r = clamp((N.rack_rows||1)-1,1,20); patchNom({ rack_rows:r }); applyRacksGrid(r, N.rack_cols); };
+  const incRackRows = () => { const r = clamp((N.rack_rows||1)+1,1,20); patchNom({ rack_rows:r }); applyRacksGrid(r, N.rack_cols); };
+  const decRackCols = () => { const c = clamp((N.rack_cols||1)-1,1,20); patchNom({ rack_cols:c }); applyRacksGrid(N.rack_rows, c); };
+  const incRackCols = () => { const c = clamp((N.rack_cols||1)+1,1,20); patchNom({ rack_cols:c }); applyRacksGrid(N.rack_rows, c); };
 
-  const decLaneRows = () => { const r = clamp((N.lanes_rows||1)-1,1,20); patchNom({ lanes_rows:r }); applyLanesGrid(r, N.lanes_cols); localChangeRef.current=false; };
-  const incLaneRows = () => { const r = clamp((N.lanes_rows||1)+1,1,20); patchNom({ lanes_rows:r }); applyLanesGrid(r, N.lanes_cols); localChangeRef.current=false; };
-  const decLaneCols = () => { const c = clamp((N.lanes_cols||1)-1,1,20); patchNom({ lanes_cols:c }); applyLanesGrid(N.lanes_rows, c); localChangeRef.current=false; };
-  const incLaneCols = () => { const c = clamp((N.lanes_cols||1)+1,1,20); patchNom({ lanes_cols:c }); applyLanesGrid(N.lanes_rows, c); localChangeRef.current=false; };
+  const decLaneRows = () => { const r = clamp((N.lanes_rows||1)-1,1,20); patchNom({ lanes_rows:r }); applyLanesGrid(r, N.lanes_cols); };
+  const incLaneRows = () => { const r = clamp((N.lanes_rows||1)+1,1,20); patchNom({ lanes_rows:r }); applyLanesGrid(r, N.lanes_cols); };
+  const decLaneCols = () => { const c = clamp((N.lanes_cols||1)-1,1,20); patchNom({ lanes_cols:c }); applyLanesGrid(N.lanes_rows, c); };
+  const incLaneCols = () => { const c = clamp((N.lanes_cols||1)+1,1,20); patchNom({ lanes_cols:c }); applyLanesGrid(N.lanes_rows, c); };
 
   /* ---------- Cambio de modo ---------- */
   const switchMode = (nextMode) => {
@@ -130,50 +162,53 @@ export default function WarehouseCard({
     if (nextMode === "racks") {
       const rows = clamp(N.rack_rows || 1, 1, 20);
       const cols = clamp(N.rack_cols || 1, 1, 20);
-      setStruct(buildRacks(rows, cols, []));
+      setStructReplace(buildRacks(rows, cols, []));
     } else {
       const rows = clamp(N.lanes_rows || 1, 1, 20);
       const cols = clamp(N.lanes_cols || 1, 1, 20);
-      setStruct(buildLanes(rows, cols, []));
+      setStructReplace(buildLanes(rows, cols, []));
     }
-    localChangeRef.current = false;
   };
 
   /* ---------- Renombrado manual (solo racks) ---------- */
   const [manualNaming, setManualNaming] = useState(false); // “Renombrar manualmente”
-  const [rackAlias, setRackAlias] = useState({});          // { [rackId]: "texto" }
-  const [shelfNames, setShelfNames] = useState({});        // { [rackId]: ["", "", ...] }
 
-  // Asegura arrays de baldas sincronizados con estructura (sólo al editar)
-  const ensureShelfArrays = () => {
-    setShelfNames(prev => {
-      const next = { ...prev };
-      for (const r of estructura) {
-        const len = Math.max(1, r.baldas || 1);
-        const cur = next[r.estante] || [];
-        if (cur.length !== len) {
-          const grown = [...cur]; grown.length = len;
-          for (let i=0;i<len;i++) if (grown[i] === undefined) grown[i] = "";
-          next[r.estante] = grown;
-        }
-      }
-      const valid = new Set(estructura.map(e=>e.estante));
-      Object.keys(next).forEach(k => { if (!valid.has(+k)) delete next[k]; });
-      return next;
+  const setRackAlias = (rackId, val) => updateRackAndNormalize(rackId, (e) => ({ ...e, alias: val || "" }));
+  const setShelfName = (rackId, index0, val) =>
+    updateRackAndNormalize(rackId, (e) => {
+      const len = Math.max(1, e.baldas || 1);
+      const arr = Array.isArray(e.shelf_names) ? e.shelf_names.slice(0, len) : [];
+      while (arr.length < len) arr.push("");
+      arr[index0] = val;
+      return { ...e, shelf_names: arr };
     });
-  };
 
   /* ---------- Nombres ---------- */
-  const rackLabel = (idx1) => {
-    const alias = rackAlias[idx1];
+  const rackLabel = (idx1, alias) => {
     if (manualNaming && alias) return alias;
     if (N.col_scheme === "numeric") return String(idx1);
     return numToAlpha(idx1) || String(idx1);
   };
 
+  /* ===== Numeración global de baldas: B1, B2, B3… por todo el almacén ===== */
+  const globalStartByRack = useMemo(() => {
+    const sorted = [...estructura].sort((a,b) => a.estante - b.estante);
+    let running = 1;
+    const map = new Map();
+    for (const r of sorted) {
+      map.set(r.estante, running);
+      running += Math.max(1, r.baldas || 1);
+    }
+    return map;
+  }, [estructura]);
+
+  const defaultShelfName = (rackId, shelfIdx1) => {
+    const start = globalStartByRack.get(rackId) || 1;
+    const num = start + (shelfIdx1 - 1);
+    return `B${num}`;
+  };
+
   const laneLabel = (lane) => {
-    const alias = rackAlias[lane.estante]; // reutilizado
-    if (manualNaming && alias) return alias;
     if (N.lane_name_scheme === "numeric") return String(lane.estante);
     if (N.lane_name_scheme === "alpha") {
       const a = numToAlpha(lane.estante);
@@ -189,7 +224,7 @@ export default function WarehouseCard({
   const colorInputRef = useRef(null);
   const chooseColor = (laneId, hex) => {
     const h = String(hex || DEFAULT_LANE_COLOR).toLowerCase();
-    setStruct(estructura.map(e => e.estante === laneId ? { ...e, color: h } : e));
+    updateLane(laneId, { color: h });
     setRecentColors(prev => [h, ...prev.filter(c => c !== h)].slice(0, 10));
     setPaletteFor(null);
   };
@@ -209,16 +244,14 @@ export default function WarehouseCard({
   const [autoScale, setAutoScale] = useState(1);
   const [manualScale, setManualScale] = useState(1);
 
-  // Anchuras "naturales" por celda según modo (coinciden con min de CSS)
-  const CELL_W_RACKS = 220; // px (min de minmax en CSS)
+  const CELL_W_RACKS = 220; // px
   const CELL_W_LANES = 140; // px
-  const GRID_GAP = 12;      // px (coincide con CSS)
-  const BOARD_PADDING_X = 24; // px (padding 12 + 12 del board)
+  const GRID_GAP = 12;      // px
+  const BOARD_PADDING_X = 24; // px
 
   const naturalWidth = useMemo(() => {
     const cols = isRacks ? N.rack_cols : N.lanes_cols;
     const cellW = isRacks ? CELL_W_RACKS : CELL_W_LANES;
-    // width = celdas + gaps + padding interno
     return (cols * cellW) + ((cols - 1) * GRID_GAP) + BOARD_PADDING_X;
   }, [isRacks, N.rack_cols, N.lanes_cols]);
 
@@ -228,10 +261,8 @@ export default function WarehouseCard({
     if (!el) return;
 
     const measure = () => {
-      // restamos un pequeño margen para evitar saltos
       const available = Math.max(0, el.clientWidth - 2);
       const s = available > 0 ? Math.min(1, available / naturalWidth) : 1;
-      // limitamos para que no baje de 0.5 (seguirá habiendo scroll si hace falta)
       setAutoScale(Math.max(0.5, Math.round(s * 100) / 100));
     };
 
@@ -300,17 +331,17 @@ export default function WarehouseCard({
                   <div className="step">
                     <span>Filas</span>
                     <div className="stepper">
-                      <button onClick={()=>{ decRackRows(); ensureShelfArrays(); }}>−</button>
+                      <button onClick={()=>{ decRackRows(); }}>−</button>
                       <span>{N.rack_rows}</span>
-                      <button onClick={()=>{ incRackRows(); ensureShelfArrays(); }}>+</button>
+                      <button onClick={()=>{ incRackRows(); }}>+</button>
                     </div>
                   </div>
                   <div className="step">
                     <span>Columnas</span>
                     <div className="stepper">
-                      <button onClick={()=>{ decRackCols(); ensureShelfArrays(); }}>−</button>
+                      <button onClick={()=>{ decRackCols(); }}>−</button>
                       <span>{N.rack_cols}</span>
-                      <button onClick={()=>{ incRackCols(); ensureShelfArrays(); }}>+</button>
+                      <button onClick={()=>{ incRackCols(); }}>+</button>
                     </div>
                   </div>
                 </div>
@@ -437,69 +468,68 @@ export default function WarehouseCard({
                     const rack = id ? estructura.find(e => e.estante === id) : null;
                     if (!rack) return <div key={`rackcell-${r}-${c}`} className="cell" />;
 
-                    const label = rackLabel(rack.estante);
+                    const header = rackLabel(rack.estante, rack.alias);
                     const shelves = Math.max(1, rack.baldas || 1);
 
                     return (
                       <div key={`rackcell-${r}-${c}`} className="cell">
                         <section className="rackCard">
-                          <header className="rackHead" title={manualNaming ? "Doble clic para renombrar" : "Activa renombrado manual para editar"}>
+                          <header
+                            className="rackHead"
+                            title={manualNaming ? "Doble clic para renombrar" : "Activa renombrado manual para editar"}
+                          >
                             {manualNaming ? (
                               <button
                                 className="rackHead__name"
                                 onDoubleClick={()=>{
-                                  const v = prompt("Nombre del estante", rackAlias[rack.estante] ?? label) ?? "";
+                                  const v = prompt("Nombre del estante", rack.alias || header) ?? "";
                                   const trimmed = v.trim();
-                                  if (trimmed !== (rackAlias[rack.estante] ?? "")) {
-                                    setRackAlias(p=>({ ...p, [rack.estante]: trimmed }));
+                                  if (trimmed !== (rack.alias || "")) {
+                                    setRackAlias(rack.estante, trimmed);
                                   }
                                 }}
                               >
-                                Estante {rackAlias[rack.estante] ?? label}
+                                Estante {rack.alias || header}
                               </button>
                             ) : (
-                              <span className="rackHead__name rackHead__name--static">Estante {label}</span>
+                              <span className="rackHead__name rackHead__name--static">Estante {header}</span>
                             )}
 
                             <div className="shelfOps">
-                              <button className="iconbtn" onClick={()=>{
-                                setStruct(estructura.map(e=> e.estante===rack.estante ? { ...e, baldas: Math.max(1, (e.baldas||1)-1) } : e));
-                                ensureShelfArrays();
-                              }} title="Quitar balda"><MdRemove/></button>
+                              <button
+                                className="iconbtn"
+                                onClick={()=>{
+                                  updateRackAndNormalize(rack.estante, (e)=>({ ...e, baldas: Math.max(1, (e.baldas||1)-1) }));
+                                }}
+                                title="Quitar balda"
+                              ><MdRemove/></button>
 
                               <span className="shelf-pill">{shelves}</span>
 
-                              <button className="iconbtn" onClick={()=>{
-                                setStruct(estructura.map(e=> e.estante===rack.estante ? { ...e, baldas: (e.baldas||1)+1 } : e));
-                                ensureShelfArrays();
-                              }} title="Añadir balda"><MdAdd/></button>
+                              <button
+                                className="iconbtn"
+                                onClick={()=>{
+                                  updateRackAndNormalize(rack.estante, (e)=>({ ...e, baldas: (e.baldas||1)+1 }));
+                                }}
+                                title="Añadir balda"
+                              ><MdAdd/></button>
                             </div>
                           </header>
 
                           <div className="rackBody">
                             {Array.from({ length: shelves }).map((_, j) => {
                               const idx1 = j + 1;
-                              const auto =
-                                N.col_scheme === "alpha"
-                                  ? `${label}${idx1}`         // B1, B2…
-                                  : `${label}-${idx1}`;        // 2-1, 2-2…
-                              const manualValue = (shelfNames[rack.estante] || [])[j] ?? "";
+                              const auto = defaultShelfName(rack.estante, idx1);
+                              const manualValue = Array.isArray(rack.shelf_names) ? (rack.shelf_names[j] || "") : "";
 
                               return (
                                 <div key={idx1} className="rackSlot">
                                   <input
                                     className="slotInput"
                                     readOnly={!manualNaming}
-                                    placeholder={manualNaming ? "Escribe un nombre…" : auto}
+                                    placeholder={auto}
                                     value={manualNaming ? manualValue : ""}
-                                    onChange={(e)=>{
-                                      const val = e.target.value;
-                                      setShelfNames(prev => {
-                                        const arr = [...(prev[rack.estante] || [])];
-                                        arr[j] = val;
-                                        return { ...prev, [rack.estante]: arr };
-                                      });
-                                    }}
+                                    onChange={(e)=> setShelfName(rack.estante, j, e.target.value)}
                                   />
                                 </div>
                               );
@@ -607,7 +637,7 @@ export default function WarehouseCard({
               ? "Cada celda es un carril. Clic en el punto para cambiar su color."
               : (manualNaming
                 ? "Renombra estantes y baldas libremente. Se guarda al escribir."
-                : "Nombres automáticos. Activa «Renombrar manualmente» para editar."
+                : "Nombres automáticos: B1, B2… Activa «Renombrar manualmente» para editar."
               )
             }
           </div>

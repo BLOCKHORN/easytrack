@@ -124,7 +124,7 @@ function highlightApprox(name, query) {
   );
 }
 
-/* Colores lanes */
+/* Colores lanes & carrier */
 const hexToRgba = (hex = "#f59e0b", a = 0.08) => {
   const h = String(hex).replace("#", "").trim();
   if (!/^[0-9a-fA-F]{6}$/.test(h)) return `rgba(0,0,0,${a})`;
@@ -133,6 +133,8 @@ const hexToRgba = (hex = "#f59e0b", a = 0.08) => {
   const b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 };
+const normHex = (hex, fallback = "#2563eb") =>
+  /^#[0-9a-fA-F]{6}$/.test(String(hex)) ? hex : fallback;
 
 export default function BuscarPaquete() {
   // filtros
@@ -150,6 +152,7 @@ export default function BuscarPaquete() {
   const [resultados, setResultados] = useState([]);
   const [baldasDisponibles, setBaldasDisponibles] = useState([]);
   const [companias, setCompanias] = useState([]);
+  const [coloresCompania, setColoresCompania] = useState(() => new Map());
 
   // layout maps
   const [layoutMode, setLayoutMode] = useState("racks");
@@ -206,7 +209,7 @@ export default function BuscarPaquete() {
     );
   }, [estadoFiltro, companiaFiltro, estanteFiltro, baldaFiltro, modoBusqueda, sensibilidad]);
 
-  /* ===== CARGA PRINCIPAL – lee layouts_meta (verdad) con fallback al RPC ===== */
+  /* ===== CARGA PRINCIPAL ===== */
   useEffect(() => {
     let cancelado = false;
     (async () => {
@@ -219,11 +222,11 @@ export default function BuscarPaquete() {
 
         const tenantId = await getTenantIdOrThrow();
 
-        // Paquetes desde tu API (ya filtra por tenant vía JWT)
+        // Paquetes desde tu API (filtrados por tenant vía JWT)
         const paquetesAPI = await obtenerPaquetesBackend(token);
         if (cancelado) return;
 
-        // --- Layout from layouts_meta first ---
+        // Layout principal desde layouts_meta
         let meta = null;
         try {
           const { data } = await supabase
@@ -234,7 +237,6 @@ export default function BuscarPaquete() {
           meta = data || null;
         } catch { meta = null; }
 
-        // Fallback RPC
         if (!meta) {
           try {
             const { data } = await supabase.rpc("get_warehouse_layout", { p_org: tenantId });
@@ -247,7 +249,7 @@ export default function BuscarPaquete() {
         const lanesArr = Array.isArray(root?.lanes) ? root.lanes : [];
         const racksArr = Array.isArray(root?.racks) ? root.racks : [];
 
-        // Catálogos mínimos (baldas + compañías)
+        // Catálogos (baldas + compañías con color)
         const [baldasRes, empresasRes] = await Promise.all([
           supabase.from("baldas")
             .select("id, estante, balda, codigo")
@@ -255,7 +257,7 @@ export default function BuscarPaquete() {
             .order("estante", { ascending: true })
             .order("balda", { ascending: true }),
           supabase.from("empresas_transporte_tenant")
-            .select("nombre")
+            .select("nombre,color")
             .eq("tenant_id", tenantId),
         ]);
 
@@ -263,10 +265,16 @@ export default function BuscarPaquete() {
         setBaldasDisponibles(baldas);
 
         const listaCompanias = (empresasRes?.data || [])
-          .map(e => e.nombre)
+          .map(e => e?.nombre)
           .filter(Boolean)
           .sort((a,b)=>a.localeCompare(b));
         setCompanias(listaCompanias);
+
+        const colMap = new Map();
+        (empresasRes?.data || []).forEach(e => {
+          colMap.set(e?.nombre, normHex(e?.color || "#2563eb"));
+        });
+        setColoresCompania(colMap);
 
         // ===== Mapas de nombres/colores según modo =====
         const laneName = new Map();
@@ -277,7 +285,6 @@ export default function BuscarPaquete() {
         let mode = modeFromMeta;
 
         if (mode === "lanes") {
-          // lanes definidos en payload (verdad absoluta)
           for (const l of lanesArr) {
             const id = Number(l?.id ?? l?.lane_id);
             if (!Number.isFinite(id)) continue;
@@ -286,9 +293,7 @@ export default function BuscarPaquete() {
             if (/^#?[0-9a-f]{6}$/i.test(col)) laneColor.set(id, col.startsWith('#') ? col : `#${col}`);
           }
 
-          // Fallbacks si no vinieran lanes en payload:
           if (laneName.size === 0) {
-            // lanes table
             try {
               const { data: rows } = await supabase
                 .from("lanes")
@@ -302,7 +307,6 @@ export default function BuscarPaquete() {
                 if (/^#?[0-9a-f]{6}$/i.test(col)) laneColor.set(id, col.startsWith('#') ? col : `#${col}`);
               });
             } catch {}
-            // carriles table
             if (laneName.size === 0) {
               try {
                 const { data } = await supabase
@@ -334,7 +338,6 @@ export default function BuscarPaquete() {
               shelfName.set(`${rid}-${idx}`, s?.name || `${rname}${idx}`);
             }
           }
-          // Fallbacks con baldas si no viniera payload
           if (rackName.size === 0 && baldas.length) {
             for (const b of baldas) {
               if (!rackName.has(b.estante)) rackName.set(b.estante, String(b.estante));
@@ -351,7 +354,7 @@ export default function BuscarPaquete() {
         setRackNameById(rackName);
         setShelfNameByKey(shelfName);
 
-        // Etiqueta legible por balda_id (para racks y como último recurso en lanes)
+        // Etiqueta legible por balda_id
         const labelMap = new Map();
         for (const b of baldas) {
           if (mode === "lanes") {
@@ -367,47 +370,35 @@ export default function BuscarPaquete() {
 
         const baldaById = new Map(baldas.map(b => [b.id, b]));
 
-        // ===== Formatear resultados con nombres buenos (modo lanes PRIORITARIO por lane_id/compartimento) =====
+        // ===== Formatear resultados =====
         const formateados = (paquetesAPI || []).map(p => {
           const b = p.balda_id ? baldaById.get(p.balda_id) : null;
-
-          // Estante/balda “numéricos” que puedan venir del backend
           const estanteNum = (p.estante != null ? Number(p.estante) : (b?.estante ?? null));
           const baldaIdx   = (p.balda   != null ? Number(p.balda)   : (b?.balda   ?? null));
+          const laneIdRaw  = (p.lane_id != null ? Number(p.lane_id) : null);
+          const laneId     = Number.isFinite(laneIdRaw) ? laneIdRaw
+                            : (mode === "lanes" ? (Number.isFinite(estanteNum) ? estanteNum : null) : null);
 
-          // LANE id real (si existe), o estante de balda como fallback
-          const laneIdRaw = (p.lane_id != null ? Number(p.lane_id) : null);
-          const laneId = Number.isFinite(laneIdRaw) ? laneIdRaw
-                        : (mode === "lanes" ? (Number.isFinite(estanteNum) ? estanteNum : null) : null);
-
-          // Nombre de ubicación
           let ubicacion = "";
           let lane_color = null;
-
           if (mode === "lanes") {
-            // 1) Si hay lane_id y está en el mapa → usamos su nombre/color.
             const lname = (laneId != null ? laneName.get(laneId) : null);
             if (lname) {
               ubicacion = `Carril ${lname}`;
               lane_color = laneColor.get(laneId) || null;
             } else if (typeof p.compartimento === "string" && p.compartimento.trim()) {
-              // 2) Si no, usamos el compartimento que guardamos al crear el paquete en modo carriles
               ubicacion = `Carril ${p.compartimento.trim()}`;
-              // intenta color por si el compartimento coincide con el nombre configurado
               const lid = [...laneName.entries()].find(([, n]) => String(n).toUpperCase() === p.compartimento.trim().toUpperCase())?.[0];
               if (lid != null) lane_color = laneColor.get(lid) || null;
             } else if (p.balda_id && labelMap.get(p.balda_id)) {
-              // 3) Último recurso: derivado desde una balda vieja (si existe)
               ubicacion = labelMap.get(p.balda_id);
               if (b?.estante != null) lane_color = laneColor.get(Number(b.estante)) || null;
             } else {
-              // 4) Fallback ultra mínimo
               const lname2 = laneName.get(Number(estanteNum));
               ubicacion = `Carril ${lname2 ?? (b?.codigo ?? estanteNum ?? "?")}`;
               if (estanteNum != null) lane_color = laneColor.get(Number(estanteNum)) || null;
             }
           } else {
-            // === RACKS ===
             if (p.balda_id && labelMap.get(p.balda_id)) {
               ubicacion = labelMap.get(p.balda_id);
             } else {
@@ -429,7 +420,6 @@ export default function BuscarPaquete() {
             balda: baldaIdx,
             ubicacion_label: ubicacion,
             lane_color,
-            // extra: conservar referencias por si luego editamos
             lane_id: laneId,
             compartimento: p.compartimento ?? null,
           };
@@ -445,6 +435,17 @@ export default function BuscarPaquete() {
     })();
     return () => { cancelado = true; };
   }, []);
+
+  /* ===== Colores por carrier (para pintar chips/acciones) ===== */
+  const getCompColor = (name) => normHex(coloresCompania.get(name), "#2563eb");
+  const brandColor = useMemo(() => (
+    companiaFiltro !== "todos" ? getCompColor(companiaFiltro) : "#2563eb"
+  ), [companiaFiltro, coloresCompania]);
+  const brandVars = useMemo(() => ({
+    '--brand': brandColor,
+    '--brand-rgba': hexToRgba(brandColor, 0.14),
+    '--brand-ring': hexToRgba(brandColor, 0.36),
+  }), [brandColor]);
 
   /* ===== Opciones derivadas ===== */
   const companiasFiltradas = useMemo(
@@ -597,11 +598,9 @@ export default function BuscarPaquete() {
         nombre_cliente: paqueteEditando.nombre_cliente,
         empresa_transporte: paqueteEditando.empresa_transporte || paqueteEditando.compania,
         balda_id: paqueteEditando.balda_id ? Number(paqueteEditando.balda_id) : null,
-        // NOTA: lane_id/compartimento suelen mantenerse como estaban en backend
       };
       const actualizado = await editarPaqueteBackend(payload, token);
 
-      // refrescar etiquetas con los mapas actuales
       const b = baldasDisponibles.find(x => x.id === (actualizado?.balda_id ?? payload.balda_id));
       const rlabel = b ? (rackNameById.get(b.estante) ?? String(b.estante)) : undefined;
       const slabel = b ? (shelfNameByKey.get(`${b.estante}-${b.balda}`) ?? (b.codigo || `Fila ${b.balda}`)) : undefined;
@@ -609,7 +608,6 @@ export default function BuscarPaquete() {
         ? `Carril ${laneNameById.get(b.estante) ?? b.codigo ?? b.estante}`
         : `Estante ${rlabel} · ${slabel}`
       ) : undefined;
-
       const nuevoColor = b && layoutMode === "lanes" ? (laneColorById.get(b.estante) || null) : undefined;
 
       setResultados(prev => prev.map(p => p.id === payload.id ? {
@@ -646,7 +644,12 @@ export default function BuscarPaquete() {
   const chips = [
     busqueda ? { k: "q", label: `Búsqueda: “${busqueda}”`, onClear: () => setBusqueda("") } : null,
     estadoFiltro !== "todos" ? { k: "estado", label: `Estado: ${estadoFiltro}`, onClear: () => setEstadoFiltro("todos") } : null,
-    companiaFiltro !== "todos" ? { k: "comp", label: `Compañía: ${companiaFiltro}`, onClear: () => setCompaniaFiltro("todos") } : null,
+    companiaFiltro !== "todos" ? {
+      k: "comp",
+      label: `Compañía: ${companiaFiltro}`,
+      color: getCompColor(companiaFiltro),
+      onClear: () => setCompaniaFiltro("todos")
+    } : null,
     estanteFiltro !== "todos" ? {
       k: "est",
       label: layoutMode === "lanes"
@@ -658,7 +661,7 @@ export default function BuscarPaquete() {
   ].filter(Boolean);
 
   return (
-    <div className="buscar-paquete">
+    <div className="buscar-paquete" style={brandVars}>
       <div className="titulo-flex">
         <h2><FaSearch className="icono-titulo" /> Buscar paquete</h2>
         <div className="resumen kpis" aria-live="polite">
@@ -753,7 +756,13 @@ export default function BuscarPaquete() {
           <span className="chips-label"><FaFilter /> Filtros activos</span>
           <div className="chips-list">
             {chips.map(c => (
-              <button key={c.k} className="chip" onClick={c.onClear} aria-label={`Quitar ${c.label}`}>
+              <button
+                key={c.k}
+                className={`chip ${c.color ? "chip--brand" : ""}`}
+                onClick={c.onClear}
+                aria-label={`Quitar ${c.label}`}
+                style={c.color ? { ['--chip']: c.color, ['--chip-rgba']: hexToRgba(c.color, 0.16) } : undefined}
+              >
                 {c.label} <FaTimes />
               </button>
             ))}
@@ -825,6 +834,8 @@ export default function BuscarPaquete() {
                     ? { ['--lane']: p.lane_color, ['--lane-rgba']: hexToRgba(p.lane_color, 0.06) }
                     : undefined;
 
+                  const compColor = getCompColor(p.compania);
+
                   return (
                     <tr
                       key={p.id}
@@ -836,9 +847,22 @@ export default function BuscarPaquete() {
                           ? highlightApprox(p.nombre_cliente, busqueda)
                           : p.nombre_cliente}
                       </td>
-                      <td data-label="Compañía">{p.compania}</td>
 
-                      {/* Ubicación (más descriptiva) */}
+                      {/* Compañía con color */}
+                      <td data-label="Compañía" className="compania">
+                        {p.compania ? (
+                          <span
+                            className="comp-chip"
+                            style={{ ['--comp']: compColor, ['--comp-rgba']: hexToRgba(compColor, 0.16) }}
+                            title={p.compania}
+                          >
+                            <i className="comp-dot" aria-hidden="true" />
+                            <span>{p.compania}</span>
+                          </span>
+                        ) : <span className="muted">—</span>}
+                      </td>
+
+                      {/* Ubicación */}
                       <td data-label="Ubicación">
                         {layoutMode === "lanes" && p.lane_color ? (
                           <span
@@ -882,11 +906,12 @@ export default function BuscarPaquete() {
             {/* Tarjetas móvil */}
             <div className="cards-m" aria-label="Resultados (móvil)">
               {paginados.map(p => {
-                const style = p.lane_color
+                const styleLane = p.lane_color
                   ? { ['--lane']: p.lane_color, ['--lane-rgba']: hexToRgba(p.lane_color, 0.08) }
                   : undefined;
+                const compColor = getCompColor(p.compania);
                 return (
-                  <article key={p.id} className={`card ${p.lane_color ? "lane-tinted" : ""}`} style={style}>
+                  <article key={p.id} className={`card ${p.lane_color ? "lane-tinted" : ""}`} style={styleLane}>
                     <header className="card__head">
                       <h4 className="card__title">{p.nombre_cliente}</h4>
                       <span className={`badge-estado ${p.entregado ? "entregado" : "pendiente"}`}>
@@ -895,7 +920,15 @@ export default function BuscarPaquete() {
                     </header>
                     <div className="card__row">
                       <span className="label">Compañía</span>
-                      <span>{p.compania}</span>
+                      {p.compania ? (
+                        <span
+                          className="comp-chip"
+                          style={{ ['--comp']: compColor, ['--comp-rgba']: hexToRgba(compColor, 0.16) }}
+                        >
+                          <i className="comp-dot" aria-hidden="true" />
+                          <span>{p.compania}</span>
+                        </span>
+                      ) : <span className="muted">—</span>}
                     </div>
                     <div className="card__row">
                       <span className="label">Ubicación</span>
