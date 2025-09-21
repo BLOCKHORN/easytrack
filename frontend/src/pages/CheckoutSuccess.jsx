@@ -38,18 +38,19 @@ export default function CheckoutSuccess() {
   const [cooldown, setCooldown] = useState(0);
 
   const [loading, setLoading] = useState(true);
-  const [verifiedOk, setVerifiedOk] = useState(false); // <- NUEVO: sabemos si la verificación fue OK
+  const [verifiedOk, setVerifiedOk] = useState(false);
   const [verifyErr, setVerifyErr] = useState('');
   const [planCode, setPlanCode] = useState('');
   const [trialEndsAt, setTrialEndsAt] = useState('');
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState('');
   const [portalUrl, setPortalUrl] = useState('');
-  const [dashboardUrl, setDashboardUrl] = useState(`${window.location.origin}/app`);
+  // 👇 por defecto, a tu ruta real del panel
+  const [dashboardUrl, setDashboardUrl] = useState(`${window.location.origin}/dashboard`);
+  // y tu página de precios actual
   const [plansUrl, setPlansUrl] = useState(`${window.location.origin}/planes`);
   const [showConfetti, setShowConfetti] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Guarda el último session_id por si refresca
   useEffect(() => {
     if (sessionIdFromUrl) localStorage.setItem('last_session_id', sessionIdFromUrl);
   }, [sessionIdFromUrl]);
@@ -94,7 +95,7 @@ export default function CheckoutSuccess() {
           const arr = Array.isArray(d.checkoutUrls) ? d.checkoutUrls : [];
 
           const portal   = urlsObj.portal    || arr[0] || '';
-          const dash     = urlsObj.dashboard || arr[1] || `${window.location.origin}/app`;
+          const dash     = urlsObj.dashboard || arr[1] || `${window.location.origin}/dashboard`;
           const plans    = urlsObj.plans     || arr[2] || `${window.location.origin}/planes`;
 
           setDashboardUrl(dash);
@@ -110,7 +111,7 @@ export default function CheckoutSuccess() {
           setTrialEndsAt(d.trialEndsAt || '');
           setCurrentPeriodEnd(d.currentPeriodEnd || '');
 
-          setVerifiedOk(true);      // <- marcamos verificación OK
+          setVerifiedOk(true);
           setLoading(false);
           return true;
         } catch {
@@ -130,13 +131,11 @@ export default function CheckoutSuccess() {
         if (ok) return;
       }
 
-      // Fallback amable
       setVerifyErr('No se pudo confirmar automáticamente tu sesión. Puedes entrar al panel o gestionar la facturación desde aquí.');
       setLoading(false);
     })();
   }, [sessionId, email]);
 
-  // ---- Reenviar/invitar (lo usa el auto-envío y el botón) ----
   async function resendInvite(){
     if(!isEmail(email)) return;
     if(status==='sending') return;
@@ -174,16 +173,14 @@ export default function CheckoutSuccess() {
     }
   }
 
-  // ---- NUEVO: auto-envío una sola vez por session_id cuando todo está listo ----
   useEffect(() => {
-    if (!verifiedOk) return;          // necesitamos verificación OK
-    if (!isEmail(email)) return;      // necesitamos email válido
+    if (!verifiedOk) return;
+    if (!isEmail(email)) return;
     if (!sessionId) return;
 
     const key = `invite_sent:${sessionId}`;
-    if (localStorage.getItem(key) === '1') return; // ya enviado para esta sesión
+    if (localStorage.getItem(key) === '1') return;
 
-    // Dispara invitación y marca como enviada (aunque falle no bloquea el botón)
     (async () => {
       try {
         await resendInvite();
@@ -204,13 +201,11 @@ export default function CheckoutSuccess() {
 
   return (
     <section className="success-screen full-bleed">
-      {/* confetti */}
       <div className={`confetti ${showConfetti?'show':''}`} aria-hidden="true">
         {Array.from({length:10}).map((_,i)=><span key={i}/>)}
       </div>
 
       <div className="card" role="status" aria-live="polite">
-        {/* Hero */}
         <div className="hero">
           <span className="badge"><FiCheck/><span className="pulse"/></span>
           <h1>Pago completado</h1>
@@ -219,7 +214,6 @@ export default function CheckoutSuccess() {
           </p>
         </div>
 
-        {/* Skeleton */}
         {loading && (
           <div className="skeletons" aria-hidden="true">
             <div className="sk sk-row" />
@@ -227,7 +221,6 @@ export default function CheckoutSuccess() {
           </div>
         )}
 
-        {/* Info rápida */}
         <div className="quick" aria-label="Resumen de la suscripción">
           <div className="qitem">
             <FiUser/> <span className="lab">Email</span>
@@ -248,7 +241,6 @@ export default function CheckoutSuccess() {
           </div>
         </div>
 
-        {/* Timeline */}
         <ol className="timeline" aria-label="Pasos completados">
           <li className="step done">
             <span className="dot"><FiCheck/></span>
@@ -266,7 +258,6 @@ export default function CheckoutSuccess() {
           </li>
         </ol>
 
-        {/* Abrir correo */}
         <div className="inbox-row">
           <div className="left">
             <div className="subj">Asunto: <b>“Invitación a EasyTrack”</b></div>
@@ -279,7 +270,6 @@ export default function CheckoutSuccess() {
           )}
         </div>
 
-        {/* CTAs */}
         <div className="cta-row">
           {dashboardUrl && <a className="btn primary" href={dashboardUrl}>Ir al panel</a>}
           {portalUrl
@@ -288,7 +278,6 @@ export default function CheckoutSuccess() {
           {plansUrl && <a className="btn ghost" href={plansUrl}>Cambiar plan</a>}
         </div>
 
-        {/* Reenviar */}
         <div className="resend">
           <label htmlFor="inv-email">¿No te llegó? Reenviar invitación</label>
           <div className={`row ${!isEmail(email)&&email?'invalid':''}`}>

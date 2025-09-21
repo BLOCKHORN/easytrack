@@ -136,8 +136,23 @@ async function upsertSubscription({ tenantId, planId, stripeCustomerId, stripeSu
   }
 }
 
+/** Dedupe por event_id. Si no tienes UNIQUE en payment_events(event_id) añade uno (ver nota al final). */
 async function dedupeEventOrThrow(event) {
   if (!event?.id) return;
+
+  // Pre-chequeo manual para entornos sin UNIQUE (reduce duplicados)
+  try {
+    const { data: exists } = await supabase
+      .from('payment_events')
+      .select('event_id')
+      .eq('event_id', event.id)
+      .maybeSingle();
+    if (exists?.event_id) throw new Error(`EVENT_DUPLICATE:${event.id}`);
+  } catch (e) {
+    if (String(e.message || '').startsWith('EVENT_DUPLICATE:')) throw e;
+    // si falla el select, seguimos y dejamos que el insert decida
+  }
+
   const insert = {
     provider: 'stripe',
     event_type: event.type,
@@ -214,9 +229,19 @@ async function stripeWebhook(req, res) {
         const session = event.data.object;
         if (!session.subscription) break;
 
+        // Expandimos la suscripción para conocer status/price
         const subscription = await stripe.subscriptions.retrieve(session.subscription, {
           expand: ['items.data.price']
         });
+
+        // ✅ CONDICIÓN DURA: solo continuamos si está realmente “pagado” o la sub ya está activa/trial
+        const paidEnough =
+          session.payment_status === 'paid' ||
+          (subscription && ['active', 'trialing'].includes(subscription.status));
+        if (!paidEnough) {
+          console.log('[webhook] invite suppressed (not paid yet):', session.id, subscription?.status);
+          break;
+        }
 
         const signupEmail =
           session.customer_details?.email ||
@@ -228,6 +253,7 @@ async function stripeWebhook(req, res) {
 
         await upsertTenantStripeCustomer(tenant?.id, subscription.customer);
 
+        // Resolver plan
         let planId = null;
         const metaCode = normalizePlan(subscription.metadata?.plan_code || session.metadata?.plan_code || '');
         if (metaCode) {
@@ -239,6 +265,7 @@ async function stripeWebhook(req, res) {
           planId = planByPrice?.id || null;
         }
 
+        // Actualiza la fila creada en /checkout/start, o upsert si no existe
         const patch = {
           tenant_id: tenant?.id || null,
           plan_id: planId || null,
@@ -269,6 +296,7 @@ async function stripeWebhook(req, res) {
           });
         }
 
+        // ✅ Invitación SOLO cuando el pago está confirmado / sub activa
         await inviteUserIfPossible(signupEmail);
         break;
       }
@@ -292,6 +320,7 @@ async function stripeWebhook(req, res) {
           planId = planByPrice?.id || null;
         }
 
+        // Resolver tenant
         let tenantId;
         const { data: subRow } = await supabase
           .from('subscriptions')
@@ -319,6 +348,20 @@ async function stripeWebhook(req, res) {
           stripeCustomerId: s.customer,
           stripeSubscription: s
         });
+
+        // (Opcional) Si quieres cubrir casos asíncronos: invita aquí SOLO si ya está activa/trial.
+        // Esto evita usuarios “huérfanos” cuando el completed llegó con payment_status != 'paid'.
+        if (['active', 'trialing'].includes(s.status)) {
+          try {
+            const cust = typeof s.customer === 'string'
+              ? await stripe.customers.retrieve(s.customer)
+              : s.customer;
+            const emailOK = cust?.email || s.metadata?.signup_email || '';
+            if (emailOK) await inviteUserIfPossible(emailOK);
+          } catch (e) {
+            console.warn('[webhook] optional invite on subscription.updated failed:', e.message);
+          }
+        }
         break;
       }
 

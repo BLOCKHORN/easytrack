@@ -181,7 +181,7 @@ export default function Planes() {
     return { was, now, save, unit };
   }, [plan, refMonthly]);
 
-  // ---------- Checkout (guarda session_id antes de Stripe) ----------
+  // ---------- Checkout (Stripe-first; guardamos session_id si llega) ----------
   async function start() {
     try {
       if (!plan) return;
@@ -311,7 +311,7 @@ export default function Planes() {
                 <div className="then">
                   <span className="then-label">Luego</span>
                   <span className="then-num">
-                    {(animMonthly / 100).toLocaleString("es-ES", { maximumFractionDigits: 0 })} €
+                    {(animMonthly / 100).toLocaleString("es-ES", { maximumFractionDigits: 0 })}
                   </span>
                   <span className="then-per">/ mes</span>
                 </div>
