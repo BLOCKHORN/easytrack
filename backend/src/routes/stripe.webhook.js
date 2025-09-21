@@ -3,12 +3,14 @@
 /**
  * IMPORTANTE:
  * app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
+ * - Monta ESTA ruta ANTES de express.json()
+ * - Usa el webhook secret del mismo modo (test/live) que la clave usada en el checkout.
  */
 
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-const { supabase, supabaseAdmin } = require('../utils/supabaseClient');
+const { supabaseAdmin } = require('../utils/supabaseClient'); // <-- usa el admin aquí
 const { normalizePlan } = require('../utils/pricing');
 const { slugifyBase, uniqueSlug } = require('../helpers/slug');
 
@@ -27,17 +29,16 @@ function mapStripeStatus(s) {
     default: return 'incomplete';
   }
 }
-
 const tsToISO = (unix) =>
   (typeof unix === 'number' && !Number.isNaN(unix)) ? new Date(unix * 1000).toISOString() : null;
-
 const toEmail = (v) => String(v || '').toLowerCase().trim();
 
+/** Crea/recupera tenant por email (service role) */
 async function ensureTenantByEmail(email, tenantNameHint = '') {
   const em = toEmail(email);
   if (!em) return null;
 
-  const { data: tExist, error: exErr } = await supabase
+  const { data: tExist, error: exErr } = await supabaseAdmin
     .from('tenants')
     .select('id, slug, email, stripe_customer_id')
     .eq('email', em)
@@ -46,9 +47,9 @@ async function ensureTenantByEmail(email, tenantNameHint = '') {
   if (tExist?.id) return tExist;
 
   const base = slugifyBase(tenantNameHint || em.split('@')[0]);
-  const slug = await uniqueSlug(supabase, base);
+  const slug = await uniqueSlug(supabaseAdmin, base);
 
-  const { data: tNew, error } = await supabase
+  const { data: tNew, error } = await supabaseAdmin
     .from('tenants')
     .insert([{ email: em, nombre_empresa: tenantNameHint || base, slug }])
     .select('id, slug, email, stripe_customer_id')
@@ -60,33 +61,34 @@ async function ensureTenantByEmail(email, tenantNameHint = '') {
 
 async function upsertTenantStripeCustomer(tenantId, stripeCustomerId) {
   if (!tenantId || !stripeCustomerId) return;
-  const { data: t } = await supabase
+  const { data: t } = await supabaseAdmin
     .from('tenants')
     .select('id, stripe_customer_id')
     .eq('id', tenantId)
     .maybeSingle();
   if (!t) return;
   if (t.stripe_customer_id === stripeCustomerId) return;
-  await supabase
+  const { error } = await supabaseAdmin
     .from('tenants')
     .update({ stripe_customer_id: String(stripeCustomerId) })
     .eq('id', tenantId);
+  if (error) throw error;
 }
 
 async function getPlanIdByCode(planCodeRaw) {
-  const code = normalizePlan(planCodeRaw);
-  const { data, error } = await supabase
+  const code = normalizePlan(planCodeRaw || '');
+  if (!code) return null;
+  const { data, error } = await supabaseAdmin
     .from('billing_plans')
     .select('id')
     .eq('code', code)
-    .single();
-  if (error) throw new Error(`No se encontró billing_plans.code=${code}`);
+    .maybeSingle();
+  if (error || !data) return null;
   return data.id;
 }
-
 async function getPlanByStripePriceId(priceId) {
   if (!priceId) return null;
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('billing_plans')
     .select('id, code')
     .eq('stripe_price_id', priceId)
@@ -94,14 +96,14 @@ async function getPlanByStripePriceId(priceId) {
   if (error || !data) return null;
   return data;
 }
-
 function getBasePriceIdFromSubscription(sub) {
   const items = sub?.items?.data || [];
   const base = items.find(i => i?.price?.recurring?.usage_type !== 'metered') || items[0];
   return base?.price?.id || null;
 }
 
-async function upsertSubscription({ tenantId, planId, stripeCustomerId, stripeSubscription }) {
+/** Inserta/actualiza fila en subscriptions. Usa service role. */
+async function upsertSubscription({ tenantId, planId, stripeCustomerId, stripeSubscription, providerSessionId }) {
   if (!stripeSubscription?.id) throw new Error('stripeSubscription.id requerido');
 
   const payload = {
@@ -115,10 +117,12 @@ async function upsertSubscription({ tenantId, planId, stripeCustomerId, stripeSu
     current_period_start: tsToISO(stripeSubscription.current_period_start),
     current_period_end: tsToISO(stripeSubscription.current_period_end),
     cancel_at_period_end: !!stripeSubscription.cancel_at_period_end,
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
   };
+  if (providerSessionId) payload.provider_session_id = providerSessionId; // <-- importante si tu columna es NOT NULL
 
-  const { data: existing, error: exErr } = await supabase
+  // ¿Existe ya por provider_subscription_id?
+  const { data: existing, error: exErr } = await supabaseAdmin
     .from('subscriptions').select('id')
     .eq('provider', 'stripe')
     .eq('provider_subscription_id', stripeSubscription.id)
@@ -126,23 +130,21 @@ async function upsertSubscription({ tenantId, planId, stripeCustomerId, stripeSu
   if (exErr) throw exErr;
 
   if (existing?.id) {
-    const { error } = await supabase.from('subscriptions').update(payload).eq('id', existing.id);
+    const { error } = await supabaseAdmin.from('subscriptions').update(payload).eq('id', existing.id);
     if (error) throw error;
     return existing.id;
   } else {
-    const { data, error } = await supabase.from('subscriptions').insert([payload]).select('id').single();
+    const { data, error } = await supabaseAdmin.from('subscriptions').insert([payload]).select('id').single();
     if (error) throw error;
     return data.id;
   }
 }
 
-/** Dedupe por event_id. Si no tienes UNIQUE en payment_events(event_id) añade uno (ver nota al final). */
+/** Dedupe por event_id en payment_events (service role) */
 async function dedupeEventOrThrow(event) {
   if (!event?.id) return;
-
-  // Pre-chequeo manual para entornos sin UNIQUE (reduce duplicados)
   try {
-    const { data: exists } = await supabase
+    const { data: exists } = await supabaseAdmin
       .from('payment_events')
       .select('event_id')
       .eq('event_id', event.id)
@@ -150,42 +152,37 @@ async function dedupeEventOrThrow(event) {
     if (exists?.event_id) throw new Error(`EVENT_DUPLICATE:${event.id}`);
   } catch (e) {
     if (String(e.message || '').startsWith('EVENT_DUPLICATE:')) throw e;
-    // si falla el select, seguimos y dejamos que el insert decida
   }
-
   const insert = {
     provider: 'stripe',
     event_type: event.type,
     event_id: event.id,
     payload: event
   };
-  const { error } = await supabase.from('payment_events').insert(insert);
+  const { error } = await supabaseAdmin.from('payment_events').insert(insert);
   if (error) {
-    if (error.code === '23505') {
-      throw new Error(`EVENT_DUPLICATE:${event.id}`);
-    }
+    if (error.code === '23505') throw new Error(`EVENT_DUPLICATE:${event.id}`);
     throw error;
   }
 }
 
-/** Invitación con fallback a reset si ya existe */
+/** Envía invitación/reset (opcional) */
 async function inviteUserIfPossible(email) {
   try {
     const em = toEmail(email);
     if (!em) return;
 
-    const admin = (supabaseAdmin?.auth?.admin) ? supabaseAdmin : supabase;
-    if (!admin?.auth?.admin?.inviteUserByEmail) return;
+    if (!supabaseAdmin?.auth?.admin?.inviteUserByEmail) return;
 
     const redirectTo = `${process.env.FRONTEND_URL || process.env.APP_BASE_URL || ''}/billing/success`;
 
-    const { error } = await admin.auth.admin.inviteUserByEmail(em, { redirectTo });
+    const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(em, { redirectTo });
     if (!error) return;
 
     const msg = String(error.message || '').toLowerCase();
     const already = msg.includes('already been registered') || msg.includes('user already registered');
     if (already) {
-      const { error: rerr } = await supabase.auth.resetPasswordForEmail(em, { redirectTo });
+      const { error: rerr } = await supabaseAdmin.auth.resetPasswordForEmail(em, { redirectTo });
       if (rerr) console.warn('[inviteUserIfPossible] reset fallback failed:', rerr.message);
       else console.log('[inviteUserIfPossible] reset password email sent to', em);
     } else {
@@ -229,12 +226,12 @@ async function stripeWebhook(req, res) {
         const session = event.data.object;
         if (!session.subscription) break;
 
-        // Expandimos la suscripción para conocer status/price
+        // Expandimos
         const subscription = await stripe.subscriptions.retrieve(session.subscription, {
           expand: ['items.data.price']
         });
 
-        // ✅ CONDICIÓN DURA: solo continuamos si está realmente “pagado” o la sub ya está activa/trial
+        // Continuar solo si está realmente pagado o activa/trial
         const paidEnough =
           session.payment_status === 'paid' ||
           (subscription && ['active', 'trialing'].includes(subscription.status));
@@ -253,11 +250,11 @@ async function stripeWebhook(req, res) {
 
         await upsertTenantStripeCustomer(tenant?.id, subscription.customer);
 
-        // Resolver plan
+        // Resolver plan_id
         let planId = null;
         const metaCode = normalizePlan(subscription.metadata?.plan_code || session.metadata?.plan_code || '');
         if (metaCode) {
-          try { planId = await getPlanIdByCode(metaCode); } catch {}
+          planId = await getPlanIdByCode(metaCode);
         }
         if (!planId) {
           const basePriceId = getBasePriceIdFromSubscription(subscription);
@@ -265,38 +262,20 @@ async function stripeWebhook(req, res) {
           planId = planByPrice?.id || null;
         }
 
-        // Actualiza la fila creada en /checkout/start, o upsert si no existe
-        const patch = {
-          tenant_id: tenant?.id || null,
-          plan_id: planId || null,
-          provider: 'stripe',
-          provider_customer_id: String(subscription.customer || ''),
-          provider_subscription_id: subscription.id,
-          status: mapStripeStatus(subscription.status),
-          trial_ends_at: tsToISO(subscription.trial_end),
-          current_period_start: tsToISO(subscription.current_period_start),
-          current_period_end: tsToISO(subscription.current_period_end),
-          cancel_at_period_end: !!subscription.cancel_at_period_end,
-          updated_at: new Date().toISOString()
-        };
-        const upd = await supabase
-          .from('subscriptions')
-          .update(patch)
-          .eq('provider', 'stripe')
-          .eq('provider_session_id', session.id)
-          .select('id')
-          .maybeSingle();
-
-        if (!upd?.data?.id) {
+        // Upsert definitiva (añadimos provider_session_id)
+        try {
           await upsertSubscription({
             tenantId: tenant?.id || null,
             planId,
             stripeCustomerId: subscription.customer,
-            stripeSubscription: subscription
+            stripeSubscription: subscription,
+            providerSessionId: session.id,
           });
+        } catch (e) {
+          console.error('[webhook] upsertSubscription (completed) error:', e.message);
+          throw e;
         }
 
-        // ✅ Invitación SOLO cuando el pago está confirmado / sub activa
         await inviteUserIfPossible(signupEmail);
         break;
       }
@@ -306,10 +285,11 @@ async function stripeWebhook(req, res) {
       case 'customer.subscription.deleted': {
         const s = event.data.object;
 
+        // plan_id
         let planId = null;
         const metaCode = normalizePlan(s.metadata?.plan_code || '');
         if (metaCode) {
-          try { planId = await getPlanIdByCode(metaCode); } catch {}
+          planId = await getPlanIdByCode(metaCode);
         }
         if (!planId) {
           const sub = typeof s.items?.data?.[0]?.price?.id === 'string'
@@ -320,9 +300,9 @@ async function stripeWebhook(req, res) {
           planId = planByPrice?.id || null;
         }
 
-        // Resolver tenant
+        // tenant
         let tenantId;
-        const { data: subRow } = await supabase
+        const { data: subRow } = await supabaseAdmin
           .from('subscriptions')
           .select('tenant_id')
           .eq('provider', 'stripe')
@@ -342,15 +322,20 @@ async function stripeWebhook(req, res) {
           await upsertTenantStripeCustomer(tenantId, s.customer);
         }
 
-        await upsertSubscription({
-          tenantId,
-          planId,
-          stripeCustomerId: s.customer,
-          stripeSubscription: s
-        });
+        try {
+          await upsertSubscription({
+            tenantId,
+            planId,
+            stripeCustomerId: s.customer,
+            stripeSubscription: s,
+            // sin providerSessionId aquí (puede no existir), y debe ser NULL-able
+          });
+        } catch (e) {
+          console.error('[webhook] upsertSubscription (sub.*) error:', e.message);
+          throw e;
+        }
 
-        // (Opcional) Si quieres cubrir casos asíncronos: invita aquí SOLO si ya está activa/trial.
-        // Esto evita usuarios “huérfanos” cuando el completed llegó con payment_status != 'paid'.
+        // Opcional: invitar si ya está activa/trial
         if (['active', 'trialing'].includes(s.status)) {
           try {
             const cust = typeof s.customer === 'string'
