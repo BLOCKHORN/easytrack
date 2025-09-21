@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  FiCheck, FiMail, FiExternalLink, FiRepeat, FiAlertCircle, FiClock, FiUser, FiShield, FiCopy
+  FiCheck, FiMail, FiExternalLink, FiRepeat, FiAlertCircle, FiClock, FiUser, FiShield, FiCopy, FiEye, FiEyeOff
 } from 'react-icons/fi';
+import { supabase } from '../utils/supabaseClient';
 import '../styles/CheckoutSuccess.scss';
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/,'');
 
-const isEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
+const isEmail = (v='') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
 function guessInboxUrl(email=''){
   const d = email.split('@')[1]?.toLowerCase() || '';
@@ -27,6 +28,130 @@ function fmtDate(iso){
   }catch{ return iso; }
 }
 
+/* =========================================================
+   Mini componente inline para crear contraseña en esta vista
+   (mismo motor que tu CrearPassword.jsx, simplificado)
+   ========================================================= */
+function InlinePasswordSetup({ userEmail }) {
+  const [pwd, setPwd] = useState('');
+  const [pwd2, setPwd2] = useState('');
+  const [show, setShow] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [ok, setOk] = useState(false);
+  const [err, setErr] = useState('');
+
+  const rules = useMemo(() => {
+    const L = pwd.length >= 8;
+    const U = /[A-Z]/.test(pwd);
+    const l = /[a-z]/.test(pwd);
+    const n = /[0-9]/.test(pwd);
+    const s = /[^A-Za-z0-9]/.test(pwd);
+    const w = !/\s/.test(pwd);
+    return { L, U, l, n, s, w };
+  }, [pwd]);
+
+  const strength = useMemo(() => {
+    let score = 0;
+    if (rules.L) score++;
+    if (rules.U) score++;
+    if (rules.l) score++;
+    if (rules.n) score++;
+    if (rules.s) score++;
+    if (!rules.w) score = Math.max(0, score - 2);
+    return score; // 0..5
+  }, [rules]);
+
+  const allValid =
+    rules.L && rules.U && rules.l && rules.n && rules.w && pwd === pwd2;
+
+  async function save(e) {
+    e?.preventDefault?.();
+    setErr('');
+    if (!allValid) {
+      setErr('Revisa los requisitos y que ambas contraseñas coincidan.');
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase.auth.updateUser({ password: pwd });
+    setSaving(false);
+    if (error) {
+      setErr(error.message || 'No se pudo actualizar la contraseña.');
+      return;
+    }
+    setOk(true);
+    setTimeout(() => {
+      window.location.href = '/dashboard';
+    }, 900);
+  }
+
+  return (
+    <div className="et-card et-inline-pw">
+      <header className="head">
+        <div className="badge">Paso final</div>
+        <h2>Crea tu contraseña</h2>
+        <p className="muted">Usuario: <strong>{userEmail}</strong></p>
+      </header>
+
+      <form className="form" onSubmit={save}>
+        <label className="label" htmlFor="pwd">Nueva contraseña</label>
+        <div className="input-wrap">
+          <input
+            id="pwd"
+            type={show ? 'text' : 'password'}
+            value={pwd}
+            onChange={(e) => setPwd(e.target.value)}
+            placeholder="Mínimo 8 caracteres"
+            autoComplete="new-password"
+            required
+          />
+          <button
+            type="button"
+            className="toggle"
+            onClick={() => setShow(v => !v)}
+            aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+          >
+            {show ? <FiEyeOff/> : <FiEye/>}
+          </button>
+        </div>
+
+        <div className={`meter s-${strength}`} aria-hidden="true"><span /></div>
+
+        <ul className="checks" aria-live="polite">
+          <li className={rules.L ? 'ok' : ''}>Mínimo 8 caracteres</li>
+          <li className={rules.U ? 'ok' : ''}>Una mayúscula</li>
+          <li className={rules.l ? 'ok' : ''}>Una minúscula</li>
+          <li className={rules.n ? 'ok' : ''}>Un número</li>
+          <li className={rules.w ? 'ok' : ''}>Sin espacios</li>
+          <li className={rules.s ? 'ok' : ''}>Recomendado: símbolo</li>
+        </ul>
+
+        <label className="label" htmlFor="pwd2">Confirmar contraseña</label>
+        <div className="input-wrap">
+          <input
+            id="pwd2"
+            type="password"
+            value={pwd2}
+            onChange={(e) => setPwd2(e.target.value)}
+            placeholder="Repite la contraseña"
+            autoComplete="new-password"
+            required
+          />
+        </div>
+
+        {err && <div className="alert error" role="alert">{err}</div>}
+        {ok && <div className="alert success" role="status">Contraseña guardada. Redirigiendo…</div>}
+
+        <div className="actions">
+          <button className="et-btn et-btn--primary" disabled={!allValid || saving}>
+            {saving ? 'Guardando…' : 'Guardar y entrar'}
+          </button>
+          <a className="et-btn" href="/planes">Cancelar</a>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function CheckoutSuccess() {
   const qs = useMemo(() => new URLSearchParams(window.location.search), []);
   const sessionIdFromUrl = qs.get('session_id') || '';
@@ -43,13 +168,10 @@ export default function CheckoutSuccess() {
   const [planCode, setPlanCode] = useState('');
   const [trialEndsAt, setTrialEndsAt] = useState('');
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState('');
-  const [portalUrl, setPortalUrl] = useState('');
-  // 👇 por defecto, a tu ruta real del panel
-  const [dashboardUrl, setDashboardUrl] = useState(`${window.location.origin}/dashboard`);
-  // y tu página de precios actual
-  const [plansUrl, setPlansUrl] = useState(`${window.location.origin}/planes`);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [copied, setCopied] = useState(false);
+
+  // modo de la vista: esperando confirmación o creando password inline
+  const [mode, setMode] = useState('await_confirm'); // 'await_confirm' | 'set_password'
+  const [authedEmail, setAuthedEmail] = useState('');
 
   useEffect(() => {
     if (sessionIdFromUrl) localStorage.setItem('last_session_id', sessionIdFromUrl);
@@ -59,17 +181,58 @@ export default function CheckoutSuccess() {
   const canResend = isEmail(email) && status!=='sending' && cooldown===0;
 
   useEffect(() => {
-    setShowConfetti(true);
-    const t = setTimeout(() => setShowConfetti(false), 900);
-    return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
     if (!cooldown) return;
     const t = setInterval(() => setCooldown(c => Math.max(0, c - 1)), 1000);
     return () => clearInterval(t);
   }, [cooldown]);
 
+  // === Escucha de sesión supabase + BroadcastChannel para cambiar a 'set_password' ===
+  useEffect(() => {
+    // 1) cambios de auth (supabase propaga entre pestañas)
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        const { data } = await supabase.auth.getUser();
+        const u = data?.user || null;
+        if (u?.email) {
+          setAuthedEmail(u.email);
+          setMode('set_password');
+        }
+      }
+    });
+
+    // 2) BroadcastChannel (en /crear-password mandaremos una señal)
+    const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('et-auth') : null;
+    if (bc) {
+      bc.onmessage = async (ev) => {
+        if (ev?.data?.type === 'EMAIL_CONFIRMED') {
+          const { data } = await supabase.auth.getUser();
+          const u = data?.user || null;
+          setAuthedEmail(u?.email || email);
+          setMode('set_password');
+        }
+      };
+    }
+
+    // 3) Fallback con localStorage event
+    const onStorage = async (e) => {
+      if (e.key === 'et:email_confirmed' && e.newValue === '1') {
+        const { data } = await supabase.auth.getUser();
+        const u = data?.user || null;
+        setAuthedEmail(u?.email || email);
+        setMode('set_password');
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      sub?.subscription?.unsubscribe?.();
+      if (bc) bc.close();
+      window.removeEventListener('storage', onStorage);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // === Verificación (igual que antes) ===
   useEffect(() => {
     async function verifyWith(id){
       const endpoints = [
@@ -81,7 +244,6 @@ export default function CheckoutSuccess() {
           const r = await fetch(url, { headers: { 'Accept':'application/json' } });
           const text = await r.text();
           let j; try { j = JSON.parse(text); } catch { continue; }
-
           if (!r.ok || j?.ok === false) {
             const m = (j?.error || '').toLowerCase();
             if (m.includes('no such checkout.session') || m.includes('resource_missing')) {
@@ -89,34 +251,18 @@ export default function CheckoutSuccess() {
             }
             continue;
           }
-
           const d = j?.data ?? j ?? {};
-          const urlsObj = d.urls || {};
-          const arr = Array.isArray(d.checkoutUrls) ? d.checkoutUrls : [];
-
-          const portal   = urlsObj.portal    || arr[0] || '';
-          const dash     = urlsObj.dashboard || arr[1] || `${window.location.origin}/dashboard`;
-          const plans    = urlsObj.plans     || arr[2] || `${window.location.origin}/planes`;
-
-          setDashboardUrl(dash);
-          setPlansUrl(plans);
-          setPortalUrl(portal);
-
           if (!email && d.customerEmail) {
             setEmail(d.customerEmail);
             localStorage.setItem('signup_email', d.customerEmail);
           }
-
           setPlanCode(d.planCode || '');
           setTrialEndsAt(d.trialEndsAt || '');
           setCurrentPeriodEnd(d.currentPeriodEnd || '');
-
           setVerifiedOk(true);
           setLoading(false);
           return true;
-        } catch {
-          // probar siguiente endpoint
-        }
+        } catch { /* probar siguiente endpoint */ }
       }
       return false;
     }
@@ -131,7 +277,7 @@ export default function CheckoutSuccess() {
         if (ok) return;
       }
 
-      setVerifyErr('No se pudo confirmar automáticamente tu sesión. Puedes entrar al panel o gestionar la facturación desde aquí.');
+      setVerifyErr('No se pudo confirmar automáticamente tu sesión. Revisa tu correo o reenvía la invitación.');
       setLoading(false);
     })();
   }, [sessionId, email]);
@@ -163,7 +309,7 @@ export default function CheckoutSuccess() {
 
       setStatus('sent');
       setMsg(kind === 'reset'
-        ? 'Tu cuenta ya existía. Te hemos enviado un email para restablecer la contraseña.'
+        ? 'Tu cuenta ya existía. Te enviamos un email para restablecer la contraseña.'
         : 'Invitación enviada. Revisa tu correo (y SPAM).'
       );
       setCooldown(20);
@@ -173,134 +319,168 @@ export default function CheckoutSuccess() {
     }
   }
 
-  useEffect(() => {
-    if (!verifiedOk) return;
-    if (!isEmail(email)) return;
-    if (!sessionId) return;
-
-    const key = `invite_sent:${sessionId}`;
-    if (localStorage.getItem(key) === '1') return;
-
-    (async () => {
-      try {
-        await resendInvite();
-      } finally {
-        localStorage.setItem(key, '1');
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [verifiedOk, email, sessionId]);
-
   function copyEmail(){
     if (!email) return;
-    navigator.clipboard?.writeText(email).then(()=>{
-      setCopied(true);
-      setTimeout(()=>setCopied(false), 1000);
-    });
+    navigator.clipboard?.writeText(email);
   }
 
+  // ========= RENDER =========
   return (
-    <section className="success-screen full-bleed">
-      <div className={`confetti ${showConfetti?'show':''}`} aria-hidden="true">
-        {Array.from({length:10}).map((_,i)=><span key={i}/>)}
-      </div>
-
-      <div className="card" role="status" aria-live="polite">
-        <div className="hero">
-          <span className="badge"><FiCheck/><span className="pulse"/></span>
-          <h1>Pago completado</h1>
-          <p className="muted">
-            {loading ? 'Confirmando tu suscripción…' : 'Te hemos enviado un correo para crear tu contraseña.'}
+    <section className="et-success">
+      <header className="et-hero">
+        <div className="et-hero__icon">
+          <div className="ok"><FiCheck aria-hidden="true"/></div>
+        </div>
+        <div className="et-hero__text">
+          <h1>{mode === 'set_password' ? '¡Email verificado!' : 'Pago completado'}</h1>
+          <p>
+            {mode === 'set_password'
+              ? 'Completa tu alta creando la contraseña aquí mismo.'
+              : (loading ? 'Confirmando tu suscripción…' : 'Te hemos enviado un correo para crear tu contraseña.')}
           </p>
         </div>
+      </header>
 
-        {loading && (
-          <div className="skeletons" aria-hidden="true">
-            <div className="sk sk-row" />
-            <div className="sk sk-steps" />
-          </div>
+      {verifyErr && mode !== 'set_password' && (
+        <div className="et-banner">
+          <FiAlertCircle/> <span>{verifyErr}</span>
+        </div>
+      )}
+
+      <main className="et-container">
+        {mode === 'set_password' ? (
+          <InlinePasswordSetup userEmail={authedEmail || email} />
+        ) : (
+          <>
+            {/* Resumen */}
+            <div className="et-card et-summary">
+              <div className="et-summary__item">
+                <div className="et-summary__icon"><FiUser/></div>
+                <div>
+                  <div className="et-summary__label">Email</div>
+                  <div className="et-summary__value">{email || '—'}</div>
+                </div>
+                {email && (
+                  <button className="et-icon-btn" onClick={copyEmail} aria-label="Copiar email">
+                    <FiCopy/>
+                  </button>
+                )}
+              </div>
+
+              <div className="et-summary__item">
+                <div className="et-summary__icon"><FiShield/></div>
+                <div>
+                  <div className="et-summary__label">Plan</div>
+                  <div className="et-summary__value">{planCode || '—'}</div>
+                </div>
+              </div>
+
+              <div className="et-summary__item">
+                <div className="et-summary__icon"><FiClock/></div>
+                <div>
+                  <div className="et-summary__label">Prueba hasta</div>
+                  <div className="et-summary__value">{fmtDate(trialEndsAt)}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Pasos */}
+            <div className="et-card et-steps">
+              <ol>
+                <li className="done">
+                  <div className="dot"><FiCheck/></div>
+                  <div className="txt">
+                    <strong>Pago confirmado</strong>
+                    <span>Listo en Stripe</span>
+                  </div>
+                </li>
+                <li className={!loading ? 'active' : ''}>
+                  <div className="dot">2</div>
+                  <div className="txt">
+                    <strong>Revisa tu correo</strong>
+                    <span>Busca el email “Invitación a EasyTrack”</span>
+                  </div>
+                </li>
+                <li>
+                  <div className="dot">3</div>
+                  <div className="txt">
+                    <strong>Crea tu contraseña</strong>
+                    <span>El enlace te lleva a <code>/crear-password</code></span>
+                  </div>
+                </li>
+              </ol>
+
+              <div className="et-inbox" role="group" aria-label="Abrir tu bandeja de entrada">
+                <div>
+                  <div className="subj">Asunto esperado</div>
+                  <div className="title">“Invitación a EasyTrack”</div>
+                  <div className="subj">Si no aparece, revisa Promociones/SPAM.</div>
+                </div>
+                {(() => {
+                  const url = guessInboxUrl(email);
+                  return url ? (
+                    <a className="et-btn et-btn--primary" href={url} target="_blank" rel="noreferrer">
+                      <FiMail/> Abrir correo <FiExternalLink/>
+                    </a>
+                  ) : (
+                    <button className="et-btn" disabled title="Proveedor no detectado">
+                      <FiMail/> Abrir correo
+                    </button>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Reenviar */}
+            <div className="et-card et-resend">
+              <h3>¿No te llegó? Reenviar invitación</h3>
+              <div className={`et-input-row ${!isEmail(email) && email ? 'is-invalid' : ''}`}>
+                <input
+                  id="inv-email"
+                  type="email"
+                  value={email}
+                  onChange={e=>setEmail(e.target.value)}
+                  placeholder="tu@email.com"
+                  autoComplete="email"
+                  inputMode="email"
+                />
+                <button
+                  className="et-btn et-btn--primary"
+                  onClick={resendInvite}
+                  disabled={!canResend}
+                  aria-busy={status==='sending'}
+                >
+                  <FiRepeat/>{status==='sending' ? 'Enviando…' : cooldown? `Reintenta en ${cooldown}s` : 'Reenviar'}
+                </button>
+              </div>
+
+              {msg && (
+                <p className={`et-status ${status==='error' ? 'is-error' : 'is-ok'}`}>
+                  {status==='error' ? <FiAlertCircle/> : <FiCheck/>} {msg}
+                </p>
+              )}
+              {status==='idle' && <p className="et-hint"><FiClock/> Normalmente llega en segundos.</p>}
+
+              <details className="et-tips">
+                <summary>¿No lo ves? Consejos rápidos</summary>
+                <ul>
+                  <li>Busca por remitente <code>no-reply@supabase.io</code>.</li>
+                  <li>Revisa carpetas de <b>SPAM</b>, <b>Promociones</b> y <b>Todos</b>.</li>
+                  <li>Confirma que tu email es correcto y pulsa <b>Reenviar</b>.</li>
+                </ul>
+              </details>
+            </div>
+
+            {/* Meta */}
+            <div className="et-card et-meta">
+              <div className="et-meta__row">
+                <span>Periodo actual</span>
+                <strong>{fmtDate(currentPeriodEnd)}</strong>
+              </div>
+            </div>
+          </>
         )}
-
-        <div className="quick" aria-label="Resumen de la suscripción">
-          <div className="qitem">
-            <FiUser/> <span className="lab">Email</span>
-            <span className="val">{email || '—'}</span>
-            {email && (
-              <button className="icon-btn" onClick={copyEmail} aria-label="Copiar email">
-                <FiCopy/>
-              </button>
-            )}
-          </div>
-          <div className="qitem">
-            <FiShield/> <span className="lab">Plan</span>
-            <span className="val">{planCode || '—'}</span>
-          </div>
-          <div className="qitem">
-            <FiClock/> <span className="lab">Prueba hasta</span>
-            <span className="val">{fmtDate(trialEndsAt)}</span>
-          </div>
-        </div>
-
-        <ol className="timeline" aria-label="Pasos completados">
-          <li className="step done">
-            <span className="dot"><FiCheck/></span>
-            <div className="txt"><strong>Pago confirmado</strong><span>Listo en Stripe</span></div>
-          </li>
-          <div className={`connector ${loading ? '' : 'done'}`} />
-          <li className={`step ${loading ? '' : 'active'}`}>
-            <span className="dot">2</span>
-            <div className="txt"><strong>Revisa tu email</strong><span>“Invitación a EasyTrack”</span></div>
-          </li>
-          <div className="connector" />
-          <li className="step">
-            <span className="dot">3</span>
-            <div className="txt"><strong>Crea tu contraseña</strong><span>Te lleva a <code>/crear-password</code></span></div>
-          </li>
-        </ol>
-
-        <div className="inbox-row">
-          <div className="left">
-            <div className="subj">Asunto: <b>“Invitación a EasyTrack”</b></div>
-            <div className="muted small">Si no aparece, revisa Promociones/SPAM.</div>
-          </div>
-          {inboxUrl ? (
-            <a className="btn ghost" href={inboxUrl} target="_blank" rel="noreferrer">Abrir correo <FiExternalLink/></a>
-          ) : (
-            <button className="btn ghost" disabled title="Proveedor no detectado">Abrir correo <FiExternalLink/></button>
-          )}
-        </div>
-
-        <div className="cta-row">
-          {dashboardUrl && <a className="btn primary" href={dashboardUrl}>Ir al panel</a>}
-          {portalUrl
-            ? <a className="btn" href={portalUrl} target="_blank" rel="noreferrer">Gestionar facturación</a>
-            : <button className="btn" disabled aria-disabled="true" title="Portal no disponible todavía">Gestionar facturación</button>}
-          {plansUrl && <a className="btn ghost" href={plansUrl}>Cambiar plan</a>}
-        </div>
-
-        <div className="resend">
-          <label htmlFor="inv-email">¿No te llegó? Reenviar invitación</label>
-          <div className={`row ${!isEmail(email)&&email?'invalid':''}`}>
-            <input id="inv-email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@email.com" />
-            <button className="btn primary" onClick={resendInvite} disabled={!canResend} aria-busy={status==='sending'}>
-              <FiRepeat/>{status==='sending' ? 'Enviando…' : cooldown? `Reintenta en ${cooldown}s` : 'Reenviar'}
-            </button>
-          </div>
-          {!!msg && <p className={`status ${status==='error'?'error':'ok'}`}>{status==='error'?<FiAlertCircle/>:<FiCheck/>} {msg}</p>}
-          {status==='idle' && <p className="hint"><FiClock/> Normalmente llega en segundos.</p>}
-          {verifyErr && <p className="status warn"><FiAlertCircle/> {verifyErr}</p>}
-          {copied && <p className="status ok" role="status">Email copiado</p>}
-        </div>
-
-        <details className="tips">
-          <summary>¿No lo ves? Consejos rápidos</summary>
-          <ul>
-            <li>Busca por remitente <code>no-reply@supabase.io</code>.</li>
-            <li>Revisa carpetas de <b>SPAM</b>, <b>Promociones</b> y <b>Todos</b>.</li>
-            <li>Confirma que tu email es correcto y pulsa <b>Reenviar</b>.</li>
-          </ul>
-        </details>
-      </div>
+      </main>
     </section>
   );
 }

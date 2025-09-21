@@ -1,24 +1,45 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 import '../styles/CrearPassword.scss';
 
 export default function CrearPassword() {
-  const [loadingUser, setLoadingUser] = useState(true);
-  const [user, setUser] = useState(null);
+  const [loadingUser, setLoadingUser]   = useState(true);
+  const [user, setUser]                 = useState(null);
 
-  const [pwd, setPwd] = useState('');
-  const [pwd2, setPwd2] = useState('');
-  const [show, setShow] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [pwd, setPwd]                   = useState('');
+  const [pwd2, setPwd2]                 = useState('');
+  const [show, setShow]                 = useState(false);
+  const [saving, setSaving]             = useState(false);
 
-  const [ok, setOk] = useState(false);
-  const [err, setErr] = useState('');
+  const [ok, setOk]                     = useState(false);
+  const [err, setErr]                   = useState('');
 
-  // Carga usuario que llega desde el enlace de invitación/magic link
+  // Al entrar desde el link de invitación, ya venimos con sesión válida.
+  // Aquí leemos el usuario y señalizamos a la otra pestaña que el email está confirmado.
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase.auth.getUser();
-      if (!error) setUser(data?.user || null);
+      if (!error) {
+        const u = data?.user || null;
+        setUser(u);
+
+        // 🔔 Señaliza a otras pestañas/ventanas que el email ya fue confirmado
+        try {
+          // Fallback por localStorage (dispara evento 'storage')
+          localStorage.setItem('et:email_confirmed', '1');
+          setTimeout(() => {
+            try { localStorage.removeItem('et:email_confirmed'); } catch {}
+          }, 2000);
+
+          // Canal dedicado (más fiable/moderno)
+          if ('BroadcastChannel' in window) {
+            const bc = new BroadcastChannel('et-auth');
+            bc.postMessage({ type: 'EMAIL_CONFIRMED' });
+            bc.close();
+          }
+        } catch {}
+      }
       setLoadingUser(false);
     })();
   }, []);
@@ -64,7 +85,7 @@ export default function CrearPassword() {
       return;
     }
     setOk(true);
-    // refresco ligero para que la sesión quede perfecta antes de ir al panel
+    // Refresco ligero y al panel
     setTimeout(() => {
       window.location.href = '/dashboard';
     }, 900);
@@ -89,9 +110,9 @@ export default function CrearPassword() {
           <h1>Crear contraseña</h1>
           <p className="muted">
             No hay sesión activa. Abre el enlace de invitación desde este mismo
-            navegador o solicita uno nuevo.
+            navegador o solicita uno nuevo desde la pantalla anterior.
           </p>
-          <a className="btn ghost" href="/precios">Volver a planes</a>
+          <a className="btn ghost" href="/planes">Volver a planes</a>
         </div>
       </section>
     );
@@ -124,8 +145,9 @@ export default function CrearPassword() {
               className="toggle"
               onClick={() => setShow((v) => !v)}
               aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              title={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}
             >
-              {show ? 'Ocultar' : 'Mostrar'}
+              {show ? <FiEyeOff /> : <FiEye />}
             </button>
           </div>
 
@@ -166,7 +188,7 @@ export default function CrearPassword() {
             <button className="btn primary" disabled={!allValid || saving}>
               {saving ? 'Guardando…' : 'Guardar y entrar'}
             </button>
-            <a className="btn ghost" href="/precios">Cancelar</a>
+            <a className="btn ghost" href="/planes">Cancelar</a>
           </div>
         </form>
 
