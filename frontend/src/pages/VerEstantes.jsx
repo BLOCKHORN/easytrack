@@ -117,6 +117,11 @@ const RACK_CELL_W = 340;
 const LANE_CELL_W = 280;
 const MIN_SCALE = 0.40;
 
+/* NUEVO: máximos de expansión y umbrales fluidos */
+const MAX_EXPAND_PX = 3000;        // para que no se corte al listar muchos paquetes
+const FLUID_BREAK_RACKS = 1100;    // a partir de aquí pasamos a grid fluido (sin scale) en estantes
+const FLUID_BREAK_LANES = 900;     // y aquí en lanes
+
 export default function VerEstantes() {
   const [modo, setModo] = useState("lanes"); // "lanes" | "racks"
 
@@ -153,6 +158,10 @@ export default function VerEstantes() {
   const lanesInnerRef = useRef(null);
   const [racksScale, setRacksScale] = useState(1);
   const [lanesScale, setLanesScale] = useState(1);
+
+  // ---- NUEVO: flags “fluido” para cortar el scale en pantallas pequeñas
+  const [fluidRacks, setFluidRacks] = useState(false);
+  const [fluidLanes, setFluidLanes] = useState(false);
 
   /* ===================== Carga ===================== */
   useEffect(() => {
@@ -438,6 +447,18 @@ export default function VerEstantes() {
   useEffect(() => { recomputeRacksScale(); }, [rackGrid.cols, rackOrder.length, readyEstructura]);
   useEffect(() => { recomputeLanesScale(); }, [gridDims.cols, lanes.length, readyLayout]);
 
+  // NUEVO: activar modo fluido según ancho de ventana
+  useEffect(() => {
+    const onResize = () => {
+      const w = window.innerWidth || document.documentElement.clientWidth || 0;
+      setFluidRacks(w <= FLUID_BREAK_RACKS);
+      setFluidLanes(w <= FLUID_BREAK_LANES);
+    };
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   useEffect(() => {
     const ro1 = new ResizeObserver(() => { recomputeRacksScale(); recomputeLanesScale(); });
     if (racksWrapRef.current) ro1.observe(racksWrapRef.current);
@@ -577,14 +598,22 @@ export default function VerEstantes() {
         lanes.length === 0 ? (
           <div className="estado-vacio">No hay carriles configurados.</div>
         ) : (
-          <div className="fit-wrapper lanes-fit" ref={lanesWrapRef} style={{ ['--zoom']: lanesScale }}>
+          <div
+            className={`fit-wrapper lanes-fit ${fluidLanes ? "fluid" : ""}`}
+            ref={lanesWrapRef}
+            style={{ ['--zoom']: fluidLanes ? 1 : lanesScale }}
+          >
             <div
               className="lanes-matrix"
               ref={lanesInnerRef}
-              style={{
-                gridTemplateColumns: `repeat(${gridDims.cols || 1}, var(--lane-cell-w))`,
-                width: `${(gridDims.cols || 1) * LANE_CELL_W + ((gridDims.cols || 1) - 1) * GAP_PX}px`
-              }}
+              style={
+                fluidLanes
+                  ? { gridTemplateColumns: `repeat(auto-fit, minmax(var(--lane-cell-w), 1fr))`, width: "auto" }
+                  : {
+                      gridTemplateColumns: `repeat(${gridDims.cols || 1}, var(--lane-cell-w))`,
+                      width: `${(gridDims.cols || 1) * LANE_CELL_W + ((gridDims.cols || 1) - 1) * GAP_PX}px`
+                    }
+              }
               role="grid"
             >
               {Array.from({ length: gridDims.rows || 1 }).flatMap((_, rIdx) =>
@@ -625,13 +654,13 @@ export default function VerEstantes() {
                         <i className="lane-tape" aria-hidden />
                         <div className="lane-title">{highlight(lane.label || `Carril ${lane.id}`, q)}</div>
                         <div className={`lane-qty ${n === 0 ? "zero" : "some"}`}><b>{n}</b><i>paquetes</i></div>
-                        <FaChevronDown className="chev" aria-hidden />
+                        <FaChevronDown className={`chev ${open ? "rot" : ""}`} aria-hidden />
                       </button>
 
                       <div
                         id={`vis-lane-${lane.id}`}
                         className="lane-visor"
-                        style={{ maxHeight: open ? "800px" : "0px", opacity: open ? 1 : 0 }}
+                        style={{ maxHeight: open ? `${MAX_EXPAND_PX}px` : "0px", opacity: open ? 1 : 0 }}
                       >
                         {n > 0 ? (
                           <ul className="lista-paquetes">
@@ -672,14 +701,22 @@ export default function VerEstantes() {
       ) : estructuraFiltradaRacks.length === 0 ? (
         <div className="estado-vacio">No hay estantes que coincidan con el filtro.</div>
       ) : (
-        <div className="fit-wrapper racks-fit" ref={racksWrapRef} style={{ ['--zoom']: racksScale }}>
+        <div
+          className={`fit-wrapper racks-fit ${fluidRacks ? "fluid" : ""}`}
+          ref={racksWrapRef}
+          style={{ ['--zoom']: fluidRacks ? 1 : racksScale }}
+        >
           <div
             className="grid-estantes"
             ref={racksInnerRef}
-            style={{
-              '--rack-cols': `repeat(${rackGrid.cols || 1}, var(--rack-cell-w))`,
-              width: `${(rackGrid.cols || 1) * RACK_CELL_W + ((rackGrid.cols || 1) - 1) * GAP_PX}px`
-            }}
+            style={
+              fluidRacks
+                ? { gridTemplateColumns: `repeat(auto-fit, minmax(var(--rack-cell-w), 1fr))`, width: "auto" }
+                : {
+                    ['--rack-cols']: `repeat(${rackGrid.cols || 1}, var(--rack-cell-w))`,
+                    width: `${(rackGrid.cols || 1) * RACK_CELL_W + ((rackGrid.cols || 1) - 1) * GAP_PX}px`
+                  }
+            }
             role="grid"
           >
             {(() => {
@@ -734,13 +771,13 @@ export default function VerEstantes() {
                             >
                               <span className="codigo">{highlight(visible, q)}</span>
                               <span className={`qty ${n === 0 ? "zero" : "some"}`} aria-hidden><b>{n}</b><i>paquetes</i></span>
-                              <FaChevronDown className="chev" aria-hidden />
+                              <FaChevronDown className={`chev ${open ? "rot" : ""}`} aria-hidden />
                             </button>
 
                             <div
                               id={`visor-${id}`}
                               className="visor-paquetes"
-                              style={{ maxHeight: open ? "800px" : "0px", opacity: open ? 1 : 0 }}
+                              style={{ maxHeight: open ? `${MAX_EXPAND_PX}px` : "0px", opacity: open ? 1 : 0 }}
                             >
                               {n > 0 ? (
                                 <ul className="lista-paquetes">

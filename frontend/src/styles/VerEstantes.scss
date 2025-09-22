@@ -1,5 +1,5 @@
 /* ==========================================================================
-   VerEstantes.scss — vista de almacén (auto-scale + nombres de config)
+   VerEstantes.scss — vista de almacén (auto-scale + modo fluido responsive)
    ========================================================================== */
 
 .ver-estantes {
@@ -29,6 +29,9 @@
   /* widths base para auto-scale (coinciden con JSX consts) */
   --rack-cell-w: 340px;
   --lane-cell-w: 280px;
+
+  /* NUEVO: límite alto para visor expandido (evitar corte en 10+ items) */
+  --expand-max: 3000px;
 
   color: var(--text);
   background: var(--surface);
@@ -156,12 +159,15 @@
     background: var(--surface-2); color: var(--muted);
   }
 
-  /* ================= FIT WRAPPERS (auto-scale) ================= */
+  /* ================= FIT WRAPPERS (auto-scale + modo fluido) ================= */
   .fit-wrapper {
     width: 100%;
-    overflow: hidden; /* clave: nunca scroll horizontal */
+    /* IMPORTANTE: permitir crecimiento vertical del contenido expandido */
+    overflow-x: hidden;
+    overflow-y: visible;
     --zoom: 1;
   }
+
   .fit-wrapper > .grid-estantes,
   .fit-wrapper > .lanes-matrix {
     transform: scale(var(--zoom));
@@ -169,19 +175,31 @@
     will-change: transform;
   }
 
+  /* MODO FLUIDO: sin scale, sin corte y sticky funcionando */
+  .fit-wrapper.fluid {
+    overflow: visible;
+  }
+  .fit-wrapper.fluid > .grid-estantes,
+  .fit-wrapper.fluid > .lanes-matrix {
+    transform: none !important;
+    width: 100% !important;
+  }
+  .fit-wrapper:not(.fluid) .columna .cabecera-estante {
+    position: static; /* sticky no funciona dentro de elementos transformados */
+  }
+
   /* ================= LANES ================= */
   .lanes-matrix {
     margin-top: 14px;
     display: grid;
     gap: var(--gap);
-    /* columnas fijas por config, el ancho real lo pone JSX en width */
     grid-auto-rows: auto;
   }
 
   .lane-cell {
     min-height: 72px;
     &.empty { border: 1px dashed var(--border-2); border-radius: var(--radius-md); background: var(--surface-2); }
-    &.wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: 0 8px 24px rgba(2,6,23,.06); overflow: hidden; }
+    &.wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: 0 8px 24px rgba(2,6,23,.06); overflow: hidden; min-width: 0; }
     &.activa { box-shadow: 0 12px 36px rgba(2,6,23,.1); }
   }
 
@@ -220,11 +238,24 @@
     .lane-qty.zero b { color: #94a3b8; }
 
     .chev { color: var(--muted); transition: transform .2s ease; }
+    .chev.rot { transform: rotate(180deg); }
   }
 
-  .lane-visor { transition: max-height .28s ease, opacity .18s ease; overflow: hidden; padding: 0 14px 12px; }
-  .lista-paquetes { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
-  .lista-paquetes .paquete { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); padding: 10px 12px; display: grid; gap: 8px; }
+  /* Transición con alto grande para no cortar tras 9 items */
+  .lane-visor {
+    transition: max-height .28s ease, opacity .18s ease;
+    overflow: hidden;
+    padding: 0 14px 12px;
+    max-height: 0; /* estado cerrado por defecto (reforzado) */
+  }
+
+  .lista-paquetes {
+    margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 10px;
+  }
+  .lista-paquetes .paquete {
+    border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2);
+    padding: 10px 12px; display: grid; gap: 8px;
+  }
   .lista-paquetes .cliente { font-weight: 900; color: var(--elev); }
   .lista-paquetes .meta { display: flex; gap: 8px; flex-wrap: wrap; }
   .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--elev); font-weight: 800; }
@@ -238,6 +269,7 @@
     display: grid;
     gap: var(--gap);
     grid-template-columns: var(--rack-cols, repeat(1, var(--rack-cell-w)));
+    grid-auto-rows: auto; /* asegurar crecimiento natural */
     /* el ancho total (px) lo establece JSX -> evita overflow y permite scale */
   }
 
@@ -248,7 +280,8 @@
 
   .columna {
     border: 1px solid var(--border); border-radius: var(--radius-lg);
-    background: var(--surface); box-shadow: 0 8px 24px rgba(2,6,23,.06); overflow: hidden;
+    background: var(--surface); box-shadow: 0 8px 24px rgba(2,6,23,.06);
+    overflow: hidden; min-width: 0;
 
     .cabecera-estante {
       position: sticky; top: 0; z-index: 2;
@@ -282,9 +315,15 @@
       .qty i { font-size: 11px; font-style: normal; color: var(--muted); font-weight: 700; }
       .qty.zero b { color: #94a3b8; }
       .chev { color: var(--muted); transition: transform .2s ease; }
+      .chev.rot { transform: rotate(180deg); }
     }
 
-    .visor-paquetes { transition: max-height .28s ease, opacity .18s ease; overflow: hidden; padding: 0 12px 10px; }
+    .visor-paquetes {
+      transition: max-height .28s ease, opacity .18s ease;
+      overflow: hidden;
+      padding: 0 12px 10px;
+      max-height: 0; /* cerrado por defecto */
+    }
 
     .lista-paquetes { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
     .lista-paquetes .paquete { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: 10px 12px; display: grid; gap: 6px; }
@@ -294,6 +333,25 @@
     .pill.estado.warn { background: color-mix(in srgb, var(--warning) 16%, #fff); border-color: color-mix(in srgb, var(--warning) 30%, #fff); color: color-mix(in srgb, var(--warning) 55%, #000); }
     .pill--carrier { --comp: var(--brand); --comp-rgba: var(--brand-rgba); background: var(--comp-rgba); border-color: color-mix(in srgb, var(--comp) 36%, #fff); color: color-mix(in srgb, var(--comp) 88%, #000); }
     .pill--carrier .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--comp); box-shadow: 0 0 0 2px color-mix(in srgb, var(--comp) 40%, #fff); }
+  }
+
+  /* ====== Breakpoints fluidos: ajustar widths base ====== */
+  @media (max-width: 1280px) {
+    --rack-cell-w: 320px;
+    --lane-cell-w: 260px;
+  }
+  @media (max-width: 1024px) {
+    --rack-cell-w: 300px;
+    --lane-cell-w: 240px;
+  }
+  @media (max-width: 768px) {
+    /* celdas ocupan todo el ancho disponible en modo fluido */
+    --rack-cell-w: min(100%, 520px);
+    --lane-cell-w: min(100%, 520px);
+  }
+  @media (max-width: 480px) {
+    --rack-cell-w: 100%;
+    --lane-cell-w: 100%;
   }
 
   /* accesibilidad */
