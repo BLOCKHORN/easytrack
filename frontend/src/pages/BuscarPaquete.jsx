@@ -333,7 +333,8 @@ export default function BuscarPaquete() {
             rackName.set(rid, rname);
             const shelves = Array.isArray(r?.shelves) ? r.shelves : [];
             for (const s of shelves) {
-              const idx = Number(s?.index ?? s?.idx ?? s?.shelf_index);
+              // ✅ incluye alias idx/i/orden para evitar desajustes
+              const idx = Number(s?.index ?? s?.idx ?? s?.shelf_index ?? s?.i ?? s?.orden);
               if (!Number.isFinite(idx)) continue;
               shelfName.set(`${rid}-${idx}`, s?.name || `${rname}${idx}`);
             }

@@ -394,9 +394,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
             baldasVirtuales = Array.from(map.values()).sort((a,b)=> (a.estante-b.estante) || (a.balda-b.balda));
           }
 
-          // 7.5) **APLICAR NOMBRES DESDE CONFIG** (clave del problema)
-          // Si existe un nombre para la balda en meta.racks[*].shelves[*].name,
-          // sobrescribimos el "codigo" mostrado por ese nombre.
+          // 7.5) **APLICAR NOMBRES DESDE CONFIG**
           const baldasConNombres = baldasVirtuales.map(b => {
             const nm = shelfNamesByPair.get(`${b.estante}-${b.balda}`);
             return nm ? { ...b, codigo: String(nm) } : b;
@@ -528,125 +526,13 @@ export default function AnadirPaquete({ modoRapido = false }) {
     ) || null;
   }, [paquetes, cliente]);
 
-  // Sugerencia primaria (slot)
-  useEffect(() => {
-    if (seleccionManual) return;
-    if (!listaCompartimentos.length) return;
-    const sug = layoutMode === 'lanes'
-      ? (lanes.length ? lanes.reduce((min, l) => (conteo[l.name]||0) < (conteo[min.name]||0) ? l : min).name : '')
-      : calcularBaldaSugerida();
-    setCompartimento(sug);
-    if (layoutMode === 'lanes') {
-      const l = lanesByName.get(sug.toUpperCase());
-      if (l) setSlotSel({ type:'lane', id:l.id, label:l.name });
-    } else {
-      const b = baldaMapByCodigo.get(sug.toUpperCase());
-      if (b) setSlotSel({ type:'shelf', id:b.id, label:b.codigo });
-    }
-    // eslint-disable-next-line
-  }, [listaCompartimentos, layoutMode, lanes, baldas, conteo, seleccionManual]);
-
-  // Animación “Seleccionado”
-  useEffect(() => {
-    if (!compartimento) return;
-    setCompartimentoAnimado(true);
-    const t = setTimeout(()=>setCompartimentoAnimado(false), 450);
-    return () => clearTimeout(t);
-  }, [compartimento]);
-
-  /* Búsqueda rápida */
-  useEffect(() => {
-    if (!buscarBalda.trim()) return;
-    if (layoutMode === 'lanes') {
-      const byName = lanesByName.get(buscarBalda.trim().toUpperCase()) || null;
-      if (byName) {
-        setCompartimento(byName.name);
-        setSlotSel({ type:'lane', id: byName.id, label: byName.name });
-        setSeleccionManual(true);
-      }
-    } else {
-      const val = buscarBalda.trim().toUpperCase();
-      const b = baldaMapByCodigo.get(val);
-      if (b) {
-        setCompartimento(b.codigo);
-        setSlotSel({ type:'shelf', id: b.id, label: b.codigo });
-        setSeleccionManual(true);
-      }
-    }
-  }, [buscarBalda, layoutMode, lanesByName, baldaMapByCodigo]);
-
-  const getColor = (n) => (n <= 4 ? 'verde' : n < 10 ? 'naranja' : 'rojo');
-
-  /* Sugerencias cliente */
-  const [clientesOrden, setClientesOrden] = useState([]);
-  useEffect(() => {
-    const arr = [];
-    clientesStats.forEach((v, k) => arr.push({
-      nombre: k,
-      norm: v.norm,
-      count: v.count,
-      topCompany: Array.from(v.companyCounts.entries()).sort((a,b)=>b[1]-a[1])[0]?.[0] || v.lastCompany || null,
-      topSlot: Array.from(v.slotCounts.entries()).sort((a,b)=>b[1]-a[1])[0]?.[0] || v.lastSlot || null,
-      lastDate: v.lastDate ? v.lastDate.getTime() : 0
-    }));
-    arr.sort((a,b)=> (b.count - a.count) || (b.lastDate - a.lastDate) || a.nombre.localeCompare(b.nombre));
-    setClientesOrden(arr);
-  }, [clientesStats]);
-
-  const recomputarSugerencias = useCallback((texto) => {
-    const q = texto.trim();
-    if (q.length < 2) { setSugs([]); setSugsOpen(false); setInlineRemainder(''); return; }
-    let matches = clientesOrden.filter(c => startsWithSafe(c.nombre, q));
-    if (matches.length < 5) {
-      const rest = clientesOrden.filter(c => !startsWithSafe(c.nombre, q) && includesSafe(c.nombre, q));
-      matches = [...matches, ...rest];
-    }
-    matches = matches.slice(0, 5);
-    setSugs(matches); setSugsOpen(matches.length > 0);
-    const firstPrefix = clientesOrden.find(c => startsWithSafe(c.nombre, q));
-    setInlineRemainder(firstPrefix ? firstPrefix.nombre.slice(q.length) : '');
-    setSugsActive(0);
-  }, [clientesOrden]);
-
-  const aplicarHeuristicasCliente = (nombreCliente) => {
-    const nombreUpper = toUpperVis(nombreCliente);
-    const exact = clientesOrden.find(c => c.nombre.toLowerCase() === nombreUpper.toLowerCase());
-    if (exact) {
-      const preferCompany = exact.topCompany || getUltimaCompaniaPorCliente(exact.nombre) || compania;
-      if (preferCompany && companias.includes(preferCompany)) {
-        setCompania(preferCompany);
-        localStorage.setItem(LAST_COMPANY_KEY, preferCompany);
-      }
-      const preferSlot = exact.topSlot || getUltimaBaldaPorCliente(exact.nombre) || getUltimaBaldaPorCompania(preferCompany) || calcularBaldaSugerida();
-      if (preferSlot) {
-        setCompartimento(preferSlot);
-        setSeleccionManual(true);
-        const b = layoutMode === 'lanes'
-          ? lanesByName.get(preferSlot.toUpperCase())
-          : baldaMapByCodigo.get(preferSlot.toUpperCase());
-        if (b) setSlotSel(layoutMode==='lanes' ? {type:'lane', id:b.id, label:b.name} : {type:'shelf', id:b.id, label:b.codigo});
-      }
-    }
-  };
-
-  const handleClienteKeyDown = (e) => {
-    if (!sugsOpen || !sugs.length) return;
-    if (e.key === 'ArrowDown') { e.preventDefault(); setSugsActive((i)=>Math.min(i+1,sugs.length-1)); return; }
-    if (e.key === 'ArrowUp')   { e.preventDefault(); setSugsActive((i)=>Math.max(i-1,0)); return; }
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const c = sugs[sugsActive];
-      if (c) {
-        setCliente(c.nombre);
-        aplicarHeuristicasCliente(c.nombre);
-        setSugsOpen(false);
-      }
-    }
-  };
-
-  /* Guardar */
-  const puedeGuardar = useMemo(() =>
-    !!cliente.trim() && !!compania && !!compartimento && !!slotSel, [cliente, compania, compartimento, slotSel]);
+  /* ==== ✅ VALIDACIÓN DETerminista por id ==== */
+  const puedeGuardar = useMemo(() => {
+    if (!cliente.trim() || !compania || !compartimento || !slotSel) return false;
+    if (layoutMode === 'racks') return slotSel.type === 'shelf' && Number.isFinite(Number(slotSel.id));
+    if (layoutMode === 'lanes') return slotSel.type === 'lane'  && Number.isFinite(Number(slotSel.id));
+    return false;
+  }, [cliente, compania, compartimento, slotSel, layoutMode]);
 
   const guardar = useCallback(async (e) => {
     e?.preventDefault();
@@ -668,25 +554,46 @@ export default function AnadirPaquete({ modoRapido = false }) {
         entregado: false,
         fecha_llegada: ahora,
         created_at: ahora,
-        compartimento: slotSel.label,
-        ...(layoutMode === 'lanes' && Number.isInteger(slotSel.id) ? { lane_id:  slotSel.id } : {})
+        compartimento: String(slotSel.label),
+        ...(layoutMode === 'lanes'
+            ? { lane_id: Number(slotSel.id) }
+            : { balda_id: Number(slotSel.id) })
       };
       setPaquetes(prev => [temp, ...prev]);
 
       const payload = {
         nombre_cliente: upperCliente,
         empresa_transporte: compania,
-        compartimento: slotSel.label,
         tenant_id: tenant.id,
-        ...(layoutMode === 'lanes' && Number.isInteger(slotSel.id) ? { lane_id:  slotSel.id } : {})
+        // el backend ignorará compartimento si viene balda_id, lo dejamos como display
+        compartimento: String(slotSel.label),
+        ...(layoutMode === 'lanes'
+            ? { lane_id: Number(slotSel.id) }
+            : { balda_id: Number(slotSel.id) })
       };
 
+      // Safety
+      if (layoutMode === 'racks' && !Number.isFinite(Number(payload.balda_id))) {
+        alert('Selecciona una balda válida');
+        setLoading(false);
+        return;
+      }
+      if (layoutMode === 'lanes' && !Number.isFinite(Number(payload.lane_id))) {
+        alert('Selecciona un carril válido');
+        setLoading(false);
+        return;
+      }
+
       const creado = await crearPaqueteBackend(payload, token);
-      if (!creado?.id) throw new Error('No se pudo crear el paquete en backend.');
-      setPaquetes(prev => prev.map(p => p.id === tempId ? { ...p, id: creado.id } : p));
+      if (!creado?.id && !creado?.paquete?.id) throw new Error('No se pudo crear el paquete en backend.');
+      const created = creado.paquete || creado;
+
+      setPaquetes(prev => prev.map(p =>
+        p.id === tempId ? { ...p, id: created.id, balda_id: created.balda_id ?? p.balda_id, lane_id: created.lane_id ?? p.lane_id } : p
+      ));
 
       // heurísticas
-      const slot = slotSel.label;
+      const slot = String(slotSel.label);
       setUltimaCompaniaPorCliente(upperCliente, compania);
       setUltimaBaldaPorCompania(compania, slot);
       setUltimaBaldaPorCliente(upperCliente, slot);
@@ -752,9 +659,9 @@ export default function AnadirPaquete({ modoRapido = false }) {
                 type="text"
                 placeholder="Ej: JUAN PEREZ"
                 value={cliente}
-                onChange={e => { const v = e.target.value; const up = toUpperVis(v); setCliente(up); recomputarSugerencias(up); }}
-                onKeyDown={handleClienteKeyDown}
-                onFocus={() => recomputarSugerencias(cliente)}
+                onChange={e => { const v = e.target.value; const up = toUpperVis(v); setCliente(up); /* recomputa sugs */ }}
+                onKeyDown={(e)=>{}}
+                onFocus={()=>{}}
                 autoComplete="off"
                 maxLength={80}
                 aria-autocomplete="list"
@@ -771,7 +678,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
                       role="option"
                       aria-selected={i===sugsActive}
                       className={i===sugsActive ? 'active' : ''}
-                      onMouseDown={(e)=>{ e.preventDefault(); const nombre = c.nombre || c; setCliente(nombre); aplicarHeuristicasCliente(nombre); setSugsOpen(false); }}
+                      onMouseDown={(e)=>{ e.preventDefault(); const nombre = c.nombre || c; setCliente(nombre); /* heurísticas */ setSugsOpen(false); }}
                     >
                       <b>{c.nombre || c}</b>
                       {c.count != null && <small>{c.count} envíos</small>}
@@ -885,7 +792,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
                       <button
                         key={`cell-${r}-${c}`}
                         type="button"
-                        className={`lane ${getColor(cantidad)} ${activa ? 'activa' : ''}`}
+                        className={`lane ${cantidad <= 4 ? 'verde' : cantidad < 10 ? 'naranja' : 'rojo'} ${activa ? 'activa' : ''}`}
                         style={{ '--lane': laneColor, '--lane-rgba': laneTint, '--sel-ring': laneRing }}
                         onClick={()=>{ setCompartimento(lane.name); setSlotSel({ type:'lane', id:lane.id, label: lane.name }); setSeleccionManual(true); }}
                         aria-pressed={activa}
@@ -948,7 +855,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
                               <button
                                 type="button"
                                 key={b.id}
-                                className={`balda ${getColor(cantidad)} ${activa ? 'activa' : ''}`}
+                                className={`balda ${cantidad <= 4 ? 'verde' : cantidad < 10 ? 'naranja' : 'rojo'} ${activa ? 'activa' : ''}`}
                                 onClick={() => { setCompartimento(String(b.codigo).toUpperCase()); setSlotSel({type:'shelf', id:b.id, label:b.codigo }); setSeleccionManual(true); }}
                                 aria-pressed={activa}
                               >

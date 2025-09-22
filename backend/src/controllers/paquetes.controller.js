@@ -72,12 +72,8 @@ async function getLayoutMeta(tenantId) {
   return { mode: data?.mode || null, rows: data?.rows || 0, cols: data?.cols || 0 };
 }
 
-/** LEE carriles con esquema unificado. Soporta:
- *  - tabla `lanes` (lane_id, name, color, row/col opcional)
- *  - tabla `carriles` (id, codigo, color, fila/columna opcional)
- */
+/** LEE carriles con esquema unificado. */
 async function getLanes(tenantId) {
-  // lanes (preferente)
   try {
     const { data, error } = await supabase
       .from("lanes")
@@ -93,7 +89,6 @@ async function getLanes(tenantId) {
       }));
     }
   } catch {/* ignore */}
-  // carriles (fallback)
   try {
     const { data } = await supabase
       .from("carriles")
@@ -110,9 +105,7 @@ async function getLanes(tenantId) {
   }
 }
 
-/**
- * Busca o crea una balda “puente” para un carril (balda=1).
- */
+/** Crea/recupera “balda puente” para un carril (balda=1). */
 async function upsertBaldaPuente(tenantId, laneId, codigoMostrado) {
   const { data: found, error: fErr } = await supabase
     .from("baldas")
@@ -137,168 +130,62 @@ async function upsertBaldaPuente(tenantId, laneId, codigoMostrado) {
   return ins || null;
 }
 
-/**
- * Devuelve {id,estante,balda,codigo} de public.baldas para (tenantId, compartimento).
- * Si no existe:
- *  - en carriles: resuelve por número, letras, color o nombre; crea balda puente (balda=1).
- *  - en estantes: intenta racks_shelves (org_id/idx) y luego patrón (A1, 2-3…).
- */
-async function ensureBaldaForCompartimento(tenantId, compartimento, opts = {}) {
-  const raw = String(compartimento || "").trim();
-  const needle = canonCodigo(raw);
+/* ──────────────────────────────────────────────────────────────────── */
+/* Handlers                                                            */
+/* ──────────────────────────────────────────────────────────────────── */
 
-  const laneFromBody = Number(opts?.lane_id ?? NaN);
-  if (Number.isFinite(laneFromBody)) {
-    const ok = await upsertBaldaPuente(tenantId, laneFromBody, raw);
-    if (ok) return ok;
-  }
-
-  // 1) ya existe en baldas por código
-  {
-    const { data: list, error } = await supabase
-      .from("baldas").select("id, estante, balda, codigo")
-      .eq("id_negocio", tenantId);
-    if (error) console.warn("[ensureBalda] baldas list error:", error);
-    if (Array.isArray(list)) {
-      const found = list.find((b) => canonCodigo(b.codigo) === needle);
-      if (found) return found;
-    }
-  }
-
-  // modo
-  const meta = await getLayoutMeta(tenantId);
-
-  /* Carriles (por defecto si no es 'racks') */
-  if (meta.mode !== "racks") {
-    const token = afterKeyword(raw, /^CARRIL\s+/i);
-    const tokenCanon = canonCodigo(token);
-
-    if (/^\d+$/.test(tokenCanon)) {
-      const laneId = parseInt(tokenCanon, 10);
-      const lanes = await getLanes(tenantId);
-      if (!lanes.some(l => l.lane_id === laneId)) return null;
-      return await upsertBaldaPuente(tenantId, laneId, token || String(laneId));
-    }
-
-    if (/^[A-Z]+$/.test(tokenCanon)) {
-      const laneId = alphaToNum(tokenCanon);
-      const lanes = await getLanes(tenantId);
-      if (!lanes.some(l => l.lane_id === laneId)) return null;
-      return await upsertBaldaPuente(tenantId, laneId, token);
-    }
-
-    const hexDirect = normHex(token) || (token.match(/#?[0-9a-fA-F]{6}/)?.[0] && normHex(token.match(/#?[0-9a-fA-F]{6}/)[0]));
-    if (hexDirect) {
-      const lanes = await getLanes(tenantId);
-      const hit = lanes.find(l => l.colorHex === hexDirect);
-      if (!hit) return null;
-      return await upsertBaldaPuente(tenantId, hit.lane_id, hit.name || String(hit.lane_id));
-    }
-
-    if (token) {
-      const lanes = await getLanes(tenantId);
-      const up = normName(token);
-      const hit = lanes.find(l => normName(l.name || "") === up);
-      if (hit) {
-        return await upsertBaldaPuente(tenantId, hit.lane_id, hit.name || String(hit.lane_id));
-      }
-    }
-
-    const parsed = parseCodigoGenerico(token);
-    if (parsed && Number.isFinite(parsed.estante)) {
-      const lanes = await getLanes(tenantId);
-      if (!lanes.some(l => l.lane_id === parsed.estante)) return null;
-      return await upsertBaldaPuente(tenantId, parsed.estante, token);
-    }
-    return null;
-  }
-
-  /* Estantes (racks_shelves con org_id, idx) */
-  try {
-    // Carga shelves
-    const { data: shelves, error: eS } = await supabase
-      .from("racks_shelves")
-      .select("rack_id, idx, name")
-      .eq("org_id", tenantId);
-    if (eS) console.warn("[ensureBalda] shelves error:", eS);
-
-    if (Array.isArray(shelves) && shelves.length) {
-      // Carga nombres de racks
-      const rackIds = [...new Set(shelves.map(s => s.rack_id))];
-      let rackName = {};
-      if (rackIds.length) {
-        const { data: racks, error: eR } = await supabase
-          .from("racks")
-          .select("rack_id, name")
-          .eq("org_id", tenantId)
-          .in("rack_id", rackIds);
-        if (!eR && Array.isArray(racks)) {
-          racks.forEach(r => { rackName[r.rack_id] = r.name || String(r.rack_id); });
-        }
-      }
-
-      for (const s of shelves) {
-        const rname = rackName[s.rack_id] || String(s.rack_id);
-        const idx = Number(s.idx);
-        const codeA = s.name ?? `${rname}${idx}`;
-        const codeB = s.name ?? `${s.rack_id}-${idx}`;
-        if (canonCodigo(codeA) === needle || canonCodigo(codeB) === needle) {
-          await supabase.from("baldas").upsert([{
-            id_negocio: tenantId, estante: s.rack_id, balda: idx, codigo: s.name ?? codeA
-          }], { onConflict: "id_negocio,estante,balda" });
-          const { data: row } = await supabase
-            .from("baldas").select("id, estante, balda, codigo")
-            .eq("id_negocio", tenantId).eq("estante", s.rack_id).eq("balda", idx).maybeSingle();
-          if (row) return row;
-        }
-      }
-    }
-  } catch (e) {
-    console.warn("[ensureBalda] racks block skipped:", e?.message || e);
-  }
-
-  // Fallback por patrón (A1, 2-3…)
-  const parsed = parseCodigoGenerico(raw);
-  if (parsed && Number.isFinite(parsed.estante) && Number.isFinite(parsed.balda)) {
-    await supabase.from("baldas").upsert([{
-      id_negocio: tenantId,
-      estante: parsed.estante,
-      balda: parsed.balda,
-      codigo: raw
-    }], { onConflict: "id_negocio,estante,balda" });
-    const { data: row } = await supabase
-      .from("baldas").select("id, estante, balda, codigo")
-      .eq("id_negocio", tenantId).eq("estante", parsed.estante).eq("balda", parsed.balda).maybeSingle();
-    if (row) return row;
-  }
-
-  return null;
-}
-
-/* ---------- Handlers ---------- */
+/** ✅ NO ADIVINA: requiere balda_id (racks) o lane_id (carril). */
 const crearPaquete = async (req, res) => {
   try {
     const tenantId = await resolveTenantId(req);
     if (!tenantId) return res.status(403).json({ error: "Tenant no resuelto" });
 
-    const { nombre_cliente, empresa_transporte, compartimento, lane_id } = req.body || {};
-    if (!nombre_cliente?.trim() || !empresa_transporte?.trim() || !compartimento?.trim()) {
+    const { nombre_cliente, empresa_transporte, balda_id, lane_id, compartimento } = req.body || {};
+    if (!nombre_cliente?.trim() || !empresa_transporte?.trim()) {
       return res.status(400).json({ error: "Faltan campos obligatorios." });
     }
 
-    const balda = await ensureBaldaForCompartimento(tenantId, compartimento, { lane_id });
-    if (!balda) return res.status(404).json({ error: "No se pudo localizar el carril/balda para ese compartimento." });
-
-    // empresa_id es NOT NULL en tu esquema → asegúrala
+    // empresa_id es NOT NULL → asegúrala
     const empresaId = await ensureEmpresaId(tenantId, empresa_transporte);
     if (!empresaId) return res.status(400).json({ error: "Empresa de transporte inválida." });
 
+    // 1) Determinar balda_id sin heurísticas
+    let finalBaldaId = null;
+
+    if (Number.isFinite(Number(balda_id))) {
+      // modo racks (balda concreta seleccionada en UI)
+      const bid = Number(balda_id);
+      const { data: b, error: e } = await supabase
+        .from("baldas").select("id")
+        .eq("id", bid).eq("id_negocio", tenantId).maybeSingle();
+      if (e) return res.status(500).json({ error: e.message });
+      if (!b) return res.status(400).json({ error: "Balda inválida para este negocio." });
+      finalBaldaId = bid;
+    } else if (Number.isFinite(Number(lane_id))) {
+      // modo lanes (crea/usa balda puente del carril)
+      const lid = Number(lane_id);
+      // (opcional) valida que el carril exista
+      const lanes = await getLanes(tenantId);
+      if (!lanes.some(l => l.lane_id === lid)) {
+        return res.status(400).json({ error: "Carril inválido para este negocio." });
+      }
+      const puente = await upsertBaldaPuente(tenantId, lid, compartimento);
+      if (!puente) return res.status(500).json({ error: "No se pudo preparar la balda del carril." });
+      finalBaldaId = puente.id;
+    } else {
+      // Nada de adivinar por “compartimento”
+      return res.status(400).json({ error: "Debes indicar balda_id (racks) o lane_id (carril)." });
+    }
+
+    // 2) Insert
     const payload = {
-      nombre_cliente: nombre_cliente.trim(),
-      empresa_transporte: empresa_transporte.trim(),
-      balda_id: balda.id,
       tenant_id: tenantId,
       empresa_id: empresaId,
+      nombre_cliente: nombre_cliente.trim(),
+      empresa_transporte: empresa_transporte.trim(),
+      balda_id: finalBaldaId,
+      // compartimento queda solo como display (opcional)
+      ...(compartimento ? { compartimento: String(compartimento) } : {})
     };
 
     const { data: inserted, error: errorInsert } = await supabase
