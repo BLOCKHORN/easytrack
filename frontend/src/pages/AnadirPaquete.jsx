@@ -777,7 +777,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
                     if (!lane) return <div key={`cell-${r}-${c}`} className="lane-cell empty" />;
 
                     const activa = slotSel?.type==='lane' && slotSel?.id === lane.id;
-                    const cantidad = (conteo[lane.name] ?? conteo[String(lane.id)] ?? 0);
+                    const cantidad = (conteo[String(lane.id)] ?? conteo[lane.name] ?? 0);
 
                     const visible = buscarBalda.trim()
                       ? (lane.name || '').toUpperCase().includes(buscarBalda.trim().toUpperCase())
@@ -844,7 +844,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
                         <div className="baldas-grid">
                           {list.map(b => {
                             const activa = slotSel?.type==='shelf' && slotSel?.id === b.id;
-                            const cantidad = (conteo[String(b.codigo).toUpperCase()] ?? conteo[String(b.id)] ?? 0);
+                            const cantidad = (conteo[String(b.id)] ?? conteo[String(b.codigo).toUpperCase()] ?? 0);
 
                             const visible = buscarBalda.trim()
                               ? String(b.codigo).toUpperCase().includes(buscarBalda.trim().toUpperCase())
