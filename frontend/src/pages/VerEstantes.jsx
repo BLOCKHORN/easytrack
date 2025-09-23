@@ -3,8 +3,15 @@ import "../styles/VerEstantes.scss";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { getTenantIdOrThrow } from "../utils/tenant";
-import { obtenerPaquetesBackend, obtenerEstructuraEstantesYPaquetes } from "../services/paquetesService";
-import { FaBoxes, FaSearch, FaChevronDown, FaTimes } from "react-icons/fa";
+import {
+  obtenerPaquetesBackend,
+  obtenerEstructuraEstantesYPaquetes,
+  eliminarPaqueteBackend, // <-- NUEVO: acción rápida
+} from "../services/paquetesService";
+import {
+  FaBoxes, FaSearch, FaChevronDown, FaTimes,
+  FaEye, FaEyeSlash, FaTrashAlt
+} from "react-icons/fa";
 
 /* ===== Helpers ===== */
 const clsOcupacion = (n) => (n === 0 ? "neutra" : n <= 4 ? "verde" : n <= 9 ? "naranja" : "rojo");
@@ -96,7 +103,7 @@ function extractStructureFromBackend(payload) {
   })).filter(r => Number.isFinite(r.estante));
 }
 
-/* ===== Carrier dominante para color de “banda” ===== */
+/* ===== Carrier dominante para color ===== */
 function getDominantCarrierColor(arr = [], colorMap = new Map(), fallback = "#6b7280") {
   if (!arr.length) return fallback;
   const counts = new Map();
@@ -111,19 +118,17 @@ function getDominantCarrierColor(arr = [], colorMap = new Map(), fallback = "#6b
   return hex;
 }
 
-/* ===== Constantes visuales para auto-fit ===== */
+/* ===== Constantes visuales ===== */
 const GAP_PX = 12;
 const RACK_CELL_W = 340;
 const LANE_CELL_W = 280;
 const MIN_SCALE = 0.40;
-
-/* NUEVO: máximos de expansión y umbrales fluidos */
-const MAX_EXPAND_PX = 3000;        // para que no se corte al listar muchos paquetes
-const FLUID_BREAK_RACKS = 1100;    // a partir de aquí pasamos a grid fluido (sin scale) en estantes
-const FLUID_BREAK_LANES = 900;     // y aquí en lanes
+const MAX_EXPAND_PX = 3000;
+const FLUID_BREAK_RACKS = 1100;
+const FLUID_BREAK_LANES = 900;
 
 export default function VerEstantes() {
-  const [modo, setModo] = useState("lanes"); // "lanes" | "racks"
+  const [modo, setModo] = useState("racks"); // "lanes" | "racks"
 
   // ---- Lanes
   const [lanes, setLanes] = useState([]);
@@ -136,7 +141,7 @@ export default function VerEstantes() {
   const [rackOrder, setRackOrder] = useState([]);
   const [pkgsByBaldaId, setPkgsByBaldaId] = useState({});
 
-  // ---- Carriers (colores)
+  // ---- Colores compañías
   const [coloresCompania, setColoresCompania] = useState(() => new Map());
   const getCompColor = (name) => normHex(coloresCompania.get(name), "#2563eb");
 
@@ -147,7 +152,14 @@ export default function VerEstantes() {
   const [q, setQ] = useState("");
   const [soloConPkgs, setSoloConPkgs] = useState(false);
 
-  // ---- ready flags
+  // Privacidad
+  const [revealAll, setRevealAll] = useState(false);
+  const [revealedSet, setRevealedSet] = useState(() => new Set());
+
+  // Token
+  const [authToken, setAuthToken] = useState("");
+
+  // ---- Flags
   const [readyLayout, setReadyLayout] = useState(false);
   const [readyEstructura, setReadyEstructura] = useState(false);
 
@@ -159,11 +171,10 @@ export default function VerEstantes() {
   const [racksScale, setRacksScale] = useState(1);
   const [lanesScale, setLanesScale] = useState(1);
 
-  // ---- NUEVO: flags “fluido” para cortar el scale en pantallas pequeñas
   const [fluidRacks, setFluidRacks] = useState(false);
   const [fluidLanes, setFluidLanes] = useState(false);
 
-  /* ===================== Carga ===================== */
+  /* =============== Carga =============== */
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -176,9 +187,10 @@ export default function VerEstantes() {
         const [{ data: { session } }] = await Promise.all([supabase.auth.getSession()]);
         const token = session?.access_token;
         if (!token) throw new Error("No hay sesión activa.");
+        setAuthToken(token);
         const tenantId = await getTenantIdOrThrow();
 
-        // Colores de compañías
+        // Colores compañías
         const empresasPromise = supabase
           .from("empresas_transporte_tenant")
           .select("nombre,color")
@@ -206,13 +218,12 @@ export default function VerEstantes() {
           return meta || {};
         })();
 
-        // Paquetes (desde tu API, filtrados por tenant vía JWT)
+        // Paquetes
         const paquetesPromise = obtenerPaquetesBackend(token).catch(() => []);
 
         const [empresas, metaRaw, paquetes] = await Promise.all([empresasPromise, layoutPromise, paquetesPromise]);
         if (cancel) return;
 
-        // Map colores compañías
         const colorMap = new Map();
         (empresas || []).forEach(e => { colorMap.set(e?.nombre, normHex(e?.color || "#2563eb")); });
         setColoresCompania(colorMap);
@@ -223,7 +234,7 @@ export default function VerEstantes() {
         const colsHint = num(metaRaw?.cols ?? root?.grid?.cols, 0);
         setModo(modeFromMeta);
 
-        /* ========= Mapas de nombres desde meta.racks y meta.lanes ========= */
+        /* === Nombres meta === */
         const racksMeta = Array.isArray(root?.racks) ? root.racks
           : Array.isArray(metaRaw?.racks) ? metaRaw.racks : [];
         const rackNames = new Map();
@@ -247,9 +258,8 @@ export default function VerEstantes() {
           if (Number.isFinite(lid) && l?.name) laneNamesFromMeta.set(lid, String(l.name));
         }
 
-        /* ======================= L A N E S ======================= */
+        /* ============ L A N E S ============ */
         if (modeFromMeta === "lanes") {
-          // Solo usamos meta.lanes o tablas (no inferir desde paquetes)
           let arr = Array.isArray(root?.lanes) ? root.lanes : [];
           if (!arr.length) {
             const q1 = await supabase
@@ -297,10 +307,8 @@ export default function VerEstantes() {
             rowsHint, colsHint
           );
 
-          // Aplica nombre desde meta si existe
           const laidWithNames = laid.map(x => ({ ...x, label: laneNamesFromMeta.get(x.id) || x.label }));
 
-          // **NO ADIVINAR**: solo paquetes con lane_id válido presente en catálogo
           const validLaneIds = new Set(laidWithNames.map(l => l.id));
           const byLane = {};
           for (const p of (paquetes || [])) {
@@ -324,8 +332,7 @@ export default function VerEstantes() {
           return;
         }
 
-        /* ======================= R A C K S ======================= */
-        // Estructura: primero API; si no, tabla baldas. **No inferimos desde paquetes.**
+        /* ============ R A C K S ============ */
         let estructura = [];
         try {
           const body = await obtenerEstructuraEstantesYPaquetes(token);
@@ -354,7 +361,6 @@ export default function VerEstantes() {
           } catch { /* no-op */ }
         }
 
-        // Grid/orden: meta si existe, si no, layout cuadrado básico
         const pos = [];
         for (const r of racksMeta) {
           const rid = num(r?.id, NaN);
@@ -383,7 +389,6 @@ export default function VerEstantes() {
           rowsR = Math.ceil(n / colsR);
         }
 
-        // **NO ADIVINAR**: solo paquetes con balda_id válido presente en estructura
         const validBaldaIds = new Set(estructura.flatMap(r => (r.baldas || []).map(b => b.id)));
         const byBalda = {};
         for (const p of (paquetes || [])) {
@@ -398,10 +403,9 @@ export default function VerEstantes() {
           });
         }
 
-        // Aplica nombres desde meta a estructura (rack y baldas por índice)
         const estructuraNamed = estructura.map(r => ({
           ...r,
-          nombre: rackNames.get(r.estante) || r.nombre,
+          nombre: (racksMeta.find(x => num(x?.id, NaN) === r.estante)?.name) || r.nombre,
           baldas: (r.baldas || []).map(b => {
             const nm = shelfNamesByPair.get(`${r.estante}-${b.idx}`);
             return nm ? { ...b, label: nm, codigo: b.codigo || nm } : b;
@@ -421,10 +425,10 @@ export default function VerEstantes() {
         if (!cancel) { setError(e?.message || "No se pudo cargar la vista de almacén"); setCargando(false); }
       }
     })();
-    return () => { cancel = true; };
+    return () => { /* cancel */ };
   }, []);
 
-  /* ===================== Escalado responsive (auto-fit ancho) ===================== */
+  /* =============== Escalado responsive =============== */
   const recomputeRacksScale = () => {
     const wrap = racksWrapRef.current;
     if (!wrap) return;
@@ -447,7 +451,6 @@ export default function VerEstantes() {
   useEffect(() => { recomputeRacksScale(); }, [rackGrid.cols, rackOrder.length, readyEstructura]);
   useEffect(() => { recomputeLanesScale(); }, [gridDims.cols, lanes.length, readyLayout]);
 
-  // NUEVO: activar modo fluido según ancho de ventana
   useEffect(() => {
     const onResize = () => {
       const w = window.innerWidth || document.documentElement.clientWidth || 0;
@@ -466,26 +469,7 @@ export default function VerEstantes() {
     return () => ro1.disconnect();
   }, []);
 
-  /* ===================== Derivados / Filtros ===================== */
-  const totalPaquetes = useMemo(() => {
-    const values = modo === "lanes" ? Object.values(pkgsByLaneId) : Object.values(pkgsByBaldaId);
-    return values.reduce((a, arr) => a + (arr?.length || 0), 0);
-  }, [modo, pkgsByLaneId, pkgsByBaldaId]);
-
-  const stats = useMemo(() => {
-    if (modo === "lanes") {
-      const ocupadas = lanes.filter(l => (pkgsByLaneId[l.id] || []).length > 0).length;
-      return { titleA:"Carriles", valA:lanes.length, titleB:"Carriles ocupados", valB:ocupadas, titleC:"Paquetes", valC:totalPaquetes };
-    } else {
-      const totalBaldas = estructuraRacks.reduce((a,c)=>a+(c?.baldas?.length||0),0);
-      const baldasOcupadas = estructuraRacks.reduce((a,col)=>a+(col.baldas||[]).filter(b=>(pkgsByBaldaId[b.id]||[]).length>0).length,0);
-      return { titleA:"Estantes", valA:estructuraRacks.length, titleB:"Baldas ocupadas", valB:baldasOcupadas, titleC:"Paquetes", valC:totalPaquetes };
-    }
-  }, [modo, lanes, pkgsByLaneId, estructuraRacks, pkgsByBaldaId, totalPaquetes]);
-
-  const toggle = (id) => setOpenSet(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const clearQ = () => setQ("");
-
+  /* =============== Filtros/derivados =============== */
   const laneByRC = useMemo(() => {
     const map = new Map();
     for (const l of lanes) map.set(`${l.row}-${l.col}`, l);
@@ -525,27 +509,64 @@ export default function VerEstantes() {
   const filteredMap = useMemo(() => new Map(estructuraFiltradaRacks.map(r => [r.estante, r])), [estructuraFiltradaRacks]);
   const filteredEstantesSet = useMemo(() => new Set(estructuraFiltradaRacks.map(r => r.estante)), [estructuraFiltradaRacks]);
 
-  /* ===================== UI ===================== */
+  /* =============== Acciones UI =============== */
+  const toggle = (id) => setOpenSet(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const clearQ = () => setQ("");
+
+  const toggleRevealAll = () => {
+    setRevealAll(prev => !prev);
+    setRevealedSet(new Set()); // limpiar revelados individuales
+  };
+  const toggleRevealOne = (id) => {
+    if (revealAll) return; // si ya está todo visible, no hace falta
+    setRevealedSet(prev => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  };
+
+  const removeFromLocalState = (pkgId) => {
+    // Racks
+    setPkgsByBaldaId(prev => {
+      const next = { ...prev };
+      for (const k of Object.keys(next)) {
+        next[k] = (next[k] || []).filter(p => p.id !== pkgId);
+      }
+      return next;
+    });
+    // Lanes
+    setPkgsByLaneId(prev => {
+      const next = { ...prev };
+      for (const k of Object.keys(next)) {
+        next[k] = (next[k] || []).filter(p => p.id !== pkgId);
+      }
+      return next;
+    });
+  };
+
+  const onDeletePkg = async (pkgId) => {
+    const ok = window.confirm("¿Eliminar este paquete? Esta acción no se puede deshacer.");
+    if (!ok) return;
+    try {
+      await eliminarPaqueteBackend(authToken, pkgId);
+      removeFromLocalState(pkgId);
+    } catch (e) {
+      console.error("Eliminar paquete falló:", e);
+      alert("No se pudo eliminar el paquete.");
+    }
+  };
+
+  /* =============== Render =============== */
   return (
     <div className="ver-estantes">
-      {/* Cabecera */}
+      {/* Cabecera simplificada (sin resumen) */}
       <div className="titulo-bar">
-        <h2><FaBoxes className="icono" /> Visualización del almacén</h2>
-        <div className="resumen">
-          <span className="chip">{stats.titleA}: {stats.valA}</span>
-          <span className="chip">{stats.titleB}: {stats.valB}</span>
-          <span className="chip chip--accent">{stats.titleC}: {stats.valC}</span>
-        </div>
+        <h2><FaBoxes className="icono" /> Estanterías</h2>
       </div>
 
-      {/* Leyenda + filtros */}
+      {/* Toolbar: leyenda + filtros + privacidad */}
       <div className="toolbar">
-        <div className="leyenda" aria-label="Leyenda de ocupación">
-          <span className="leg-item"><i className="dot neutra" /><span>0</span></span>
-          <span className="leg-item"><i className="dot verde" /><span>1–4</span></span>
-          <span className="leg-item"><i className="dot naranja" /><span>5–9</span></span>
-          <span className="leg-item"><i className="dot rojo" /><span>10+</span></span>
-        </div>
 
         <div className="filtros">
           <div className="input-icon">
@@ -569,6 +590,16 @@ export default function VerEstantes() {
             <span className="slider" aria-hidden />
             <span className="label">Solo con paquetes</span>
           </label>
+
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={toggleRevealAll}
+            aria-pressed={revealAll}
+            title={revealAll ? "Ocultar nombres" : "Mostrar todos los nombres"}
+          >
+            {revealAll ? <><FaEyeSlash /> Ocultar nombres</> : <><FaEye /> Mostrar nombres</>}
+          </button>
 
           <div className="acciones">
             <button
@@ -666,9 +697,12 @@ export default function VerEstantes() {
                           <ul className="lista-paquetes">
                             {arr.map(p => {
                               const cc = getCompColor(p.empresa_transporte);
+                              const revealed = revealAll || revealedSet.has(p.id);
                               return (
                                 <li key={p.id} className="paquete pendiente">
-                                  <div className="cliente">{highlight(p?.nombre_cliente || "—", q)}</div>
+                                  <div className={`cliente ${revealed ? "" : "blurred"}`}>
+                                    {highlight(p?.nombre_cliente || "—", q)}
+                                  </div>
                                   <div className="meta">
                                     <span
                                       className="pill pill--carrier"
@@ -678,6 +712,24 @@ export default function VerEstantes() {
                                     </span>
                                     <span className="pill">{p.fecha_llegada ? new Date(p.fecha_llegada).toLocaleDateString() : "—"}</span>
                                     <span className="pill estado warn">Pendiente</span>
+                                  </div>
+                                  <div className="row-actions">
+                                    <button
+                                      type="button"
+                                      className="icon-btn"
+                                      title={revealed ? "Ocultar nombre" : "Mostrar nombre"}
+                                      onClick={() => toggleRevealOne(p.id)}
+                                    >
+                                      {revealed ? <FaEyeSlash /> : <FaEye />}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="icon-btn danger"
+                                      title="Eliminar paquete"
+                                      onClick={() => onDeletePkg(p.id)}
+                                    >
+                                      <FaTrashAlt />
+                                    </button>
                                   </div>
                                 </li>
                               );
@@ -733,19 +785,13 @@ export default function VerEstantes() {
 
                 const { nombre, baldas } = rack;
                 const totalEstante = (baldas || []).reduce((acc, b) => acc + (pkgsByBaldaId[b.id]?.length || 0), 0);
-                const ocupadas = (baldas || []).filter(b => (pkgsByBaldaId[b.id]?.length || 0) > 0).length;
-                const pct = (baldas || []).length ? Math.round((ocupadas / baldas.length) * 100) : 0;
 
                 return (
                   <section key={`est-${est}`} className="columna" aria-label={`Estante ${nombre || est}`}>
                     <header className="cabecera-estante">
                       <div className="tit">
                         <span className="titulo">Estante {nombre || est}</span>
-                        <span className="contador">{totalEstante} pkg</span>
-                      </div>
-                      <div className="mini-progress">
-                        <div className="bar"><span style={{ width: `${pct}%` }} /></div>
-                        <span className="pct">{pct}%</span>
+                        <span className="contador">{totalEstante} {totalEstante === 1 ? "paquete" : "paquetes"}</span>
                       </div>
                     </header>
 
@@ -783,9 +829,12 @@ export default function VerEstantes() {
                                 <ul className="lista-paquetes">
                                   {lista.map(p => {
                                     const cc = getCompColor(p.empresa_transporte);
+                                    const revealed = revealAll || revealedSet.has(p.id);
                                     return (
                                       <li key={p.id} className="paquete pendiente">
-                                        <div className="cliente">{highlight(p?.nombre_cliente || "—", q)}</div>
+                                        <div className={`cliente ${revealed ? "" : "blurred"}`}>
+                                          {highlight(p?.nombre_cliente || "—", q)}
+                                        </div>
                                         <div className="meta">
                                           <span
                                             className="pill pill--carrier"
@@ -795,6 +844,24 @@ export default function VerEstantes() {
                                           </span>
                                           <span className="pill">{p.fecha_llegada ? new Date(p.fecha_llegada).toLocaleDateString() : "—"}</span>
                                           <span className="pill estado warn">Pendiente</span>
+                                        </div>
+                                        <div className="row-actions">
+                                          <button
+                                            type="button"
+                                            className="icon-btn"
+                                            title={revealed ? "Ocultar nombre" : "Mostrar nombre"}
+                                            onClick={() => toggleRevealOne(p.id)}
+                                          >
+                                            {revealed ? <FaEyeSlash /> : <FaEye />}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="icon-btn danger"
+                                            title="Eliminar paquete"
+                                            onClick={() => onDeletePkg(p.id)}
+                                          >
+                                            <FaTrashAlt />
+                                          </button>
                                         </div>
                                       </li>
                                     );

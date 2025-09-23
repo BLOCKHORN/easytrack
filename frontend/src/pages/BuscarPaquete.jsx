@@ -1,8 +1,7 @@
-// src/pages/BuscarPaquete.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  FaSearch, FaEdit, FaTrashAlt, FaCheckCircle, FaTimes, FaSlidersH,
-  FaFilter, FaInfoCircle
+  FaSearch, FaEdit, FaTrashAlt, FaTimes, FaInfoCircle,
+  FaEye, FaEyeSlash
 } from "react-icons/fa";
 import { supabase } from "../utils/supabaseClient";
 import {
@@ -15,16 +14,16 @@ import { getTenantIdOrThrow } from "../utils/tenant";
 import "../styles/BuscarPaquete.scss";
 
 const RESULTADOS_POR_PAGINA = 10;
-const LS_KEY = "buscar_paquete_filtros_v5";
+const LS_KEY = "buscar_paquete_filtros_v10";
+const LS_SHOW_RACK = "bp_showRackInLocation";
 
-/* ===== Utils texto + fuzzy ===== */
+/* ===== Utils ===== */
 const normalize = (s = "") =>
   String(s)
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .toLowerCase().trim()
     .replace(/[^\p{L}\p{N}\s'-]+/gu, " ")
     .replace(/\s+/g, " ");
-
 const tokenize = (s = "") => normalize(s).split(" ").filter(Boolean);
 
 function jaroWinkler(a = "", b = "") {
@@ -51,42 +50,39 @@ function jaroWinkler(a = "", b = "") {
     k++;
   }
   transpositions /= 2;
-  const jaro = (matches / a.length + matches / b.length + (matches - transpositions) / matches) / 3;
+  const j = (matches / a.length + matches / b.length + (matches - transpositions) / matches) / 3;
   let prefix = 0;
   for (let i = 0; i < Math.min(4, a.length, b.length); i++) { if (a[i] === b[i]) prefix++; else break; }
-  return jaro + prefix * 0.1 * (1 - jaro);
+  return j + prefix * 0.1 * (1 - j);
 }
-
-function fuzzyScore(queryRaw, candidateRaw) {
-  const query = normalize(queryRaw);
-  const cand  = normalize(candidateRaw);
-  if (!query) return 1;
-  if (!cand) return 0;
-  const qTokens = tokenize(query);
-  const cTokens = tokenize(cand);
-  if (qTokens.length === 0 || cTokens.length === 0) return 0;
-  let tokenSum = 0;
-  for (const qt of qTokens) {
+const fuzzyScore = (q, c) => {
+  const qn = normalize(q), cn = normalize(c);
+  if (!qn) return 1; if (!cn) return 0;
+  const qT = tokenize(qn), cT = tokenize(cn);
+  let sum = 0;
+  for (const qt of qT) {
     let best = 0;
-    for (const ct of cTokens) {
-      if (!ct) continue;
-      if (ct === qt) best = Math.max(best, 1);
-      else if (ct.startsWith(qt)) best = Math.max(best, 0.9);
-      else if (ct.includes(qt)) best = Math.max(best, 0.78);
+    for (const ct of cT) {
+      if (ct === qt) { best = 1; break; }
+      if (ct.startsWith(qt)) best = Math.max(best, 0.95);
+      else if (ct.includes(qt)) best = Math.max(best, 0.8);
       else best = Math.max(best, jaroWinkler(qt, ct) * 0.9);
-      if (best === 1) break;
     }
-    tokenSum += best;
+    sum += best;
   }
-  const tokenScore = tokenSum / qTokens.length;
-  const globalJW = jaroWinkler(query, cand);
-  let leadBoost = 0;
-  if (cTokens[0] && qTokens[0] && (cTokens[0].startsWith(qTokens[0]) || jaroWinkler(qTokens[0], cTokens[0]) > 0.9)) {
-    leadBoost = 0.05;
-  }
-  return Math.min(1, Math.max(globalJW, (tokenScore * 0.7 + globalJW * 0.3)) + leadBoost);
-}
-
+  const tokenScore = sum / qT.length;
+  const global = jaroWinkler(qn, cn);
+  return Math.max(global, tokenScore * 0.7 + global * 0.3);
+};
+const passesStrict = (q, c) => {
+  const qT = tokenize(q), cT = tokenize(c);
+  if (qT.length === 0) return true;
+  if (cT.length === 0) return false;
+  return qT.every(qt => {
+    const minJW = Math.min(0.93, 0.80 + Math.min(qt.length, 10) * 0.02);
+    return cT.some(ct => ct === qt || ct.startsWith(qt) || jaroWinkler(qt, ct) >= minJW);
+  });
+};
 function highlightApprox(name, query) {
   const qTokens = tokenize(query);
   if (qTokens.length === 0) return name;
@@ -124,7 +120,7 @@ function highlightApprox(name, query) {
   );
 }
 
-/* Colores lanes & carrier */
+/* Colores lanes (no se usan para compañías) */
 const hexToRgba = (hex = "#f59e0b", a = 0.08) => {
   const h = String(hex).replace("#", "").trim();
   if (!/^[0-9a-fA-F]{6}$/.test(h)) return `rgba(0,0,0,${a})`;
@@ -133,26 +129,26 @@ const hexToRgba = (hex = "#f59e0b", a = 0.08) => {
   const b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 };
-const normHex = (hex, fallback = "#2563eb") =>
-  /^#[0-9a-fA-F]{6}$/.test(String(hex)) ? hex : fallback;
 
 export default function BuscarPaquete() {
   // filtros
   const [busqueda, setBusqueda] = useState("");
-  const [estadoFiltro, setEstadoFiltro] = useState("todos");
+  const [estadoFiltro, setEstadoFiltro] = useState("pendiente"); // por defecto: PENDIENTE
   const [companiaFiltro, setCompaniaFiltro] = useState("todos");
   const [estanteFiltro, setEstanteFiltro] = useState("todos");
   const [baldaFiltro, setBaldaFiltro] = useState("todos");
 
-  // opciones búsqueda
-  const [modoBusqueda, setModoBusqueda] = useState("inteligente");
-  const [sensibilidad, setSensibilidad] = useState("media");
+  // bloqueo de cliente
+  const [lockedClient, setLockedClient] = useState(null);
+
+  // privacidad
+  const [revealAll, setRevealAll] = useState(false);
+  const [revealedSet, setRevealedSet] = useState(() => new Set());
 
   // datos
   const [resultados, setResultados] = useState([]);
   const [baldasDisponibles, setBaldasDisponibles] = useState([]);
   const [companias, setCompanias] = useState([]);
-  const [coloresCompania, setColoresCompania] = useState(() => new Map());
 
   // layout maps
   const [layoutMode, setLayoutMode] = useState("racks");
@@ -161,6 +157,14 @@ export default function BuscarPaquete() {
   const [rackNameById, setRackNameById] = useState(() => new Map());
   const [shelfNameByKey, setShelfNameByKey] = useState(() => new Map());
   const [baldaLabelById, setBaldaLabelById] = useState(() => new Map());
+
+  // preferencia de ubicación (compacta vs completa)
+  const [showRackInLocation, setShowRackInLocation] = useState(() => {
+    try {
+      const v = localStorage.getItem(LS_SHOW_RACK);
+      return v === "1";
+    } catch { return false; }
+  });
 
   // ui
   const [paginaActual, setPaginaActual] = useState(1);
@@ -182,9 +186,7 @@ export default function BuscarPaquete() {
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3200);
   };
 
-  // sugerencias
-  const [openSug, setOpenSug] = useState(false);
-  const [sugerencias, setSugerencias] = useState([]);
+  // debounce para paginación
   const searchDebounceRef = useRef(null);
 
   // filtros guardados
@@ -193,21 +195,22 @@ export default function BuscarPaquete() {
       const raw = localStorage.getItem(LS_KEY);
       if (!raw) return;
       const saved = JSON.parse(raw);
-      setEstadoFiltro(saved.estadoFiltro ?? "todos");
+      setEstadoFiltro(saved.estadoFiltro ?? "pendiente"); // si no existe, default pendiente
       setCompaniaFiltro(saved.companiaFiltro ?? "todos");
       setEstanteFiltro(saved.estanteFiltro ?? "todos");
       setBaldaFiltro(saved.baldaFiltro ?? "todos");
-      setModoBusqueda(saved.modoBusqueda ?? "inteligente");
-      setSensibilidad(saved.sensibilidad ?? "media");
     } catch {}
   }, []);
-
   useEffect(() => {
     localStorage.setItem(
       LS_KEY,
-      JSON.stringify({ estadoFiltro, companiaFiltro, estanteFiltro, baldaFiltro, modoBusqueda, sensibilidad })
+      JSON.stringify({ estadoFiltro, companiaFiltro, estanteFiltro, baldaFiltro })
     );
-  }, [estadoFiltro, companiaFiltro, estanteFiltro, baldaFiltro, modoBusqueda, sensibilidad]);
+  }, [estadoFiltro, companiaFiltro, estanteFiltro, baldaFiltro]);
+
+  useEffect(() => {
+    try { localStorage.setItem(LS_SHOW_RACK, showRackInLocation ? "1" : "0"); } catch {}
+  }, [showRackInLocation]);
 
   /* ===== CARGA PRINCIPAL ===== */
   useEffect(() => {
@@ -216,17 +219,16 @@ export default function BuscarPaquete() {
       setCargando(true);
       setError(null);
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session} } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) throw new Error("Sesión no encontrada");
 
         const tenantId = await getTenantIdOrThrow();
 
-        // Paquetes desde tu API (filtrados por tenant vía JWT)
         const paquetesAPI = await obtenerPaquetesBackend(token);
         if (cancelado) return;
 
-        // Layout principal desde layouts_meta
+        // Layout
         let meta = null;
         try {
           const { data } = await supabase
@@ -236,20 +238,18 @@ export default function BuscarPaquete() {
             .maybeSingle();
           meta = data || null;
         } catch { meta = null; }
-
         if (!meta) {
           try {
             const { data } = await supabase.rpc("get_warehouse_layout", { p_org: tenantId });
             meta = data || null;
           } catch { meta = null; }
         }
-
         const root = meta?.payload ? meta.payload : (meta || {});
         const modeFromMeta = meta?.mode || root?.layout_mode || "racks";
         const lanesArr = Array.isArray(root?.lanes) ? root.lanes : [];
         const racksArr = Array.isArray(root?.racks) ? root.racks : [];
 
-        // Catálogos (baldas + compañías con color)
+        // Catálogos
         const [baldasRes, empresasRes] = await Promise.all([
           supabase.from("baldas")
             .select("id, estante, balda, codigo")
@@ -257,7 +257,7 @@ export default function BuscarPaquete() {
             .order("estante", { ascending: true })
             .order("balda", { ascending: true }),
           supabase.from("empresas_transporte_tenant")
-            .select("nombre,color")
+            .select("nombre")
             .eq("tenant_id", tenantId),
         ]);
 
@@ -265,23 +265,11 @@ export default function BuscarPaquete() {
         setBaldasDisponibles(baldas);
 
         const listaCompanias = (empresasRes?.data || [])
-          .map(e => e?.nombre)
-          .filter(Boolean)
-          .sort((a,b)=>a.localeCompare(b));
+          .map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b));
         setCompanias(listaCompanias);
 
-        const colMap = new Map();
-        (empresasRes?.data || []).forEach(e => {
-          colMap.set(e?.nombre, normHex(e?.color || "#2563eb"));
-        });
-        setColoresCompania(colMap);
-
-        // ===== Mapas de nombres/colores según modo =====
-        const laneName = new Map();
-        const laneColor = new Map();
-        const rackName = new Map();
-        const shelfName = new Map();
-
+        // Mapas nombres/colores (solo lanes)
+        const laneName = new Map(), laneColor = new Map(), rackName = new Map(), shelfName = new Map();
         let mode = modeFromMeta;
 
         if (mode === "lanes") {
@@ -292,7 +280,6 @@ export default function BuscarPaquete() {
             const col = String(l?.color || "").trim();
             if (/^#?[0-9a-f]{6}$/i.test(col)) laneColor.set(id, col.startsWith('#') ? col : `#${col}`);
           }
-
           if (laneName.size === 0) {
             try {
               const { data: rows } = await supabase
@@ -307,21 +294,6 @@ export default function BuscarPaquete() {
                 if (/^#?[0-9a-f]{6}$/i.test(col)) laneColor.set(id, col.startsWith('#') ? col : `#${col}`);
               });
             } catch {}
-            if (laneName.size === 0) {
-              try {
-                const { data } = await supabase
-                  .from("carriles")
-                  .select("id,codigo,color")
-                  .eq("tenant_id", tenantId);
-                (data || []).forEach(r => {
-                  const id = Number(r?.id);
-                  if (!Number.isFinite(id)) return;
-                  if (r?.codigo) laneName.set(id, String(r.codigo));
-                  const col = String(r?.color || "").trim();
-                  if (/^#?[0-9a-f]{6}$/i.test(col)) laneColor.set(id, col.startsWith('#') ? col : `#${col}`);
-                });
-              } catch {}
-            }
           }
         } else {
           mode = "racks";
@@ -333,7 +305,6 @@ export default function BuscarPaquete() {
             rackName.set(rid, rname);
             const shelves = Array.isArray(r?.shelves) ? r.shelves : [];
             for (const s of shelves) {
-              // ✅ incluye alias idx/i/orden para evitar desajustes
               const idx = Number(s?.index ?? s?.idx ?? s?.shelf_index ?? s?.i ?? s?.orden);
               if (!Number.isFinite(idx)) continue;
               shelfName.set(`${rid}-${idx}`, s?.name || `${rname}${idx}`);
@@ -355,23 +326,28 @@ export default function BuscarPaquete() {
         setRackNameById(rackName);
         setShelfNameByKey(shelfName);
 
-        // Etiqueta legible por balda_id
-        const labelMap = new Map();
+        // Etiquetas por balda_id (FULL + COMPACT)
+        const labelMapFull = new Map();
+        const labelMapCompact = new Map();
         for (const b of baldas) {
           if (mode === "lanes") {
             const lname = laneName.get(Number(b.estante));
-            labelMap.set(b.id, `Carril ${ lname ?? (b.codigo ?? String(b.estante)) }`);
+            const full = `Carril ${ lname ?? (b.codigo ?? String(b.estante)) }`;
+            const compact = lname ?? (b.codigo ?? String(b.estante));
+            labelMapFull.set(b.id, full);
+            labelMapCompact.set(b.id, compact);
           } else {
             const rlabel = rackName.get(Number(b.estante)) ?? String(b.estante);
-            const sname  = shelfName.get(`${b.estante}-${b.balda}`) ?? (b.codigo || `Fila ${b.balda}`);
-            labelMap.set(b.id, `Estante ${rlabel} · ${sname}`);
+            const sname  = shelfName.get(`${b.estante}-${b.balda}`) ?? (b.codigo || `B${b.balda}`);
+            labelMapFull.set(b.id, `Estante ${rlabel} · ${sname}`);
+            // Compacto: SOLO balda (p. ej. B21)
+            labelMapCompact.set(b.id, sname);
           }
         }
-        setBaldaLabelById(labelMap);
 
         const baldaById = new Map(baldas.map(b => [b.id, b]));
 
-        // ===== Formatear resultados =====
+        // Formatear resultados (con ubicacion_full / ubicacion_compact)
         const formateados = (paquetesAPI || []).map(p => {
           const b = p.balda_id ? baldaById.get(p.balda_id) : null;
           const estanteNum = (p.estante != null ? Number(p.estante) : (b?.estante ?? null));
@@ -380,32 +356,33 @@ export default function BuscarPaquete() {
           const laneId     = Number.isFinite(laneIdRaw) ? laneIdRaw
                             : (mode === "lanes" ? (Number.isFinite(estanteNum) ? estanteNum : null) : null);
 
-          let ubicacion = "";
+          let ubicacion_full = "";
+          let ubicacion_compact = "";
           let lane_color = null;
+
           if (mode === "lanes") {
-            const lname = (laneId != null ? laneName.get(laneId) : null);
-            if (lname) {
-              ubicacion = `Carril ${lname}`;
-              lane_color = laneColor.get(laneId) || null;
-            } else if (typeof p.compartimento === "string" && p.compartimento.trim()) {
-              ubicacion = `Carril ${p.compartimento.trim()}`;
-              const lid = [...laneName.entries()].find(([, n]) => String(n).toUpperCase() === p.compartimento.trim().toUpperCase())?.[0];
-              if (lid != null) lane_color = laneColor.get(lid) || null;
-            } else if (p.balda_id && labelMap.get(p.balda_id)) {
-              ubicacion = labelMap.get(p.balda_id);
+            if (p.balda_id && labelMapFull.get(p.balda_id)) {
+              ubicacion_full = labelMapFull.get(p.balda_id);
+              ubicacion_compact = labelMapCompact.get(p.balda_id);
               if (b?.estante != null) lane_color = laneColor.get(Number(b.estante)) || null;
             } else {
-              const lname2 = laneName.get(Number(estanteNum));
-              ubicacion = `Carril ${lname2 ?? (b?.codigo ?? estanteNum ?? "?")}`;
-              if (estanteNum != null) lane_color = laneColor.get(Number(estanteNum)) || null;
+              const lname = (laneId != null ? laneName.get(laneId) : null)
+                         ?? (typeof p.compartimento === "string" && p.compartimento.trim() ? p.compartimento.trim() : null)
+                         ?? (laneName.get(Number(estanteNum)) ?? (b?.codigo ?? estanteNum ?? "?"));
+              ubicacion_full = `Carril ${lname}`;
+              ubicacion_compact = String(lname);
+              if (laneId != null) lane_color = laneColor.get(laneId) || null;
+              else if (estanteNum != null) lane_color = laneColor.get(Number(estanteNum)) || null;
             }
           } else {
-            if (p.balda_id && labelMap.get(p.balda_id)) {
-              ubicacion = labelMap.get(p.balda_id);
+            if (p.balda_id) {
+              ubicacion_full = labelMapFull.get(p.balda_id) || "";
+              ubicacion_compact = labelMapCompact.get(p.balda_id) || "";
             } else {
               const rlabel = rackName.get(Number(estanteNum)) ?? String(estanteNum ?? "?");
-              const sname  = shelfName.get(`${estanteNum}-${baldaIdx}`) ?? (b?.codigo || `Fila ${baldaIdx ?? "?"}`);
-              ubicacion = `Estante ${rlabel} · ${sname}`;
+              const sname  = shelfName.get(`${estanteNum}-${baldaIdx}`) ?? (b?.codigo || `B${baldaIdx ?? "?"}`);
+              ubicacion_full = `Estante ${rlabel} · ${sname}`;
+              ubicacion_compact = sname; // SOLO balda
             }
           }
 
@@ -419,13 +396,15 @@ export default function BuscarPaquete() {
             fecha_llegada: p.fecha_llegada ?? p.created_at ?? new Date().toISOString(),
             estante: estanteNum,
             balda: baldaIdx,
-            ubicacion_label: ubicacion,
+            ubicacion_full,
+            ubicacion_compact,
             lane_color,
             lane_id: laneId,
             compartimento: p.compartimento ?? null,
           };
         });
 
+        setBaldaLabelById(labelMapFull); // (se usa en el selector del modal)
         setResultados(formateados);
       } catch (e) {
         console.error("Error al cargar:", e);
@@ -436,17 +415,6 @@ export default function BuscarPaquete() {
     })();
     return () => { cancelado = true; };
   }, []);
-
-  /* ===== Colores por carrier (para pintar chips/acciones) ===== */
-  const getCompColor = (name) => normHex(coloresCompania.get(name), "#2563eb");
-  const brandColor = useMemo(() => (
-    companiaFiltro !== "todos" ? getCompColor(companiaFiltro) : "#2563eb"
-  ), [companiaFiltro, coloresCompania]);
-  const brandVars = useMemo(() => ({
-    '--brand': brandColor,
-    '--brand-rgba': hexToRgba(brandColor, 0.14),
-    '--brand-ring': hexToRgba(brandColor, 0.36),
-  }), [brandColor]);
 
   /* ===== Opciones derivadas ===== */
   const companiasFiltradas = useMemo(
@@ -465,31 +433,30 @@ export default function BuscarPaquete() {
   // Debounce + reset page
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => setPaginaActual(1), 250);
+    searchDebounceRef.current = setTimeout(() => setPaginaActual(1), 200);
     return () => clearTimeout(searchDebounceRef.current);
-  }, [busqueda, estadoFiltro, companiaFiltro, estanteFiltro, baldaFiltro, modoBusqueda, sensibilidad]);
+  }, [busqueda, estadoFiltro, companiaFiltro, estanteFiltro, baldaFiltro, lockedClient]);
 
-  // Sugerencias dinámicas
+  // Lista de clientes para bloqueo por coincidencia exacta
+  const allClientNames = useMemo(
+    () => Array.from(new Set(resultados.map(r => r.nombre_cliente).filter(Boolean))),
+    [resultados]
+  );
+
+  // Exact match -> bloqueo automático
+  const exactClientMatch = useMemo(() => {
+    const qn = normalize(busqueda);
+    if (!qn) return null;
+    return allClientNames.find(n => normalize(n) === qn) || null;
+  }, [busqueda, allClientNames]);
   useEffect(() => {
-    if (!busqueda || normalize(busqueda).length < 2) { setSugerencias([]); return; }
-    const nombres = Array.from(new Set(resultados.map(r => r.nombre_cliente).filter(Boolean)));
-    const cands = [...nombres, ...companiasFiltradas.filter(c => c !== "todos")];
-    const ranked = cands
-      .map(txt => ({ txt, s: fuzzyScore(busqueda, txt) }))
-      .filter(x => x.s >= 0.55)
-      .sort((a,b)=>b.s-a.s)
-      .slice(0,6)
-      .map(x=>x.txt);
-    setSugerencias(ranked);
-  }, [busqueda, resultados, companiasFiltradas]);
+    if (exactClientMatch && normalize(lockedClient || "") !== normalize(exactClientMatch)) {
+      setLockedClient(exactClientMatch);
+    }
+    if (!busqueda && lockedClient) setLockedClient(null);
+  }, [busqueda, exactClientMatch]); // eslint-disable-line
 
-  const threshold = useMemo(() => {
-    if (sensibilidad === "amplia") return 0.55;
-    if (sensibilidad === "estricta") return 0.78;
-    return 0.66;
-  }, [sensibilidad]);
-
-  // Filtrado + ranking
+  // Filtrado + ranking inteligente
   const filtrados = useMemo(() => {
     let base = resultados
       .filter(p =>
@@ -501,6 +468,7 @@ export default function BuscarPaquete() {
       .filter(p => baldaFiltro === "todos" || p.balda === parseInt(baldaFiltro));
 
     const q = busqueda.trim();
+
     const sortFn = (A, B) => {
       const dir = sortBy.dir === "asc" ? 1 : -1;
       const a = A[sortBy.field], b = B[sortBy.field];
@@ -509,24 +477,19 @@ export default function BuscarPaquete() {
       return ((a ?? 0) - (b ?? 0)) * dir;
     };
 
+    if (lockedClient) {
+      return base.filter(p => normalize(p.nombre_cliente) === normalize(lockedClient)).sort(sortFn);
+    }
     if (!q) return [...base].sort(sortFn);
 
-    if (modoBusqueda === "exacta") {
-      const nq = normalize(q);
-      base = base.filter(p => normalize(p.nombre_cliente).includes(nq));
-      return [...base].sort(sortFn);
-    }
-
-    return base
-      .map(p => {
-        const candidate = `${p.nombre_cliente} ${p.compania || ""}`;
-        const score = fuzzyScore(q, candidate);
-        return { p, score };
-      })
-      .filter(x => x.score >= threshold)
-      .sort((a, b) => b.score - a.score || sortFn(a.p, b.p))
+    const ranked = base
+      .filter(p => passesStrict(q, `${p.nombre_cliente} ${p.compania || ""}`))
+      .map(p => ({ p, s: fuzzyScore(q, `${p.nombre_cliente} ${p.compania || ""}`) }))
+      .sort((a,b)=>b.s-a.s || sortFn(a.p, b.p))
       .map(x => x.p);
-  }, [resultados, busqueda, estadoFiltro, companiaFiltro, estanteFiltro, baldaFiltro, sortBy, modoBusqueda, threshold]);
+
+    return ranked;
+  }, [resultados, busqueda, estadoFiltro, companiaFiltro, estanteFiltro, baldaFiltro, sortBy, lockedClient]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / RESULTADOS_POR_PAGINA));
   const paginados = useMemo(
@@ -558,19 +521,13 @@ export default function BuscarPaquete() {
       showToast("No se pudo marcar como entregado", "error");
     }
   };
-
   const solicitarEliminar = (paquete) => {
-    setConfirmState({
-      open: true,
-      payload: { id: paquete.id, nombre: paquete.nombre_cliente }
-    });
+    setConfirmState({ open: true, payload: { id: paquete.id, nombre: paquete.nombre_cliente } });
   };
-
   const confirmarEliminar = async () => {
     const payload = confirmState.payload;
     setConfirmState({ open: false, payload: null });
     if (!payload) return;
-
     const { id } = payload;
     const snapshot = resultados;
     setResultados(prev => prev.filter(p => p.id !== id));
@@ -585,9 +542,7 @@ export default function BuscarPaquete() {
       showToast("No se pudo eliminar el paquete", "error");
     }
   };
-
   const abrirModalEdicion = (paquete) => { setPaqueteEditando({ ...paquete }); setMostrarModal(true); };
-
   const guardarCambios = async () => {
     if (!paqueteEditando) return;
     try {
@@ -604,11 +559,21 @@ export default function BuscarPaquete() {
 
       const b = baldasDisponibles.find(x => x.id === (actualizado?.balda_id ?? payload.balda_id));
       const rlabel = b ? (rackNameById.get(b.estante) ?? String(b.estante)) : undefined;
-      const slabel = b ? (shelfNameByKey.get(`${b.estante}-${b.balda}`) ?? (b.codigo || `Fila ${b.balda}`)) : undefined;
-      const nuevaEtiqueta = b ? (layoutMode === "lanes"
-        ? `Carril ${laneNameById.get(b.estante) ?? b.codigo ?? b.estante}`
-        : `Estante ${rlabel} · ${slabel}`
-      ) : undefined;
+      const sname  = b ? (shelfNameByKey.get(`${b.estante}-${b.balda}`) ?? (b.codigo || `B${b.balda}`)) : undefined;
+
+      const nueva_full = b
+        ? (layoutMode === "lanes"
+            ? `Carril ${laneNameById.get(b.estante) ?? b.codigo ?? b.estante}`
+            : `Estante ${rlabel} · ${sname}`
+          )
+        : undefined;
+      const nueva_compact = b
+        ? (layoutMode === "lanes"
+            ? (laneNameById.get(b.estante) ?? b.codigo ?? String(b.estante))
+            : (sname ?? "")
+          )
+        : undefined;
+
       const nuevoColor = b && layoutMode === "lanes" ? (laneColorById.get(b.estante) || null) : undefined;
 
       setResultados(prev => prev.map(p => p.id === payload.id ? {
@@ -619,7 +584,8 @@ export default function BuscarPaquete() {
         balda_id: actualizado?.balda_id ?? payload.balda_id,
         estante: actualizado?.estante ?? b?.estante ?? p.estante,
         balda: actualizado?.balda ?? b?.balda ?? p.balda,
-        ubicacion_label: nuevaEtiqueta ?? p.ubicacion_label,
+        ubicacion_full: nueva_full ?? p.ubicacion_full,
+        ubicacion_compact: nueva_compact ?? p.ubicacion_compact,
         lane_color: nuevoColor ?? p.lane_color,
       } : p));
       setMostrarModal(false);
@@ -633,23 +599,32 @@ export default function BuscarPaquete() {
   const formatearFecha = (iso) =>
     new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
 
-  const limpiarBusqueda = () => setBusqueda("");
+  const limpiarBusqueda = () => { setBusqueda(""); setLockedClient(null); };
 
-  // KPIs
-  const total = filtrados.length;
-  const pendientesCount = filtrados.filter(p => !p.entregado).length;
+  // KPIs (ignoran estado para totales reales en la vista actual)
+  const filtradosAllForKpi = useMemo(() => {
+    return resultados
+      .filter(p => companiaFiltro === "todos" || p.compania === companiaFiltro)
+      .filter(p => estanteFiltro === "todos" || p.estante === parseInt(estanteFiltro))
+      .filter(p => baldaFiltro === "todos" || p.balda === parseInt(baldaFiltro))
+      .filter(p => {
+        const q = busqueda.trim();
+        if (!q) return true;
+        if (lockedClient) return normalize(p.nombre_cliente) === normalize(lockedClient);
+        if (!passesStrict(q, `${p.nombre_cliente} ${p.compania || ""}`)) return false;
+        return true;
+      });
+  }, [resultados, busqueda, companiaFiltro, estanteFiltro, baldaFiltro, lockedClient]);
+  const total = filtradosAllForKpi.length;
+  const pendientesCount = filtradosAllForKpi.filter(p => !p.entregado).length;
   const entregadosCount = total - pendientesCount;
   const progreso = total ? Math.round((entregadosCount / total) * 100) : 0;
 
-  // chips
   const chips = [
-    busqueda ? { k: "q", label: `Búsqueda: “${busqueda}”`, onClear: () => setBusqueda("") } : null,
-    estadoFiltro !== "todos" ? { k: "estado", label: `Estado: ${estadoFiltro}`, onClear: () => setEstadoFiltro("todos") } : null,
+    lockedClient ? { k: "lock", label: `Cliente: ${lockedClient}`, onClear: () => setLockedClient(null) } : null,
+    estadoFiltro !== "pendiente" ? { k: "estado", label: `Estado: ${estadoFiltro}`, onClear: () => setEstadoFiltro("pendiente") } : null,
     companiaFiltro !== "todos" ? {
-      k: "comp",
-      label: `Compañía: ${companiaFiltro}`,
-      color: getCompColor(companiaFiltro),
-      onClear: () => setCompaniaFiltro("todos")
+      k: "comp", label: `Compañía: ${companiaFiltro}`, onClear: () => setCompaniaFiltro("todos")
     } : null,
     estanteFiltro !== "todos" ? {
       k: "est",
@@ -661,11 +636,52 @@ export default function BuscarPaquete() {
     baldaFiltro !== "todos" ? { k: "bal", label: `Fila: ${baldaFiltro}`, onClear: () => setBaldaFiltro("todos") } : null,
   ].filter(Boolean);
 
+  /* ===== Privacidad ===== */
+  const toggleRevealAll = () => { setRevealAll(prev => !prev); setRevealedSet(new Set()); };
+  const toggleRevealOne = (id) => {
+    if (revealAll) return;
+    setRevealedSet(prev => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  };
+
+  // Enter en búsqueda
+  const onSearchKeyDown = (e) => {
+    if (e.key === "Escape") {
+      limpiarBusqueda();
+    }
+  };
+
+  // Helper: elegir etiqueta según preferencia
+  const loc = (p) => showRackInLocation ? (p.ubicacion_full || p.ubicacion_compact) : (p.ubicacion_compact || p.ubicacion_full);
+
   return (
-    <div className="buscar-paquete" style={brandVars}>
-      <div className="titulo-flex">
+    <div className="buscar-paquete">
+      <div className="bp-head">
         <h2><FaSearch className="icono-titulo" /> Buscar paquete</h2>
-        <div className="resumen kpis" aria-live="polite">
+
+        <div className="search-hero">
+          <FaSearch className="magnifier" />
+          <input
+            type="search"
+            placeholder="Escribe el nombre del cliente…"
+            value={busqueda}
+            onChange={(e) => { setBusqueda(e.target.value); if (lockedClient) setLockedClient(null); }}
+            onKeyDown={onSearchKeyDown}
+            aria-label="Buscar por cliente"
+            inputMode="search"
+            autoFocus
+          />
+          {busqueda && (
+            <button className="clear" onClick={limpiarBusqueda} title="Borrar búsqueda" aria-label="Borrar búsqueda">
+              <FaTimes />
+            </button>
+          )}
+        </div>
+
+        <div className="kpis" aria-live="polite">
           <div className="kpi"><span className="kpi-label">Total</span><span className="kpi-value">{total}</span></div>
           <div className="kpi"><span className="kpi-label">Pendientes</span><span className="kpi-value">{pendientesCount}</span></div>
           <div className="kpi"><span className="kpi-label">Entregados</span><span className="kpi-value">{entregadosCount}</span></div>
@@ -673,106 +689,92 @@ export default function BuscarPaquete() {
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="filtros-superiores" role="region" aria-label="Filtros de búsqueda">
-        <div className="searchbox" onFocus={() => setOpenSug(true)} onBlur={() => setTimeout(() => setOpenSug(false), 120)}>
-          <FaSearch className="magnifier" />
-          <input
-            type="search"
-            placeholder="Buscar por cliente (admite errores tipográficos)…"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            aria-label="Buscar por cliente"
-            inputMode="search"
-          />
-          {busqueda && (
-            <button className="clear" onClick={limpiarBusqueda} title="Borrar búsqueda" aria-label="Borrar búsqueda">
-              <FaTimes />
-            </button>
-          )}
-          {openSug && sugerencias.length > 0 && (
-            <ul className="suggestions" role="listbox">
-              {sugerencias.map(s => (
-                <li key={s} role="option" onMouseDown={() => { setBusqueda(s); setOpenSug(false); }}>
-                  <FaSearch /> <span>{s}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+      {/* Filtros + Privacidad */}
+      <div className="bp-filtros" role="region" aria-label="Filtros">
+        <label className="f-item">
+          <span className="f-label">Estado</span>
+          <select value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)}>
+            <option value="pendiente">Pendiente</option>
+            <option value="todos">Todos</option>
+            <option value="entregado">Entregado</option>
+          </select>
+        </label>
+
+        <label className="f-item">
+          <span className="f-label">Compañía</span>
+          <select value={companiaFiltro} onChange={(e) => setCompaniaFiltro(e.target.value)}>
+            {companiasFiltradas.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+
+        <label className="f-item">
+          <span className="f-label">{layoutMode === "lanes" ? "Carril" : "Estante"}</span>
+          <select value={estanteFiltro} onChange={(e) => setEstanteFiltro(e.target.value)}>
+            {estantesFiltrados.map(val => (
+              <option key={val} value={val}>
+                {val === "todos"
+                  ? (layoutMode === "lanes" ? "Todos los carriles" : "Todos los estantes")
+                  : (layoutMode === "lanes"
+                      ? `Carril ${laneNameById.get(parseInt(val)) ?? val}`
+                      : `Estante ${rackNameById.get(parseInt(val)) ?? val}`
+                    )
+                }
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="f-item">
+          <span className="f-label">Fila</span>
+          <select value={baldaFiltro} onChange={(e) => setBaldaFiltro(e.target.value)}>
+            {baldasFiltradas.map(val => (
+              <option key={val} value={val}>
+                {val === "todos" ? "Todas" : `Fila ${val}`}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="f-actions">
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => {
+              setEstadoFiltro("pendiente");
+              setCompaniaFiltro("todos");
+              setEstanteFiltro("todos");
+              setBaldaFiltro("todos");
+              setLockedClient(null);
+            }}
+          >
+            Limpiar filtros
+          </button>
+
+          <button
+            type="button"
+            className={`btn-ghost ${revealAll ? "active" : ""}`}
+            onClick={toggleRevealAll}
+            title={revealAll ? "Ocultar nombres" : "Mostrar nombres"}
+          >
+            {revealAll ? <><FaEyeSlash /> Ocultar nombres</> : <><FaEye /> Mostrar nombres</>}
+          </button>
         </div>
-
-        <div className="segmented">
-          <span className="segmented__label"><FaSlidersH /> Búsqueda</span>
-          <div className="segmented__group" role="tablist" aria-label="Modo de búsqueda">
-            <button className={modoBusqueda === "inteligente" ? "active" : ""} onClick={() => setModoBusqueda("inteligente")} role="tab">Inteligente</button>
-            <button className={modoBusqueda === "exacta" ? "active" : ""} onClick={() => setModoBusqueda("exacta")} role="tab">Exacta</button>
-          </div>
-          {modoBusqueda === "inteligente" && (
-            <div className="segmented__group sensitivity" role="tablist" aria-label="Sensibilidad">
-              <button className={sensibilidad === "amplia" ? "active" : ""} onClick={() => setSensibilidad("amplia")} role="tab">Amplia</button>
-              <button className={sensibilidad === "media" ? "active" : ""} onClick={() => setSensibilidad("media")} role="tab">Media</button>
-              <button className={sensibilidad === "estricta" ? "active" : ""} onClick={() => setSensibilidad("estricta")} role="tab">Estricta</button>
-            </div>
-          )}
-        </div>
-
-        <select value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)} aria-label="Filtrar por estado">
-          <option value="todos">Todos</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="entregado">Entregado</option>
-        </select>
-
-        <select value={companiaFiltro} onChange={(e) => setCompaniaFiltro(e.target.value)} aria-label="Filtrar por compañía">
-          {companiasFiltradas.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-
-        {/* Estante/Carril */}
-        <select value={estanteFiltro} onChange={(e) => setEstanteFiltro(e.target.value)} aria-label={layoutMode === "lanes" ? "Filtrar por carril" : "Filtrar por estante"}>
-          {estantesFiltrados.map(val => (
-            <option key={val} value={val}>
-              {val === "todos"
-                ? (layoutMode === "lanes" ? "Todos los carriles" : "Todos los estantes")
-                : (layoutMode === "lanes"
-                    ? `Carril ${laneNameById.get(parseInt(val)) ?? val}`
-                    : `Estante ${rackNameById.get(parseInt(val)) ?? val}`
-                  )
-              }
-            </option>
-          ))}
-        </select>
-
-        {/* Fila/Balda */}
-        <select value={baldaFiltro} onChange={(e) => setBaldaFiltro(e.target.value)} aria-label="Filtrar por fila/balda">
-          {baldasFiltradas.map(val => (
-            <option key={val} value={val}>
-              {val === "todos" ? "Todas las filas" : `Fila ${val}`}
-            </option>
-          ))}
-        </select>
       </div>
 
       {/* Chips */}
       {chips.length > 0 && (
         <div className="chips">
-          <span className="chips-label"><FaFilter /> Filtros activos</span>
           <div className="chips-list">
             {chips.map(c => (
               <button
                 key={c.k}
-                className={`chip ${c.color ? "chip--brand" : ""}`}
+                className="chip"
                 onClick={c.onClear}
                 aria-label={`Quitar ${c.label}`}
-                style={c.color ? { ['--chip']: c.color, ['--chip-rgba']: hexToRgba(c.color, 0.16) } : undefined}
               >
                 {c.label} <FaTimes />
               </button>
             ))}
-            <button
-              className="chip clear-all"
-              onClick={() => { setBusqueda(""); setEstadoFiltro("todos"); setCompaniaFiltro("todos"); setEstanteFiltro("todos"); setBaldaFiltro("todos"); }}
-            >
-              Limpiar todo
-            </button>
           </div>
         </div>
       )}
@@ -793,12 +795,15 @@ export default function BuscarPaquete() {
         <div className="estado-vacio">
           <FaInfoCircle /> No hay paquetes que coincidan.
           <div className="empty-actions">
-            {busqueda && <button onClick={() => setBusqueda("")}>Limpiar búsqueda</button>}
-            {modoBusqueda === "inteligente" && sensibilidad !== "amplia" && (
-              <button onClick={() => setSensibilidad("amplia")}>Ampliar sensibilidad</button>
-            )}
-            {(estadoFiltro !== "todos" || companiaFiltro !== "todos" || estanteFiltro !== "todos" || baldaFiltro !== "todos") && (
-              <button onClick={() => { setEstadoFiltro("todos"); setCompaniaFiltro("todos"); setEstanteFiltro("todos"); setBaldaFiltro("todos"); }}>
+            {busqueda && <button onClick={limpiarBusqueda}>Limpiar búsqueda</button>}
+            {(estadoFiltro !== "pendiente" || companiaFiltro !== "todos" || estanteFiltro !== "todos" || baldaFiltro !== "todos" || lockedClient) && (
+              <button onClick={() => {
+                setEstadoFiltro("pendiente");
+                setCompaniaFiltro("todos");
+                setEstanteFiltro("todos");
+                setBaldaFiltro("todos");
+                setLockedClient(null);
+              }}>
                 Quitar filtros
               </button>
             )}
@@ -811,11 +816,11 @@ export default function BuscarPaquete() {
           <div className="tabla-wrapper" role="region" aria-label="Resultados">
             <table className="tabla-paquetes">
               <colgroup>
-                <col style={{ width: "26%" }} />
+                <col style={{ width: "28%" }} />
                 <col style={{ width: "18%" }} />
                 <col style={{ width: "24%" }} />
                 <col style={{ width: "12%" }} />
-                <col style={{ width: "10%" }} />
+                <col style={{ width: "8%" }} />
                 <col style={{ width: "10%" }} />
               </colgroup>
 
@@ -823,7 +828,27 @@ export default function BuscarPaquete() {
                 <tr>
                   <th onClick={() => toggleSort("nombre_cliente")} className={sortBy.field==="nombre_cliente" ? sortBy.dir : ""}>Cliente</th>
                   <th onClick={() => toggleSort("compania")} className={sortBy.field==="compania" ? sortBy.dir : ""}>Compañía</th>
-                  <th>Ubicación</th>
+                  <th>
+                    <div className="th-ubi">
+                      <button
+                        type="button"
+                        className={`mini-toggle ${showRackInLocation ? "on" : ""}`}
+                        onClick={() => setShowRackInLocation(v => !v)}
+                        title={showRackInLocation ? "Mostrar solo balda" : "Mostrar también estante"}
+                        aria-label={showRackInLocation ? "Mostrar solo balda" : "Mostrar también estante"}
+                      >
+                        {showRackInLocation ? "Estante+Balda" : "Solo balda"}
+                      </button>
+                      <span
+                        onClick={() => toggleSort("ubicacion_compact")}
+                        className={sortBy.field==="ubicacion_compact" ? sortBy.dir : ""}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        Ubicación
+                      </span>
+                    </div>
+                  </th>
                   <th onClick={() => toggleSort("fecha_llegada")} className={sortBy.field==="fecha_llegada" ? sortBy.dir : ""}>Fecha</th>
                   <th onClick={() => toggleSort("entregado")} className={sortBy.field==="entregado" ? sortBy.dir : ""}>Estado</th>
                   <th aria-hidden>Acciones</th>
@@ -835,7 +860,7 @@ export default function BuscarPaquete() {
                     ? { ['--lane']: p.lane_color, ['--lane-rgba']: hexToRgba(p.lane_color, 0.06) }
                     : undefined;
 
-                  const compColor = getCompColor(p.compania);
+                  const revealed = revealAll || revealedSet.has(p.id);
 
                   return (
                     <tr
@@ -843,39 +868,32 @@ export default function BuscarPaquete() {
                       style={rowStyle}
                       className={`${flashRowId === p.id ? "flash" : ""} ${p.lane_color ? "lane-tinted" : ""}`}
                     >
-                      <td data-label="Cliente" className="cliente">
-                        {busqueda && modoBusqueda === "inteligente"
-                          ? highlightApprox(p.nombre_cliente, busqueda)
-                          : p.nombre_cliente}
+                      <td data-label="Cliente" className="cliente-col">
+                        <div className={`cliente ${revealed ? "" : "blurred"}`}>
+                          {busqueda ? highlightApprox(p.nombre_cliente, busqueda) : p.nombre_cliente}
+                        </div>
                       </td>
 
-                      {/* Compañía con color */}
                       <td data-label="Compañía" className="compania">
                         {p.compania ? (
-                          <span
-                            className="comp-chip"
-                            style={{ ['--comp']: compColor, ['--comp-rgba']: hexToRgba(compColor, 0.16) }}
-                            title={p.compania}
-                          >
-                            <i className="comp-dot" aria-hidden="true" />
-                            <span>{p.compania}</span>
-                          </span>
+                          <span className="comp-text">{p.compania}</span>
                         ) : <span className="muted">—</span>}
                       </td>
 
-                      {/* Ubicación */}
                       <td data-label="Ubicación">
                         {layoutMode === "lanes" && p.lane_color ? (
                           <span
                             className="ubi lane"
                             style={{ ['--lane']: p.lane_color, ['--lane-rgba']: hexToRgba(p.lane_color, 0.18) }}
-                            title={p.ubicacion_label}
+                            title={showRackInLocation ? p.ubicacion_full : p.ubicacion_compact}
                           >
                             <i className="lane-dot" aria-hidden="true" />
-                            <span>{p.ubicacion_label}</span>
+                            <span>{loc(p)}</span>
                           </span>
                         ) : (
-                          <span className="ubi">{p.ubicacion_label}</span>
+                          <span className="ubi" title={showRackInLocation ? p.ubicacion_full : p.ubicacion_compact}>
+                            {loc(p)}
+                          </span>
                         )}
                       </td>
 
@@ -885,15 +903,42 @@ export default function BuscarPaquete() {
                           {p.entregado ? "Entregado" : "Pendiente"}
                         </span>
                       </td>
+
                       <td data-label="Acciones" className="acciones">
+                        {/* PRIVACIDAD: SIEMPRE visible en todas las filas */}
+                        <button
+                          className="icono privacidad"
+                          title={revealed ? "Ocultar nombre" : "Mostrar nombre"}
+                          aria-label={revealed ? `Ocultar nombre de ${p.nombre_cliente}` : `Mostrar nombre de ${p.nombre_cliente}`}
+                          onClick={() => toggleRevealOne(p.id)}
+                        >
+                          {revealed ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
+                        </button>
+
                         <button className="icono editar" title="Editar" aria-label={`Editar paquete de ${p.nombre_cliente}`} onClick={() => abrirModalEdicion(p)}>
                           <FaEdit size={16} />
                         </button>
+
                         {!p.entregado && (
-                          <button className="icono entregar" title="Marcar entregado" aria-label={`Marcar entregado el paquete de ${p.nombre_cliente}`} onClick={() => marcarEntregado(p.id)}>
-                            <FaCheckCircle size={16} />
+                          <button
+                            className="btn-entregar"
+                            title="Marcar entregado"
+                            aria-label={`Marcar entregado el paquete de ${p.nombre_cliente}`}
+                            onClick={() => marcarEntregado(p.id)}
+                            style={{
+                              backgroundColor: "#16a34a",
+                              color: "#fff",
+                              border: "none",
+                              padding: "6px 10px",
+                              borderRadius: "8px",
+                              fontWeight: 600,
+                              cursor: "pointer"
+                            }}
+                          >
+                            Entregar
                           </button>
                         )}
+
                         <button className="icono eliminar" title="Eliminar" aria-label={`Eliminar paquete de ${p.nombre_cliente}`} onClick={() => solicitarEliminar(p)}>
                           <FaTrashAlt size={16} />
                         </button>
@@ -910,36 +955,47 @@ export default function BuscarPaquete() {
                 const styleLane = p.lane_color
                   ? { ['--lane']: p.lane_color, ['--lane-rgba']: hexToRgba(p.lane_color, 0.08) }
                   : undefined;
-                const compColor = getCompColor(p.compania);
+                const revealed = revealAll || revealedSet.has(p.id);
                 return (
                   <article key={p.id} className={`card ${p.lane_color ? "lane-tinted" : ""}`} style={styleLane}>
                     <header className="card__head">
-                      <h4 className="card__title">{p.nombre_cliente}</h4>
-                      <span className={`badge-estado ${p.entregado ? "entregado" : "pendiente"}`}>
-                        {p.entregado ? "Entregado" : "Pendiente"}
-                      </span>
+                      <h4 className={`card__title ${revealed ? "" : "blurred"}`}>{p.nombre_cliente}</h4>
+                      <div className="card__head-actions">
+                        {/* PRIVACIDAD en móvil: SIEMPRE */}
+                        <button className="btn-icon" onClick={() => toggleRevealOne(p.id)} title={revealed ? "Ocultar nombre" : "Mostrar nombre"}>
+                          {revealed ? <FaEyeSlash /> : <FaEye />}
+                        </button>
+                        <span className={`badge-estado ${p.entregado ? "entregado" : "pendiente"}`}>
+                          {p.entregado ? "Entregado" : "Pendiente"}
+                        </span>
+                      </div>
                     </header>
                     <div className="card__row">
                       <span className="label">Compañía</span>
                       {p.compania ? (
-                        <span
-                          className="comp-chip"
-                          style={{ ['--comp']: compColor, ['--comp-rgba']: hexToRgba(compColor, 0.16) }}
-                        >
-                          <i className="comp-dot" aria-hidden="true" />
-                          <span>{p.compania}</span>
-                        </span>
+                        <span className="comp-text">{p.compania}</span>
                       ) : <span className="muted">—</span>}
                     </div>
                     <div className="card__row">
-                      <span className="label">Ubicación</span>
+                      <span className="label">
+                        Ubicación
+                        <button
+                          type="button"
+                          className={`mini-toggle ml-6 ${showRackInLocation ? "on" : ""}`}
+                          onClick={() => setShowRackInLocation(v => !v)}
+                          title={showRackInLocation ? "Mostrar solo balda" : "Mostrar también estante"}
+                          aria-label={showRackInLocation ? "Mostrar solo balda" : "Mostrar también estante"}
+                        >
+                          {showRackInLocation ? "E+B" : "B"}
+                        </button>
+                      </span>
                       {layoutMode === "lanes" && p.lane_color ? (
                         <span className="ubi lane" style={{ ['--lane']: p.lane_color, ['--lane-rgba']: hexToRgba(p.lane_color, 0.18) }}>
                           <i className="lane-dot" aria-hidden="true" />
-                          <span>{p.ubicacion_label}</span>
+                          <span>{loc(p)}</span>
                         </span>
                       ) : (
-                        <span className="ubi">{p.ubicacion_label}</span>
+                        <span className="ubi">{loc(p)}</span>
                       )}
                     </div>
                     <div className="card__row">
@@ -949,7 +1005,20 @@ export default function BuscarPaquete() {
                     <footer className="card__actions">
                       <button className="btn btn--ghost" onClick={() => abrirModalEdicion(p)}><FaEdit /> Editar</button>
                       {!p.entregado && (
-                        <button className="btn btn--primary" onClick={() => marcarEntregado(p.id)}><FaCheckCircle /> Entregar</button>
+                        <button
+                          className="btn"
+                          onClick={() => marcarEntregado(p.id)}
+                          style={{
+                            backgroundColor: "#16a34a",
+                            color: "#fff",
+                            border: "none",
+                            padding: "8px 10px",
+                            borderRadius: "10px",
+                            fontWeight: 600
+                          }}
+                        >
+                          Entregar
+                        </button>
                       )}
                       <button className="btn btn--danger-ghost" onClick={() => solicitarEliminar(p)}><FaTrashAlt /> Eliminar</button>
                     </footer>
@@ -1005,7 +1074,7 @@ export default function BuscarPaquete() {
                         ? `Carril ${laneNameById.get(b.estante) ?? b.codigo ?? b.estante}`
                         : (() => {
                             const rlabel = rackNameById.get(b.estante) ?? b.estante;
-                            const sname  = shelfNameByKey.get(`${b.estante}-${b.balda}`) ?? (b.codigo || `Fila ${b.balda}`);
+                            const sname  = shelfNameByKey.get(`${b.estante}-${b.balda}`) ?? (b.codigo || `B${b.balda}`);
                             return `Estante ${rlabel} · ${sname}`;
                           })()
                       )

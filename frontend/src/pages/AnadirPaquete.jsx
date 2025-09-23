@@ -1,3 +1,4 @@
+// src/pages/AnadirPaquete.jsx
 import { useState, useEffect, useMemo, useCallback, useRef, startTransition } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { getTenantIdOrThrow } from '../utils/tenant';
@@ -6,14 +7,11 @@ import {
   obtenerPaquetesBackend,
   obtenerEstructuraEstantesYPaquetes,
 } from '../services/paquetesService';
-import { FaBoxOpen, FaLightbulb, FaCheckCircle, FaCube, FaInfoCircle, FaSearch, FaUserTie } from 'react-icons/fa';
+import { FaBoxOpen, FaLightbulb, FaCheckCircle, FaCube } from 'react-icons/fa';
 import '../styles/AnadirPaquete.scss';
 
 /* ================= Utils ================= */
 const toUpperVis = (s='') => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
-const startsWithSafe = (a='', b='') => toUpperVis(a).startsWith(toUpperVis(b));
-const includesSafe   = (a='', b='') => toUpperVis(a).includes(toUpperVis(b));
-
 const hexToRgba = (hex='#2563eb', a=0.08) => {
   const h = String(hex).replace('#','').trim();
   if (!/^[0-9a-fA-F]{6}$/.test(h)) return `rgba(0,0,0,${a})`;
@@ -22,67 +20,38 @@ const hexToRgba = (hex='#2563eb', a=0.08) => {
   const b = parseInt(h.slice(4,6),16);
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 };
-
-const num = (v, d=0) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : d;
-};
-const pullPos = (o) => ({
-  row: num(o?.position?.row ?? o?.row ?? o?.r ?? o?.grid_row ?? o?.y, 1),
-  col: num(o?.position?.col ?? o?.col ?? o?.c ?? o?.grid_col ?? o?.x, 1),
-});
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+const num = (v, d=0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+const pullPos = (o) => ({ row: num(o?.position?.row ?? o?.row ?? o?.r ?? o?.grid_row ?? o?.y, 1), col: num(o?.position?.col ?? o?.col ?? o?.c ?? o?.grid_col ?? o?.x, 1) });
 const stripPrefix = (s='') => String(s).replace(/^\s*(carril|estante)\s+/i,'').trim();
-const isCodeLike = (s='') => /^[A-Z]{1,3}\s*\d{1,3}$/i.test(String(s).trim());
 
-// Parser de códigos “A1”, “B2”, “12-3”, “A”, “3”, etc.
-const canon = (s) => String(s||'').trim().toUpperCase().replace(/\s+/g,'');
-const alphaToNum = (str) => {
-  const s = String(str||'').toUpperCase();
-  if (!/^[A-Z]+$/.test(s)) return NaN;
-  let n = 0; for (const ch of s) n = n*26 + (ch.charCodeAt(0)-64);
-  return n;
-};
-function parseCodigoGenerico(raw) {
-  const code = canon(raw);
-  if (/^\d+$/.test(code)) return { estante: parseInt(code, 10), balda: 1 };
-  if (/^[A-Z]+$/.test(code)) return { estante: alphaToNum(code), balda: 1 };
-  let m = code.match(/^([A-Z]+)(\d+)$/);           // A1, B12
-  if (m) return { estante: alphaToNum(m[1]), balda: parseInt(m[2], 10) };
-  m = String(raw).trim().match(/^(\d+)\s*-\s*(\d+)$/); // 2-3
-  if (m) return { estante: parseInt(m[1], 10), balda: parseInt(m[2], 10) };
-  return null;
-}
+/* ===== Fuzzy ===== */
+const SIM_THRESHOLD = 0.42;
+function bigrams(s=''){const t=toUpperVis(s);const out=[];for(let i=0;i<t.length-1;i++) out.push(t.slice(i,i+2));return out;}
+function dice(a='',b=''){const A=bigrams(a),B=bigrams(b);if(!A.length||!B.length) return 0;const m=new Map();for(const g of A)m.set(g,(m.get(g)||0)+1);let inter=0;for(const g of B){const c=m.get(g)||0;if(c>0){inter++;m.set(g,c-1)}}return (2*inter)/(A.length+B.length);}
+function fuzzyScore(candidate='',query=''){if(!query) return 0;const c=toUpperVis(candidate),q=toUpperVis(query);if(!c||!q) return 0;if(c===q) return 1;if(c.startsWith(q)) return 0.98;if(c.includes(q)) return 0.85;return clamp(0.55*dice(c,q),0,0.85);}
 
-/* ================= EXTRACCIÓN (estructura backend) ================= */
+/* ===== Estructura (racks & shelves) ===== */
 function extractBaldasFromEstructura(payload) {
   const out = [];
   const root = payload?.estructura;
   if (!Array.isArray(root)) return out;
   for (const est of root) {
     const estNum = num(est?.estante, NaN);
-    const rname = est?.nombre || String(estNum);
     const filas = Array.isArray(est?.filas) ? est.filas : [];
     for (const f of filas) {
       const idx = num(f?.idx ?? f?.index ?? f?.i ?? f?.balda, NaN);
       const id  = f?.id ?? `${estNum}:${idx}`;
-      // importante: aquí NO forzamos a mayúsculas el “name” si viene de configuración;
-      // trabajaremos internamente en mayúsculas con un mapa aparte para búsquedas.
-      const label = (f?.name ?? f?.codigo ?? `${rname}${idx}`);
+      const label = (f?.name ?? f?.codigo ?? `${estNum}-${idx}`);
       if (Number.isFinite(estNum) && Number.isFinite(idx)) {
         out.push({ id, codigo: String(label), estante: estNum, balda: idx });
       }
     }
   }
-  if (out.length === 0 && Array.isArray(payload)) {
-    return payload.map(r => ({
-      id: r.id, codigo: String(r.codigo||''),
-      estante: num(r.estante,1), balda: num(r.balda,1)
-    }));
-  }
   return out.sort((a,b)=> (a.estante-b.estante) || (a.balda-b.balda));
 }
 
-/* ================= FETCH ROBUSTO DE PAQUETES (siempre backend) ================= */
+/* ===== Carga de paquetes ===== */
 async function cargarPaquetesDesdeBackend() {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -96,6 +65,31 @@ async function cargarPaquetesDesdeBackend() {
   }
 }
 
+/* ===== Sonido agradable (pequeño “chime” de 2 tonos) ===== */
+function playChime() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AC();
+    const now = ctx.currentTime;
+
+    const mk = (freq, start, dur, gain=0.18) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(freq, now + start);
+      g.gain.setValueAtTime(0.0001, now + start);
+      g.gain.exponentialRampToValueAtTime(gain, now + start + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + start + dur);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(now + start);
+      o.stop(now + start + dur + 0.02);
+    };
+
+    mk(523.25, 0.00, 0.24, 0.20); // C5
+    mk(659.25, 0.12, 0.30, 0.18); // E5
+  } catch { /* noop */ }
+}
+
 export default function AnadirPaquete({ modoRapido = false }) {
   const [tenant, setTenant] = useState(null);
 
@@ -105,39 +99,38 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const [lanes, setLanes] = useState([]);
   const [baldas, setBaldas] = useState([]);
   const [rackOrder, setRackOrder] = useState([]);
-  const [rackNameById, setRackNameById] = useState(() => new Map()); // <— nombres de estantes desde config
+  const [rackNameById, setRackNameById] = useState(() => new Map());
+
+  // Refs destino (vuelo)
+  const laneRefs = useRef(new Map());
+  const baldaRefs = useRef(new Map());
 
   // Empresas
   const [companias, setCompanias] = useState([]);
-  const [coloresCompania, setColoresCompania] = useState(new Map()); // nombre -> color
+  const [coloresCompania, setColoresCompania] = useState(new Map());
   const [compania, setCompania]   = useState('');
   const [cliente, setCliente]     = useState('');
+
+  // Autocompletado (datalist)
+  const [sugs, setSugs] = useState([]);
 
   // Selección
   const [compartimento, setCompartimento] = useState('');
   const [slotSel, setSlotSel] = useState(null);
   const [seleccionManual, setSeleccionManual] = useState(false);
-  const [compartimentoAnimado, setCompartimentoAnimado] = useState(false);
 
   // Estado
   const [paquetes, setPaquetes] = useState([]);
   const [loading, setLoading]   = useState(false);
   const [exito, setExito]       = useState(false);
-  const [cargandoInicial, setCargandoInicial] = useState(true);
 
   // READY flags
   const [readyEmpresas, setReadyEmpresas] = useState(false);
   const [readyLayout,   setReadyLayout]   = useState(false);
   const [readyBaldas,   setReadyBaldas]   = useState(false);
 
-  // Autocomplete cliente
-  const [sugs, setSugs]           = useState([]);
-  const [sugsOpen, setSugsOpen]   = useState(false);
-  const [sugsActive, setSugsActive] = useState(0);
-  const [inlineRemainder, setInlineRemainder] = useState('');
-
   const inputClienteRef = useRef(null);
-  const [buscarBalda, setBuscarBalda] = useState('');
+  const flyLayerRef = useRef(null);
 
   // LS keys
   const LAST_COMPANY_KEY             = 'ultimaCompania';
@@ -146,21 +139,19 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const LAST_SLOT_BY_CLIENT_KEY      = 'ultimaBaldaPorCliente';
 
   /* ===== Derivados ===== */
-  // Índice en MAYÚSCULAS para búsquedas robustas
   const baldaMapByCodigo = useMemo(
     () => new Map(baldas.map(b => [String(b.codigo).toUpperCase(), b])),
     [baldas]
   );
-  const lanesByName      = useMemo(
+  const lanesByName = useMemo(
     () => new Map(lanes.map(l => [String(l.name).toUpperCase(), l])),
     [lanes]
   );
 
-  // Color de marca según compañía
+  // Marca por compañía
   const colorCarrier = useMemo(() => {
     const hex = coloresCompania.get(compania) || '#2563eb';
-    const norm = /^#[0-9a-fA-F]{6}$/.test(String(hex)) ? hex : '#2563eb';
-    return norm;
+    return /^#[0-9a-fA-F]{6}$/.test(String(hex)) ? hex : '#2563eb';
   }, [coloresCompania, compania]);
   const brandVars = useMemo(() => ({
     '--brand': colorCarrier,
@@ -168,72 +159,18 @@ export default function AnadirPaquete({ modoRapido = false }) {
     '--brand-ring': hexToRgba(colorCarrier, 0.36),
   }), [colorCarrier]);
 
-  const estanteriasAgrupadas = useMemo(() => {
-    if (layoutMode === 'lanes') return {};
-    const acc = {};
-    for (const b of baldas) (acc[b.estante] ||= []).push(b);
-    Object.values(acc).forEach(arr => arr.sort((a,b)=>a.balda-b.balda));
-    return acc;
-  }, [layoutMode, baldas]);
-
-  const conteo = useMemo(() => {
-    const c = {};
-    const inc = (k) => { if (!k) return; const s = String(k).toUpperCase(); c[s] = (c[s] || 0) + 1; };
-
-    for (const p of paquetes) {
-      const noEntregado = p.entregado === false || p.entregado == null;
-      if (!noEntregado) continue;
-
-      if (layoutMode === 'lanes') {
-        const raw = (typeof p.compartimento === 'string' && p.compartimento.trim()) ? p.compartimento.trim() : null;
-        const laneName = raw ? stripPrefix(raw) : null;
-        const laneId   = Number.isFinite(Number(p.lane_id)) ? String(Number(p.lane_id)) : null;
-        if (laneName) inc(laneName);
-        if (laneId)   inc(laneId);
-      } else {
-        const code = (typeof p.compartimento === 'string' && p.compartimento.trim())
-          ? p.compartimento.trim().toUpperCase()
-          : (p?.baldas?.codigo ? String(p.baldas.codigo).toUpperCase() : null);
-        const id   = Number.isFinite(Number(p?.balda_id)) ? String(Number(p.balda_id)) : null;
-        if (code) inc(code);
-        if (id)   inc(id);
-      }
-    }
-    return c;
-  }, [paquetes, layoutMode]);
-
-  const listaCompartimentos = useMemo(() => {
-    if (layoutMode === 'lanes') return lanes.map(l => l.name);
-    // trabajaremos con upper-case como clave principal
-    return baldas.map(b => String(b.codigo).toUpperCase());
-  }, [layoutMode, lanes, baldas]);
-
-  // Helpers LS
-  const getUltimaBaldaPorCompania = (nombre) => { try { const map = JSON.parse(localStorage.getItem(LAST_SLOT_BY_COMPANY_KEY) || '{}'); return map?.[nombre] || ''; } catch { return '' } };
-  const setUltimaBaldaPorCompania = (nombre, slot) => { try { const map = JSON.parse(localStorage.getItem(LAST_SLOT_BY_COMPANY_KEY) || '{}'); map[nombre] = slot; localStorage.setItem(LAST_SLOT_BY_COMPANY_KEY, JSON.stringify(map)); } catch {} };
-  const getUltimaCompaniaPorCliente = (cliente) => { try { const map = JSON.parse(localStorage.getItem(LAST_COMPANY_BY_CLIENT_KEY) || '{}'); return map?.[cliente] || ''; } catch { return '' } };
-  const setUltimaCompaniaPorCliente = (cliente, company) => { try { const map = JSON.parse(localStorage.getItem(LAST_COMPANY_BY_CLIENT_KEY) || '{}'); map[cliente] = company; localStorage.setItem(LAST_COMPANY_BY_CLIENT_KEY, JSON.stringify(map)); } catch {} };
-  const getUltimaBaldaPorCliente = (cliente) => { try { const map = JSON.parse(localStorage.getItem(LAST_SLOT_BY_CLIENT_KEY) || '{}'); return map?.[cliente] || ''; } catch { return '' } };
-  const setUltimaBaldaPorCliente = (cliente, slot) => { try { const map = JSON.parse(localStorage.getItem(LAST_SLOT_BY_CLIENT_KEY) || '{}'); map[cliente] = slot; localStorage.setItem(LAST_SLOT_BY_CLIENT_KEY, JSON.stringify(map)); } catch {} };
-
   /* ================= CARGA ================= */
   useEffect(() => {
     let cancelado = false;
     (async () => {
-      const mark = `[AñadirPaquete] carga ${Date.now()}`;
-      console.time(mark);
-      setCargandoInicial(true);
-      setReadyEmpresas(false);
-      setReadyLayout(false);
-      setReadyBaldas(false);
-
+      setReadyEmpresas(false); setReadyLayout(false); setReadyBaldas(false);
       try {
         // 1) Tenant
         const tid = await getTenantIdOrThrow();
         if (cancelado) return;
         setTenant({ id: tid });
 
-        // 2) Empresas (nombres + color)
+        // 2) Empresas
         let empresasRows = [];
         try {
           const { data: empresasRes } = await supabase
@@ -242,10 +179,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
             .eq('tenant_id', tid);
           empresasRows = empresasRes || [];
         } catch {}
-        const nombres = empresasRows
-          .map(e => e?.nombre)
-          .filter(Boolean)
-          .sort((a,b)=>a.localeCompare(b));
+        const nombres = empresasRows.map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b));
         setCompanias(nombres);
         const colorMap = new Map();
         empresasRows.forEach(e => colorMap.set(e?.nombre, e?.color || '#2563eb'));
@@ -254,7 +188,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
         setCompania(nombres.includes(ultima) ? ultima : (nombres[0] || ''));
         setReadyEmpresas(true);
 
-        // 3) Paquetes (backend)
+        // 3) Paquetes
         const paquetesRaw = await cargarPaquetesDesdeBackend();
         if (cancelado) return;
 
@@ -274,14 +208,20 @@ export default function AnadirPaquete({ modoRapido = false }) {
         const gridRowsHint = num(meta?.rows ?? root?.grid?.rows, 0);
         const gridColsHint = num(meta?.cols ?? root?.grid?.cols, 0);
 
-        /* ========= Mapas de nombres desde meta.racks/shelves ========= */
+        // Racks metadata
         const racksMeta = Array.isArray(root?.racks) ? root.racks : [];
         const rackNames = new Map();
         const shelfNamesByPair = new Map();
+        const rackPositions = [];
+
         for (const r of (racksMeta || [])) {
           const rid = num(r?.id, NaN);
           if (!Number.isFinite(rid)) continue;
           if (r?.name) rackNames.set(rid, String(r.name));
+          const pos = pullPos(r);
+          if (Number.isFinite(pos.row) && Number.isFinite(pos.col)) {
+            rackPositions.push({ est: rid, r: pos.row, c: pos.col });
+          }
           const shelves = Array.isArray(r?.shelves) ? r.shelves : [];
           for (const s of shelves) {
             const idx = num(s?.index ?? s?.idx ?? s?.shelf_index ?? s?.i ?? s?.orden, NaN);
@@ -291,24 +231,10 @@ export default function AnadirPaquete({ modoRapido = false }) {
         }
         setRackNameById(rackNames);
 
-        /* ===== MODO LANES ===== */
         if (mode === 'lanes') {
           setLayoutMode('lanes');
 
-          let lanesArr = Array.isArray(root?.lanes) ? root.lanes : [];
-          if (!lanesArr.length && paquetesRaw.length) {
-            const set = new Map();
-            let idx = 1;
-            for (const p of paquetesRaw) {
-              const laneId = Number.isFinite(Number(p.lane_id)) ? Number(p.lane_id) : null;
-              const comp = (typeof p.compartimento === 'string' ? stripPrefix(p.compartimento) : '').trim();
-              const name = comp && !isCodeLike(comp) ? comp : (laneId != null ? String(laneId) : null);
-              if (!name) continue;
-              if (!set.has(name)) set.set(name, { id: laneId ?? idx++, name, color: '#f59e0b', position: { row: 1, col: set.size + 1 } });
-            }
-            lanesArr = Array.from(set.values());
-          }
-
+          const lanesArr = Array.isArray(root?.lanes) ? root.lanes : [];
           const ls = (lanesArr || [])
             .map(l => ({
               id: num(l.id ?? l.lane_id, NaN),
@@ -318,7 +244,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
             }))
             .filter(l => Number.isFinite(l.id))
             .sort((a,b)=> (a.position.row - b.position.row) || (a.position.col - b.position.col));
-
           setLanes(ls);
 
           const rows = gridRowsHint > 0 ? gridRowsHint : Math.max(1, ...(ls.map(x => x.position.row || 1)));
@@ -338,15 +263,12 @@ export default function AnadirPaquete({ modoRapido = false }) {
               compartimento: compName || laneNameFromId || null,
             };
           });
-
-          if (!cancelado) setPaquetes(mapped);
+          setPaquetes(mapped);
           setReadyLayout(true);
-        }
-        /* ===== MODO RACKS ===== */
-        else {
+        } else {
           setLayoutMode('racks');
 
-          // 5) Estructura desde backend (preferente)
+          // Estructura desde backend
           let baldasVirtuales = [];
           try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -357,7 +279,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
             }
           } catch {}
 
-          // 6) Fallback tabla baldas (RLS)
+          // Fallback tabla baldas
           if (!baldasVirtuales.length) {
             try {
               const { data: rows } = await supabase
@@ -377,24 +299,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
             }
           }
 
-          // 7) Inferir desde paquetes si sigue vacío
-          if (!baldasVirtuales.length && paquetesRaw.length) {
-            const map = new Map();
-            let seq = 1;
-            for (const p of paquetesRaw) {
-              const code = (typeof p.compartimento === 'string' && p.compartimento.trim())
-                ? p.compartimento.trim()
-                : (p?.baldas?.codigo ? String(p.baldas.codigo) : null);
-              if (!code) continue;
-              if (!map.has(code)) {
-                const parsed = parseCodigoGenerico(code);
-                if (parsed) map.set(code, { id: `virt:${seq++}`, codigo: code, estante: parsed.estante, balda: parsed.balda });
-              }
-            }
-            baldasVirtuales = Array.from(map.values()).sort((a,b)=> (a.estante-b.estante) || (a.balda-b.balda));
-          }
-
-          // 7.5) **APLICAR NOMBRES DESDE CONFIG**
+          // Aplicar nombres desde config si existen
           const baldasConNombres = baldasVirtuales.map(b => {
             const nm = shelfNamesByPair.get(`${b.estante}-${b.balda}`);
             return nm ? { ...b, codigo: String(nm) } : b;
@@ -403,21 +308,12 @@ export default function AnadirPaquete({ modoRapido = false }) {
           setBaldas(baldasConNombres);
           setReadyBaldas(true);
 
-          // 8) Orden y grid
-          let orderFromPos = [];
-          for (const r of racksMeta) {
-            const rid = num(r?.id, NaN);
-            const pos = pullPos(r);
-            if (Number.isFinite(rid) && Number.isFinite(pos.row) && Number.isFinite(pos.col)) {
-              orderFromPos.push({ est: rid, r: pos.row, c: pos.col });
-            }
-          }
-
-          if (orderFromPos.length) {
-            orderFromPos.sort((a, b) => (a.r - b.r) || (a.c - b.c));
-            setRackOrder(orderFromPos.map(x => x.est));
-            const maxR = Math.max(...orderFromPos.map(x => x.r));
-            const maxC = Math.max(...orderFromPos.map(x => x.c));
+          // Orden y grid exactos
+          if (rackPositions.length) {
+            rackPositions.sort((a,b)=> (a.r - b.r) || (a.c - b.c));
+            setRackOrder(rackPositions.map(x => x.est));
+            const maxR = Math.max(...rackPositions.map(x => x.r));
+            const maxC = Math.max(...rackPositions.map(x => x.c));
             setGrid({
               rows: gridRowsHint > 0 ? gridRowsHint : (Number.isFinite(maxR) ? maxR : 1),
               cols: gridColsHint > 0 ? gridColsHint : (Number.isFinite(maxC) ? maxC : 1),
@@ -425,16 +321,13 @@ export default function AnadirPaquete({ modoRapido = false }) {
           } else {
             const uniqueEst = Array.from(new Set(baldasConNombres.map(b => b.estante))).sort((a, b) => a - b);
             setRackOrder(uniqueEst);
-            if (gridRowsHint > 0 && gridColsHint > 0) {
-              setGrid({ rows: gridRowsHint, cols: gridColsHint });
-            } else {
-              const n = uniqueEst.length || 1;
-              const cols = Math.min(Math.ceil(Math.sqrt(n)), 4);
-              const rows = Math.ceil(n / cols);
-              setGrid({ rows, cols });
-            }
+            const n = uniqueEst.length || 1;
+            const cols = Math.min(n, 6);
+            const rows = Math.ceil(n / cols);
+            setGrid({ rows, cols });
           }
 
+          // Mapear paquetes respetando códigos
           const byCodigo = new Map(baldasConNombres.map(b => [String(b.codigo).toUpperCase(), b]));
           const mapped = paquetesRaw.map(p => {
             const code =
@@ -456,22 +349,20 @@ export default function AnadirPaquete({ modoRapido = false }) {
             };
           });
 
-          if (!cancelado) setPaquetes(mapped);
+          setPaquetes(mapped);
           setReadyLayout(true);
         }
 
         startTransition(() => inputClienteRef.current?.focus());
       } catch (e) {
         console.error('[AñadirPaquete] Error de carga:', e);
-      } finally {
-        if (!cancelado) { setCargandoInicial(false); console.timeEnd(mark); }
       }
     })();
 
     return () => { cancelado = true; };
   }, []);
 
-  /* ======= Ranking clientes -> sugerencias ======= */
+  /* ===== Ranking clientes ===== */
   const [clientesStats, setClientesStats] = useState(new Map());
   useEffect(() => {
     const map = new Map();
@@ -508,25 +399,136 @@ export default function AnadirPaquete({ modoRapido = false }) {
     return arr;
   }, [clientesStats]);
 
+  /* ===== Sugerencias (datalist) ===== */
+  useEffect(() => {
+    const q = toUpperVis(cliente.trim());
+    const list = topClientes
+      .map(c => {
+        const s = q ? Math.max(fuzzyScore(c.nombre, q), c.nombre.startsWith(q) ? 1 : 0) : (0.4 + Math.min(c.count/50, 0.6));
+        return { nombre: c.nombre, score: s };
+      })
+      .filter(x => q ? (x.score >= SIM_THRESHOLD || x.nombre.includes(q)) : true)
+      .sort((a,b)=> (b.score - a.score) || a.nombre.localeCompare(b.nombre))
+      .slice(0, 20)
+      .map(x => x.nombre);
+    setSugs(list);
+  }, [cliente, topClientes]);
+
+  /* ======= Selección inteligente de compartimento ======= */
+  const conteo = useMemo(() => {
+    const c = {};
+    const inc = (k) => { if (!k) return; const s = String(k).toUpperCase(); c[s] = (c[s] || 0) + 1; };
+    for (const p of paquetes) {
+      const noEntregado = p.entregado === false || p.entregado == null;
+      if (!noEntregado) continue;
+      if (layoutMode === 'lanes') {
+        const laneName = (p.compartimento || '').trim();
+        const laneId   = Number.isFinite(Number(p.lane_id)) ? String(Number(p.lane_id)) : null;
+        if (laneName) inc(laneName);
+        if (laneId)   inc(laneId);
+      } else {
+        const code = (p.compartimento || p?.baldas?.codigo || '').toUpperCase().trim();
+        const id   = Number.isFinite(Number(p?.balda_id)) ? String(Number(p.balda_id)) : null;
+        if (code) inc(code);
+        if (id)   inc(id);
+      }
+    }
+    return c;
+  }, [paquetes, layoutMode]);
+
+  const listaCompartimentos = useMemo(() => {
+    if (layoutMode === 'lanes') return lanes.map(l => l.name);
+    return baldas.map(b => String(b.codigo).toUpperCase());
+  }, [layoutMode, lanes, baldas]);
+
+  const getUltimaBaldaPorCompania = (nombre) => { try { const map = JSON.parse(localStorage.getItem(LAST_SLOT_BY_COMPANY_KEY) || '{}'); return map?.[nombre] || ''; } catch { return '' } };
+  const setUltimaBaldaPorCompania = (nombre, slot) => { try { const map = JSON.parse(localStorage.getItem(LAST_SLOT_BY_COMPANY_KEY) || '{}'); map[nombre] = slot; localStorage.setItem(LAST_SLOT_BY_COMPANY_KEY, JSON.stringify(map)); } catch {} };
+  const getUltimaBaldaPorCliente = (cliente) => { try { const map = JSON.parse(localStorage.getItem(LAST_SLOT_BY_CLIENT_KEY) || '{}'); return map?.[cliente] || ''; } catch { return '' } };
+  const setUltimaBaldaPorCliente = (cliente, slot) => { try { const map = JSON.parse(localStorage.getItem(LAST_SLOT_BY_CLIENT_KEY) || '{}'); map[cliente] = slot; localStorage.setItem(LAST_SLOT_BY_CLIENT_KEY, JSON.stringify(map)); } catch {} };
+
   const calcularBaldaSugerida = useCallback(() => {
     if (!listaCompartimentos.length) return '';
-    const preferida = compania ? getUltimaBaldaPorCompania(compania) : null;
-    const ranking = listaCompartimentos.map(nombre => ({ nombre, cantidad: conteo[nombre] || 0 }))
+    const ranking = listaCompartimentos
+      .map(nombre => ({ nombre, cantidad: conteo[nombre] || 0 }))
       .sort((a,b)=> (a.cantidad-b.cantidad) || a.nombre.localeCompare(b.nombre));
-    const empate = preferida && ranking.find(r=>r.nombre===preferida)?.cantidad === ranking[0].cantidad;
-    return (empate ? preferida : ranking[0]?.nombre) || listaCompartimentos[0];
-  }, [listaCompartimentos, conteo, compania]);
+    return ranking[0]?.nombre || listaCompartimentos[0];
+  }, [listaCompartimentos, conteo]);
 
-  const paquetePendienteCliente = useMemo(() => {
-    const q = cliente.trim().toLowerCase();
-    if (!q) return null;
-    return paquetes.find(p =>
+  const smartSlotFor = useCallback((clienteNombre, company) => {
+    const upper = toUpperVis(clienteNombre || '');
+    if (!upper) return null;
+
+    // 1) Pendiente exacto
+    const matchExact = paquetes.find(p =>
       (p.entregado === false || p.entregado == null) &&
-      (p.nombre_cliente || '').trim().toLowerCase() === q
-    ) || null;
-  }, [paquetes, cliente]);
+      toUpperVis(p.nombre_cliente || '') === upper
+    );
+    if (matchExact) {
+      if (layoutMode === 'racks') {
+        const byId = matchExact.balda_id ? baldas.find(b => String(b.id) === String(matchExact.balda_id)) : null;
+        const byCode = matchExact.compartimento ? baldaMapByCodigo.get(String(matchExact.compartimento).toUpperCase()) : null;
+        const b = byId || byCode;
+        if (b) return { type:'shelf', id:b.id, label:String(b.codigo).toUpperCase() };
+      } else {
+        const byId = matchExact.lane_id ? lanes.find(l => Number(l.id) === Number(matchExact.lane_id)) : null;
+        const byName = matchExact.compartimento ? lanesByName.get(String(matchExact.compartimento).toUpperCase()) : null;
+        const l = byId || byName;
+        if (l) return { type:'lane', id:l.id, label:l.name };
+      }
+    }
 
-  /* ==== ✅ VALIDACIÓN DETerminista por id ==== */
+    // 2) Similar con historial
+    const sim = topClientes.find(c => fuzzyScore(c.nombre, upper) >= 0.72);
+    if (sim?.topSlot) {
+      if (layoutMode === 'racks') {
+        const byId = baldas.find(b => String(b.id) === String(sim.topSlot));
+        const byCode = baldaMapByCodigo.get(String(sim.topSlot).toUpperCase());
+        const b = byId || byCode;
+        if (b) return { type:'shelf', id:b.id, label:String(b.codigo).toUpperCase() };
+      } else {
+        const byId = lanes.find(l => String(l.id) === String(sim.topSlot));
+        const byName = lanesByName.get(String(sim.topSlot).toUpperCase());
+        const l = byId || byName;
+        if (l) return { type:'lane', id:l.id, label:l.name };
+      }
+    }
+
+    // 3) Últimos usados
+    const lastByClient = getUltimaBaldaPorCliente(upper);
+    const lastByCompany = company ? getUltimaBaldaPorCompania(company) : '';
+    const tryCode = (code) => {
+      if (!code) return null;
+      if (layoutMode === 'racks') {
+        const b = baldaMapByCodigo.get(String(code).toUpperCase());
+        return b ? { type:'shelf', id:b.id, label:String(b.codigo).toUpperCase() } : null;
+      } else {
+        const l = lanesByName.get(String(code).toUpperCase());
+        return l ? { type:'lane', id:l.id, label:l.name } : null;
+      }
+    };
+    const byClient = tryCode(lastByClient);
+    if (byClient) return byClient;
+    const byCompany = tryCode(lastByCompany);
+    if (byCompany) return byCompany;
+
+    // 4) Más vacío
+    const sugerida = calcularBaldaSugerida();
+    return tryCode(sugerida);
+  }, [layoutMode, paquetes, baldas, lanes, lanesByName, baldaMapByCodigo, topClientes, calcularBaldaSugerida]);
+
+  const selectSlot = useCallback((slot, manual=false) => {
+    if (!slot) return;
+    setCompartimento(slot.label);
+    setSlotSel(slot);
+    setSeleccionManual(!!manual);
+  }, []);
+
+  useEffect(() => {
+    if (seleccionManual) return;
+    const slot = smartSlotFor(cliente, compania);
+    if (slot) selectSlot(slot, false);
+  }, [cliente, compania, paquetes, layoutMode, seleccionManual, smartSlotFor, selectSlot]);
+
   const puedeGuardar = useMemo(() => {
     if (!cliente.trim() || !compania || !compartimento || !slotSel) return false;
     if (layoutMode === 'racks') return slotSel.type === 'shelf' && Number.isFinite(Number(slotSel.id));
@@ -534,6 +536,41 @@ export default function AnadirPaquete({ modoRapido = false }) {
     return false;
   }, [cliente, compania, compartimento, slotSel, layoutMode]);
 
+  /* ===== Vuelo paquete ===== */
+  const flyFromInputToSlot = useCallback(() => {
+    try {
+      const layer = flyLayerRef.current;
+      const inputEl = inputClienteRef.current;
+      if (!layer || !inputEl || !slotSel) return;
+
+      const start = inputEl.getBoundingClientRect();
+      let endEl = null;
+      if (slotSel.type === 'shelf') endEl = baldaRefs.current.get(String(slotSel.id));
+      else endEl = laneRefs.current.get(String(slotSel.id));
+      if (!endEl) return;
+      const end = endEl.getBoundingClientRect();
+
+      const parcel = document.createElement('div');
+      parcel.className = 'fly-parcel';
+      parcel.innerHTML = '<span class="icon"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M21 16.5v-9a1 1 0 0 0-.553-.894l-8-4a1 1 0 0 0-.894 0l-8 4A1 1 0 0 0 3 7.5v9a1 1 0 0 0 .553.894l8 4a1 1 0 0 0 .894 0l8-4A1 1 0 0 0 21 16.5ZM12 4.118 18.764 7.5 12 10.882 5.236 7.5ZM5 9.236l6 3v7.528l-6-3Zm8 10.528v-7.528l6-3v7.528Z"/></svg></span>';
+      layer.appendChild(parcel);
+
+      const sx = start.left + start.width - 30;
+      const sy = start.top + start.height / 2;
+      const ex = end.left + end.width / 2;
+      const ey = end.top + 12;
+
+      parcel.style.setProperty('--sx', `${sx}px`);
+      parcel.style.setProperty('--sy', `${sy}px`);
+      parcel.style.setProperty('--ex', `${ex}px`);
+      parcel.style.setProperty('--ey', `${ey}px`);
+
+      parcel.classList.add('animate');
+      setTimeout(() => { try { layer.removeChild(parcel); } catch {} }, 1200); // coincide con animación (1.15s aprox)
+    } catch { /* noop */ }
+  }, [slotSel]);
+
+  /* ===== Guardar ===== */
   const guardar = useCallback(async (e) => {
     e?.preventDefault();
     if (!puedeGuardar || loading) return;
@@ -565,24 +602,14 @@ export default function AnadirPaquete({ modoRapido = false }) {
         nombre_cliente: upperCliente,
         empresa_transporte: compania,
         tenant_id: tenant.id,
-        // el backend ignorará compartimento si viene balda_id, lo dejamos como display
         compartimento: String(slotSel.label),
         ...(layoutMode === 'lanes'
             ? { lane_id: Number(slotSel.id) }
             : { balda_id: Number(slotSel.id) })
       };
 
-      // Safety
-      if (layoutMode === 'racks' && !Number.isFinite(Number(payload.balda_id))) {
-        alert('Selecciona una balda válida');
-        setLoading(false);
-        return;
-      }
-      if (layoutMode === 'lanes' && !Number.isFinite(Number(payload.lane_id))) {
-        alert('Selecciona un carril válido');
-        setLoading(false);
-        return;
-      }
+      // ✈️ animación
+      flyFromInputToSlot();
 
       const creado = await crearPaqueteBackend(payload, token);
       if (!creado?.id && !creado?.paquete?.id) throw new Error('No se pudo crear el paquete en backend.');
@@ -592,42 +619,49 @@ export default function AnadirPaquete({ modoRapido = false }) {
         p.id === tempId ? { ...p, id: created.id, balda_id: created.balda_id ?? p.balda_id, lane_id: created.lane_id ?? p.lane_id } : p
       ));
 
-      // heurísticas
       const slot = String(slotSel.label);
-      setUltimaCompaniaPorCliente(upperCliente, compania);
-      setUltimaBaldaPorCompania(compania, slot);
-      setUltimaBaldaPorCliente(upperCliente, slot);
       localStorage.setItem(LAST_COMPANY_KEY, compania);
+      try {
+        const mapC = JSON.parse(localStorage.getItem(LAST_SLOT_BY_COMPANY_KEY) || '{}'); mapC[compania] = slot; localStorage.setItem(LAST_SLOT_BY_COMPANY_KEY, JSON.stringify(mapC));
+        const mapU = JSON.parse(localStorage.getItem(LAST_SLOT_BY_CLIENT_KEY) || '{}'); mapU[upperCliente] = slot; localStorage.setItem(LAST_SLOT_BY_CLIENT_KEY, JSON.stringify(mapU));
+      } catch {}
 
+      // 🔔 sonido “chime” y modal
+      playChime();
       setExito(true);
-      setTimeout(()=>setExito(false), 1600);
+      setTimeout(()=>setExito(false), 1800);
 
-      if (modoRapido) {
-        setCliente('');
-        setSeleccionManual(false);
-        setBuscarBalda('');
-        startTransition(() => inputClienteRef.current?.focus());
-      }
+      // 🧹 limpiar cliente (mantener empresa)
+      setCliente('');
+      setSeleccionManual(false);
+      startTransition(() => inputClienteRef.current?.focus());
     } catch (err) {
       console.error('[Añadir paquete] Error al guardar', err);
       alert('No se pudo guardar el paquete. Revisa la consola.');
     } finally {
       setLoading(false);
     }
-  }, [puedeGuardar, loading, tenant, cliente, compania, slotSel, layoutMode, modoRapido]);
+  }, [puedeGuardar, loading, tenant, cliente, compania, slotSel, layoutMode, flyFromInputToSlot]);
+
+  /* ======= UI ======= */
+  const estanteriasAgrupadas = useMemo(() => {
+    if (layoutMode === 'lanes') return {};
+    const acc = {};
+    for (const b of baldas) (acc[b.estante] ||= []).push(b);
+    Object.values(acc).forEach(arr => arr.sort((a,b)=>a.balda-b.balda));
+    return acc;
+  }, [layoutMode, baldas]);
 
   const sugerenciaPrimaria = useMemo(() => {
-    if (seleccionManual) return compartimento;
-    return layoutMode === 'lanes'
-      ? (lanes.length ? lanes.reduce((min, l) => (conteo[l.name]||0) < (conteo[min.name]||0) ? l : min).name : '')
-      : calcularBaldaSugerida();
-  }, [seleccionManual, compartimento, layoutMode, lanes, conteo, calcularBaldaSugerida]);
+    if (seleccionManual && compartimento) return compartimento;
+    return calcularBaldaSugerida() || compartimento || '';
+  }, [seleccionManual, compartimento, calcularBaldaSugerida]);
 
-  const clienteRepetido = !!paquetePendienteCliente;
-
-  /* ================= UI ================= */
   return (
     <div className="anadir-paquete" style={brandVars}>
+      {/* Capa para vuelo */}
+      <div id="fly-layer" ref={flyLayerRef} aria-hidden="true" />
+
       <header className="cabecera">
         <div className="titulo">
           <FaBoxOpen aria-hidden="true" />
@@ -639,6 +673,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
       </header>
 
       <form className="form" onSubmit={guardar}>
+        {/* ===== Datos ===== */}
         <section className="panel datos">
           <h2>Datos del paquete</h2>
           <p className="hint">Completa el cliente, la empresa y confirma el compartimento.</p>
@@ -646,46 +681,20 @@ export default function AnadirPaquete({ modoRapido = false }) {
           <div className="fila">
             <div className="campo">
               <label>Nombre del cliente</label>
-
-              {inlineRemainder && cliente && (
-                <div className="inline-hint" aria-hidden="true">
-                  <span className="typed">{cliente}</span>
-                  <span className="rest">{inlineRemainder}</span>
-                </div>
-              )}
-
               <input
                 ref={inputClienteRef}
                 type="text"
-                placeholder="Ej: JUAN PEREZ"
+                placeholder="Añadir cliente…"
                 value={cliente}
-                onChange={e => { const v = e.target.value; const up = toUpperVis(v); setCliente(up); /* recomputa sugs */ }}
-                onKeyDown={(e)=>{}}
-                onFocus={()=>{}}
+                onChange={e => { const up = toUpperVis(e.target.value); setCliente(up); setSeleccionManual(false); }}
                 autoComplete="off"
                 maxLength={80}
-                aria-autocomplete="list"
-                aria-expanded={sugsOpen}
-                aria-controls="sugs-list"
+                list="clientes-sugeridos"
               />
-              <FaUserTie className="smart-icon" aria-hidden="true" />
-
-              {sugsOpen && sugs.length > 0 && (
-                <ul id="sugs-list" className="sugs sugs--compact" role="listbox">
-                  {sugs.map((c, i) => (
-                    <li
-                      key={c.nombre || c}
-                      role="option"
-                      aria-selected={i===sugsActive}
-                      className={i===sugsActive ? 'active' : ''}
-                      onMouseDown={(e)=>{ e.preventDefault(); const nombre = c.nombre || c; setCliente(nombre); /* heurísticas */ setSugsOpen(false); }}
-                    >
-                      <b>{c.nombre || c}</b>
-                      {c.count != null && <small>{c.count} envíos</small>}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              {/* Sugerencias con datalist nativo (clicable + accesible) */}
+              <datalist id="clientes-sugeridos">
+                {sugs.map(n => <option key={n} value={n} />)}
+              </datalist>
             </div>
 
             <div className="campo">
@@ -695,65 +704,35 @@ export default function AnadirPaquete({ modoRapido = false }) {
               </select>
             </div>
 
-            <div className="campo ancho">
-              <div className="sugerencias">
-                <span className="sugerencia">
-                  <FaLightbulb className="icono-sugerencia" aria-hidden="true" />
-                  <strong>{clienteRepetido ? `Mismo ${layoutMode==='lanes'?'carril':'compartimento'}:` : 'Sugerido:'}</strong>
-                  <code className="pill">{sugerenciaPrimaria || '—'}</code>
-                </span>
+            {/* hueco para balance visual */}
+            <div className="campo" aria-hidden="true" />
+          </div>
 
-                <span className={`seleccionado ${compartimentoAnimado ? 'animado' : ''}`}>
-                  <FaCheckCircle className="icono-sugerencia" aria-hidden="true" />
-                  <strong>Seleccionado:</strong>
-                  <code className="pill pill--brand">{compartimento || '—'}</code>
-                </span>
+          {/* ===== BLOQUE CENTRAL ===== */}
+          <div className="bloque-central">
+            <div className="chips">
+              <span className="chip chip--hint">
+                <FaLightbulb aria-hidden="true" />
+                <span className="lbl">Sugerencia principal</span>
+                <code className="pill">{sugerenciaPrimaria || '—'}</code>
+              </span>
 
-                <label className="buscador-balda" title={`Buscar y seleccionar por ${layoutMode==='lanes'?'carril':'código de balda'}`}>
-                  <FaSearch aria-hidden="true" />
-                  <input
-                    type="text"
-                    inputMode="text"
-                    placeholder={layoutMode==='lanes' ? 'Buscar carril (nombre)' : 'Buscar balda (p. ej. A1)'}
-                    value={buscarBalda}
-                    onChange={(e)=>setBuscarBalda(e.target.value)}
-                  />
-                </label>
-              </div>
+              <span className="chip chip--selected">
+                <FaCheckCircle aria-hidden="true" />
+                <span className="lbl">Seleccionado</span>
+                <code className="pill pill--brand">{compartimento || '—'}</code>
+              </span>
+            </div>
 
-              {/* Avisos controlados */}
-              {readyEmpresas && !companias.length && (
-                <div className="alerta info">
-                  <FaInfoCircle aria-hidden="true" />
-                  <div><b>No hay empresas configuradas.</b><p>Añade empresas en <i>Configuración</i> para habilitar el registro.</p></div>
-                </div>
-              )}
-
-              {layoutMode==='racks' && readyLayout && readyBaldas && !baldas.length && (
-                <div className="alerta warning">
-                  <FaInfoCircle aria-hidden="true" />
-                  <div><b>No hay baldas detectadas.</b><p>Se infieren desde paquetes si es posible. Revisa <i>Configuración</i> si persiste.</p></div>
-                </div>
-              )}
-
-              {layoutMode==='lanes' && readyLayout && !lanes.length && (
-                <div className="alerta warning">
-                  <FaInfoCircle aria-hidden="true" />
-                  <div><b>No hay carriles detectados.</b><p>Se infieren desde paquetes si es posible. Revisa <i>Configuración</i> si persiste.</p></div>
-                </div>
-              )}
+            <div className="acciones-centro">
+              <button type="submit" className="btn-primary btn-xl" disabled={!puedeGuardar || loading}>
+                {loading ? 'Guardando…' : 'Guardar paquete'}
+              </button>
             </div>
           </div>
         </section>
 
-        <section className="panel acciones">
-          <div className="acciones-row">
-            <button type="submit" className="btn-primary" disabled={!puedeGuardar || loading}>
-              {loading ? 'Guardando…' : 'Guardar paquete'}
-            </button>
-          </div>
-        </section>
-
+        {/* ===== Rejilla ===== */}
         <section className="panel rejilla">
           <h2>Rejilla del almacén</h2>
           <p className="hint">Selecciona un compartimento. Verás la ocupación en tiempo real.</p>
@@ -766,7 +745,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
             <>
               <div
                 className="lanes-grid"
-                style={{ gridTemplateColumns: `repeat(${grid.cols || 1}, minmax(220px, 1fr))` }}
+                style={{ gridTemplateColumns: `repeat(${grid.cols || 1}, minmax(240px, 1fr))` }}
                 role="group"
                 aria-label="Selección de carril"
               >
@@ -779,11 +758,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
                     const activa = slotSel?.type==='lane' && slotSel?.id === lane.id;
                     const cantidad = (conteo[String(lane.id)] ?? conteo[lane.name] ?? 0);
 
-                    const visible = buscarBalda.trim()
-                      ? (lane.name || '').toUpperCase().includes(buscarBalda.trim().toUpperCase())
-                      : true;
-                    if (!visible) return <div key={`cell-${r}-${c}`} className="lane-cell empty" />;
-
                     const laneColor = lane.color || '#f59e0b';
                     const laneTint  = hexToRgba(laneColor, 0.08);
                     const laneRing  = hexToRgba(laneColor, 0.35);
@@ -792,9 +766,10 @@ export default function AnadirPaquete({ modoRapido = false }) {
                       <button
                         key={`cell-${r}-${c}`}
                         type="button"
-                        className={`lane ${cantidad <= 4 ? 'verde' : cantidad < 10 ? 'naranja' : 'rojo'} ${activa ? 'activa' : ''}`}
+                        ref={(el) => { if (el) laneRefs.current.set(String(lane.id), el); }}
+                        className={`lane ${cantidad <= 4 ? 'verde' : cantidad < 10 ? 'naranja' : 'rojo'} ${activa ? 'activa pulse' : ''}`}
                         style={{ '--lane': laneColor, '--lane-rgba': laneTint, '--sel-ring': laneRing }}
-                        onClick={()=>{ setCompartimento(lane.name); setSlotSel({ type:'lane', id:lane.id, label: lane.name }); setSeleccionManual(true); }}
+                        onClick={()=>{ selectSlot({ type:'lane', id:lane.id, label: lane.name }, true); }}
                         aria-pressed={activa}
                       >
                         <div className="lane-header">
@@ -819,7 +794,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
             <>
               <div
                 className="estantes-grid"
-                style={{ gridTemplateColumns: `repeat(${grid.cols || 1}, minmax(240px, 1fr))` }}
+                style={{ gridTemplateColumns: `repeat(${grid.cols || 1}, minmax(260px, 1fr))` }}
                 role="group"
                 aria-label="Selección de balda"
               >
@@ -841,22 +816,19 @@ export default function AnadirPaquete({ modoRapido = false }) {
                         <div className="estante-header">
                           Estante {rackNameById.get(est) ?? est} <span className="muted">{list.length} baldas</span>
                         </div>
+                        {/* Balda en columna */}
                         <div className="baldas-grid">
                           {list.map(b => {
                             const activa = slotSel?.type==='shelf' && slotSel?.id === b.id;
                             const cantidad = (conteo[String(b.id)] ?? conteo[String(b.codigo).toUpperCase()] ?? 0);
 
-                            const visible = buscarBalda.trim()
-                              ? String(b.codigo).toUpperCase().includes(buscarBalda.trim().toUpperCase())
-                              : true;
-                            if (!visible) return null;
-
                             return (
                               <button
                                 type="button"
                                 key={b.id}
-                                className={`balda ${cantidad <= 4 ? 'verde' : cantidad < 10 ? 'naranja' : 'rojo'} ${activa ? 'activa' : ''}`}
-                                onClick={() => { setCompartimento(String(b.codigo).toUpperCase()); setSlotSel({type:'shelf', id:b.id, label:b.codigo }); setSeleccionManual(true); }}
+                                ref={(el) => { if (el) baldaRefs.current.set(String(b.id), el); }}
+                                className={`balda ${cantidad <= 4 ? 'verde' : cantidad < 10 ? 'naranja' : 'rojo'} ${activa ? 'activa pulse' : ''}`}
+                                onClick={() => { selectSlot({type:'shelf', id:b.id, label:String(b.codigo).toUpperCase() }, true); }}
                                 aria-pressed={activa}
                               >
                                 <div className="balda-header">{b.codigo}</div>
@@ -882,8 +854,14 @@ export default function AnadirPaquete({ modoRapido = false }) {
       </form>
 
       {exito && (
-        <div className="modal-exito" role="status" aria-live="polite">
-          <div className="contenido"><FaCheckCircle aria-hidden="true" />¡Paquete guardado correctamente!</div>
+        <div className="modal-exito modal-exito--giant" role="status" aria-live="polite">
+          <div className="contenido">
+            <FaCheckCircle aria-hidden="true" />
+            <div>
+              <h3>¡Paquete guardado!</h3>
+              <p>Se registró correctamente en <strong>{compartimento}</strong>.</p>
+            </div>
+          </div>
         </div>
       )}
     </div>
