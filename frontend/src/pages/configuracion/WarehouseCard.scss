@@ -6,15 +6,19 @@
 .warehouse-card {
   /* scope hardening */
   box-sizing: border-box;
-  * { box-sizing: inherit; }
   position: relative;
-  color: var(--ink, #0f172a);
 
   /* tokens locales */
   --bd: var(--border, #e6e9ef);
   --mut: var(--muted, #64748b);
   --ink: var(--ink, #0f172a);
   --ring: rgba(99, 91, 255, .28);
+
+  /* usar las vars ya definidas */
+  color: var(--ink, #0f172a);
+
+  /* regla anidada (va después de las declaraciones para evitar mixed-decls) */
+  * { box-sizing: inherit; }
 
   /* HEADER --------------------------------------------------------------- */
   .card__header.warehouse-card__header{
