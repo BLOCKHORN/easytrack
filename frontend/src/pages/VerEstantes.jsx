@@ -6,7 +6,7 @@ import { getTenantIdOrThrow } from "../utils/tenant";
 import {
   obtenerPaquetesBackend,
   obtenerEstructuraEstantesYPaquetes,
-  eliminarPaqueteBackend, // <-- NUEVO: acción rápida
+  eliminarPaqueteBackend, // <-- acción rápida
 } from "../services/paquetesService";
 import {
   FaBoxes, FaSearch, FaChevronDown, FaTimes,
@@ -103,7 +103,7 @@ function extractStructureFromBackend(payload) {
   })).filter(r => Number.isFinite(r.estante));
 }
 
-/* ===== Carrier dominante para color ===== */
+/* ===== Carrier dominante (para color interno en desplegado) ===== */
 function getDominantCarrierColor(arr = [], colorMap = new Map(), fallback = "#6b7280") {
   if (!arr.length) return fallback;
   const counts = new Map();
@@ -560,13 +560,20 @@ export default function VerEstantes() {
   /* =============== Render =============== */
   return (
     <div className="ver-estantes">
-      {/* Cabecera simplificada (sin resumen) */}
+      {/* Cabecera */}
       <div className="titulo-bar">
         <h2><FaBoxes className="icono" /> Estanterías</h2>
       </div>
 
-      {/* Toolbar: leyenda + filtros + privacidad */}
+      {/* Toolbar */}
       <div className="toolbar">
+        {/* Leyenda de colores (ocupa poco y hace wrap en móvil) */}
+<div className="leyenda" role="note" aria-label="Leyenda de colores">
+  <span className="leg-item"><i className="dot neutra" />0 vacía</span>
+  <span className="leg-item"><i className="dot verde" />1–4 poco</span>
+  <span className="leg-item"><i className="dot naranja" />5–9 medio</span>
+  <span className="leg-item"><i className="dot rojo" />10+ cargado</span>
+</div>
 
         <div className="filtros">
           <div className="input-icon">
@@ -662,20 +669,25 @@ export default function VerEstantes() {
                   const laneColor = normHex(lane.color || "#6b7280", "#6b7280");
                   const laneTint  = hexToRgba(laneColor, 0.08);
                   const laneRing  = hexToRgba(laneColor, 0.35);
+
+                  // color de compañía solo para interior
                   const carrierColor = getDominantCarrierColor(arr, coloresCompania, "#6b7280");
                   const carrierTint  = hexToRgba(carrierColor, 0.14);
+
+                  const occClass = clsOcupacion(n);
 
                   return (
                     <div key={`cell-${r}-${c}`} className={`lane-cell wrap ${open ? "activa" : ""}`} role="gridcell">
                       <button
                         type="button"
-                        className={`lane-head ${clsOcupacion(n)}`}
+                        className={`lane-head ${occClass}`}
+                        data-occ={occClass}
                         style={{
                           '--lane': laneColor,
                           '--lane-rgba': laneTint,
                           '--sel-ring': laneRing,
-                          '--carrier': carrierColor,
-                          '--carrier-rgba': carrierTint
+                          '--carrier': carrierColor,       // usado en interior al abrir
+                          '--carrier-rgba': carrierTint    // usado en interior al abrir
                         }}
                         onClick={() => toggle(lane.id)}
                         aria-expanded={open}
@@ -801,6 +813,11 @@ export default function VerEstantes() {
                         const n = lista.length;
                         const open = openSet.has(id);
                         const visible = label || codigo || `Fila ${idx}`;
+
+                        // Color por ocupación en cabecera
+                        const occClass = clsOcupacion(n);
+
+                        // Color por carrier SOLO para interior del desplegable
                         const carrierColor = getDominantCarrierColor(lista, coloresCompania, "#6b7280");
                         const cTint = hexToRgba(carrierColor, 0.14);
 
@@ -808,12 +825,17 @@ export default function VerEstantes() {
                           <div key={id} className={`balda-wrapper ${open ? "activa" : ""}`}>
                             <button
                               type="button"
-                              className={`balda ${clsOcupacion(n)}`}
+                              className={`balda ${occClass}`}
+                              data-occ={occClass}
                               onClick={() => toggle(id)}
                               aria-expanded={open}
                               aria-controls={`visor-${id}`}
                               title={n === 1 ? "1 paquete" : `${n} paquetes`}
-                              style={{ ['--carrier']: carrierColor, ['--carrier-rgba']: cTint }}
+                              style={{
+                                // estas vars de carrier se consumen SOLO en el visor (interior)
+                                ['--carrier']: carrierColor,
+                                ['--carrier-rgba']: cTint
+                              }}
                             >
                               <span className="codigo">{highlight(visible, q)}</span>
                               <span className={`qty ${n === 0 ? "zero" : "some"}`} aria-hidden><b>{n}</b><i>paquetes</i></span>

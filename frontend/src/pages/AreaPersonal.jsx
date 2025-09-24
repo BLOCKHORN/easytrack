@@ -528,25 +528,6 @@ export default function AreaPersonal() {
             </div>
           </section>
 
-          <section className="tabla-seccion">
-            <h3>Últimas entregas</h3>
-            <div className="tabla-wrapper">
-              <table className="tabla ultimas">
-                <thead><tr><th>Cliente</th><th>Fecha</th><th>Empresa</th><th>Ingreso</th></tr></thead>
-                <tbody>
-                  {ultimasEntregas.map((p, i) => (
-                    <tr key={i}>
-                      <td>{p.nombre_cliente}</td>
-                      <td>{p.fecha_llegada ? toLocalDate(p.fecha_llegada).toLocaleDateString() : "—"}</td>
-                      <td>{p.empresa_transporte}</td>
-                      <td>{renderImporte(p.ingreso_generado)}</td>
-                    </tr>
-                  ))}
-                  {ultimasEntregas.length === 0 && <tr><td colSpan={4} className="empty">Sin entregas recientes</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </section>
         </>
       ) : (
         <section className="historico">

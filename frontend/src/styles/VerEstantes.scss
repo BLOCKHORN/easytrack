@@ -1,10 +1,11 @@
 /* ==========================================================================
-   VerEstantes.scss — versión simplificada + privacidad + acciones rápidas
-   (con fix de iconos: color/fill/stroke en svg para que no queden blancos)
+   VerEstantes.scss — Ocupación en cabeceras (verde/naranja/rojo)
+   Carrier solo en interior del desplegable
+   Responsive + auto-scale (desktop → móvil)
    ========================================================================== */
 
 .ver-estantes {
-  /* ===== Design tokens (tema) ===== */
+  /* ===== Design tokens ===== */
   --surface:     var(--ep-surface, #ffffff);
   --surface-2:   var(--ep-surface-2, #f8fafc);
   --surface-3:   var(--ep-surface-3, #f1f5f9);
@@ -17,9 +18,8 @@
   --brand-rgba:  rgba(37, 99, 235, .14);
   --brand-ring:  rgba(37, 99, 235, .36);
   --success:     #16a34a;
-  --danger:      #ef4444;
-  --danger-700:  #b91c1c;
   --warning:     #f59e0b;
+  --danger-700:  #b91c1c;
 
   --radius-lg:   16px;
   --radius-md:   12px;
@@ -28,11 +28,11 @@
   --control-h:   44px;
   --gap:         12px;
 
-  /* widths base (coinciden con JSX consts) */
+  /* widths base (alineado con JSX) */
   --rack-cell-w: 340px;
   --lane-cell-w: 280px;
 
-  /* límite alto para visor expandido (10+ ítems) */
+  /* límite alto para visor expandido */
   --expand-max: 3000px;
 
   color: var(--text);
@@ -63,30 +63,48 @@
   .toolbar {
     margin-top: 14px;
     display: grid;
-    grid-template-columns: auto 1fr;
+    grid-template-columns: 1fr;
     gap: 12px;
-    align-items: center;
 
-    @media (max-width: 980px) { grid-template-columns: 1fr; gap: 10px; }
-
-    /* Leyenda simple (sin títulos encima) */
+    /* === MINI LEYENDA (añadido) ===
+       Inserta el bloque JSX de la leyenda encima de .filtros */
     .leyenda {
-      display: inline-flex; gap: 10px; flex-wrap: wrap;
-      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+      display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
       padding: 8px 10px;
-      .leg-item { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; color: var(--muted); }
-      .dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(255,255,255,.6); }
-      .dot.neutra  { background: #94a3b8; }
-      .dot.verde   { background: #22c55e; }
-      .dot.naranja { background: #f59e0b; }
-      .dot.rojo    { background: #ef4444; }
+      box-shadow: 0 4px 12px rgba(2,6,23,.04);
+
+      .leg-item {
+        display: inline-flex; align-items: center; gap: 8px;
+        color: var(--muted); font-weight: 800; font-size: 12px;
+        &.muted { opacity: .9; }
+      }
+      .dot {
+        width: 12px; height: 12px; border-radius: 50%;
+        box-shadow: inset 0 0 0 2px rgba(255,255,255,.6), 0 0 0 1px rgba(2,6,23,.06);
+      }
+      .dot.neutra  { background:#94a3b8; }
+      .dot.verde   { background:#22c55e; }
+      .dot.naranja { background:#f59e0b; }
+      .dot.rojo    { background:#ef4444; }
+
+      /* Mini pastilla para indicar "interior por compañía" */
+      .mini-pill{
+        width: 26px; height: 12px; border-radius: 999px;
+        background: var(--brand-rgba);
+        border: 1px solid color-mix(in srgb, var(--brand) 36%, #fff);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.5);
+      }
     }
 
     .filtros {
       display: grid; grid-template-columns: 1fr auto auto auto; gap: 12px; align-items: center;
 
-      @media (max-width: 860px) { grid-template-columns: 1fr auto; }
-      @media (max-width: 600px) { grid-template-columns: 1fr; }
+      @media (max-width: 980px) { grid-template-columns: 1fr auto auto; }
+      @media (max-width: 700px) { grid-template-columns: 1fr auto; }
+      @media (max-width: 520px) { grid-template-columns: 1fr; }
 
       .input-icon {
         height: var(--control-h);
@@ -94,7 +112,7 @@
         border: 1px solid var(--border); border-radius: var(--radius-md);
         padding: 0 12px; background: var(--surface);
         box-shadow: 0 4px 12px rgba(2,6,23,.04);
-        svg { color: var(--muted); margin-right: 8px; }
+        svg { color: var(--muted); margin-right: 8px; flex: 0 0 auto; }
         input { flex: 1 1 auto; height: 100%; border: 0; outline: 0; background: transparent; color: var(--elev); font-size: 15px; }
         .clear { border: 0; background: transparent; color: var(--muted); padding: 6px; border-radius: 8px; cursor: pointer; }
         .clear:hover { background: var(--surface-2); color: var(--elev); }
@@ -102,7 +120,7 @@
 
       .toggle {
         display: inline-flex; align-items: center; gap: 10px; user-select: none;
-        .label { color: var(--muted); font-weight: 800; }
+        .label { color: var(--muted); font-weight: 800; white-space: nowrap; }
         input { display: none; }
         .slider {
           width: 52px; height: 28px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border);
@@ -120,7 +138,7 @@
       .btn-ghost {
         height: var(--control-h); padding: 0 12px; border-radius: var(--radius-md);
         border: 1px solid var(--border); background: var(--surface-2); color: var(--elev); font-weight: 900; cursor: pointer;
-        display: inline-flex; align-items: center; gap: 8px;
+        display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
         transition: background .15s, transform .05s, box-shadow .15s;
       }
       .btn-ghost:hover { background: var(--surface-3); }
@@ -142,8 +160,8 @@
   /* ================= FIT WRAPPERS (auto-scale + modo fluido) ================= */
   .fit-wrapper {
     width: 100%;
-    overflow-x: hidden;    /* no scroll horizontal */
-    overflow-y: visible;   /* permitir crecimiento al expandir */
+    overflow-x: hidden;    /* sin scroll horizontal */
+    overflow-y: visible;   /* crecimiento al expandir */
     --zoom: 1;
   }
   .fit-wrapper > .grid-estantes,
@@ -170,12 +188,19 @@
     &.wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: 0 8px 24px rgba(2,6,23,.06); overflow: hidden; min-width: 0; }
     &.activa { box-shadow: 0 12px 36px rgba(2,6,23,.1); }
   }
+
+  /* ---------- Cabecera de lane: color por OCUPACIÓN ---------- */
   .lane-head {
+    /* vars generales del lane (no relacionadas con ocupación) */
     --lane: #6b7280;
     --lane-rgba: rgba(107,114,128,.08);
-    --carrier: #6b7280;
-    --carrier-rgba: rgba(107,114,128,.14);
     --sel-ring: rgba(107,114,128,.35);
+
+    /* vars por OCUPACIÓN: las llena la clase .verde/.naranja/.rojo/.neutra */
+    --occ: #94a3b8;
+    --occ-10: color-mix(in srgb, var(--occ) 10%, #fff);
+    --occ-14: color-mix(in srgb, var(--occ) 14%, #fff);
+    --occ-35: color-mix(in srgb, var(--occ) 35%, #000);
 
     position: relative;
     width: 100%;
@@ -184,14 +209,14 @@
     align-items: center;
     gap: 10px;
 
-    background: linear-gradient(180deg, var(--surface), var(--lane-rgba));
+    background: linear-gradient(180deg, var(--surface), var(--occ-14)); /* degradado por ocupación */
     padding: 14px;
     border: 0;
     cursor: pointer;
     text-align: left;
 
-    .lane-tape { position: absolute; left: 0; right: 0; top: 0; height: 6px; background: linear-gradient(90deg, var(--lane), color-mix(in srgb, var(--lane) 50%, white)); }
-    &::after { content:''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--carrier) 40%, #fff); pointer-events: none; }
+    .lane-tape { position: absolute; left: 0; right: 0; top: 0; height: 6px; background: linear-gradient(90deg, var(--occ), color-mix(in srgb, var(--occ) 50%, white)); }
+    &::after { content:''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--occ-35); pointer-events: none; }
     &:hover { box-shadow: 0 0 0 4px var(--sel-ring) inset; }
 
     .lane-title { font-weight: 900; color: var(--elev); font-size: 16px; }
@@ -238,20 +263,28 @@
       .tit { display: flex; align-items: center; gap: 10px; }
       .titulo { font-weight: 900; color: var(--elev); }
       .contador { margin-left: auto; font-weight: 900; color: var(--muted); }
-      /* Eliminado: mini-progress % */
     }
 
     .baldas { padding: 12px; }
     .balda-wrapper { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); margin-bottom: 10px; overflow: hidden; }
     .balda-wrapper.activa { box-shadow: 0 8px 22px rgba(2,6,23,.08); }
 
+    /* ---------- Cabecera de balda: color por OCUPACIÓN ---------- */
     .balda {
+      /* vars de carrier SOLO para el interior (visor) */
       --carrier: #6b7280;
       --carrier-rgba: rgba(107,114,128,.14);
+
+      /* vars por OCUPACIÓN (igual que lane-head) */
+      --occ: #94a3b8;
+      --occ-14: color-mix(in srgb, var(--occ) 14%, #fff);
+      --occ-35: color-mix(in srgb, var(--occ) 35%, #000);
+
       width: 100%; border: 0; text-align: left; cursor: pointer;
-      background: linear-gradient(180deg, var(--surface), var(--carrier-rgba));
+      background: linear-gradient(180deg, var(--surface), var(--occ-14)); /* degradado por ocupación */
       padding: 12px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; position: relative;
-      &::after { content:''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--carrier) 40%, #fff); pointer-events: none; }
+      &::after { content:''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--occ-35); pointer-events: none; }
+
       .codigo { font-weight: 900; color: var(--elev); }
       .codigo mark { background: color-mix(in srgb, var(--brand) 18%, #fff); border-radius: 4px; padding: 0 2px; }
       .qty { justify-self: end; display: inline-grid; gap: 2px; text-align: right; }
@@ -308,16 +341,15 @@
   .icon-btn {
     width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface-2);
-    color: var(--elev);              /* contraste alto por defecto */
+    color: var(--elev);
     display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer; transition: background .15s, color .15s, transform .05s, box-shadow .15s;
 
-    /* Asegura visibilidad de los iconos de react-icons */
     & > svg {
       width: 18px; height: 18px;
-      color: currentColor !important;      /* para react-icons */
-      fill: currentColor !important;       /* por si algún reset pone fill:none */
-      stroke: currentColor !important;     /* por si el icono usa stroke */
+      color: currentColor !important;
+      fill: currentColor !important;
+      stroke: currentColor !important;
       flex-shrink: 0;
       pointer-events: none;
     }
@@ -342,11 +374,15 @@
     user-select: none;
   }
 
-  /* ===== Breakpoints: ajustar widths base ===== */
+  /* ===== Breakpoints: ajustar widths base (mantener 5 estantes con auto-scale) ===== */
+  @media (max-width: 1360px) { --rack-cell-w: 330px; --lane-cell-w: 270px; }
   @media (max-width: 1280px) { --rack-cell-w: 320px; --lane-cell-w: 260px; }
-  @media (max-width: 1024px) { --rack-cell-w: 300px; --lane-cell-w: 240px; }
+  @media (max-width: 1130px) { --rack-cell-w: 300px; --lane-cell-w: 240px; }
+  @media (max-width: 980px)  { --rack-cell-w: 280px; --lane-cell-w: 220px; }
+  @media (max-width: 860px)  { --rack-cell-w: 260px; --lane-cell-w: 210px; }
+  /* En móvil pasamos a modo fluido (JSX activa .fluid) y el grid ocupa 100% */
   @media (max-width: 768px)  { --rack-cell-w: min(100%, 520px); --lane-cell-w: min(100%, 520px); }
-  @media (max-width: 480px)  { --rack-cell-w: 100%; --lane-cell-w: 100%; }
+  @media (max-width: 520px)  { --rack-cell-w: 100%; --lane-cell-w: 100%; }
 
   /* ===== Accesibilidad ===== */
   :where(button, [role="tab"], [role="option"]) {
@@ -357,9 +393,17 @@
     .fit-wrapper > .grid-estantes, .fit-wrapper > .lanes-matrix { transform: none !important; }
   }
 
-  /* ===== Ocupación por colores (coherencia visual) ===== */
-  .balda.neutra, .lane-head.neutra { --carrier: #94a3b8; }
-  .balda.verde,  .lane-head.verde  { --carrier: #22c55e; }
-  .balda.naranja,.lane-head.naranja{ --carrier: #f59e0b; }
-  .balda.rojo,   .lane-head.rojo   { --carrier: #ef4444; }
+  /* ===== Colores de OCUPACIÓN (asignan variables de cabecera) ===== */
+  .balda.neutra, .lane-head.neutra {
+    --occ: #94a3b8;
+  }
+  .balda.verde,  .lane-head.verde  {
+    --occ: #22c55e;
+  }
+  .balda.naranja,.lane-head.naranja{
+    --occ: #f59e0b;
+  }
+  .balda.rojo,   .lane-head.rojo   {
+    --occ: #ef4444;
+  }
 }

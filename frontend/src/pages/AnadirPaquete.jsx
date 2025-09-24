@@ -7,7 +7,7 @@ import {
   obtenerPaquetesBackend,
   obtenerEstructuraEstantesYPaquetes,
 } from '../services/paquetesService';
-import { FaBoxOpen, FaLightbulb, FaCheckCircle, FaCube } from 'react-icons/fa';
+import { FaBoxOpen, FaLightbulb, FaCheckCircle, FaCube, FaInfoCircle } from 'react-icons/fa';
 import '../styles/AnadirPaquete.scss';
 
 /* ================= Utils ================= */
@@ -65,7 +65,7 @@ async function cargarPaquetesDesdeBackend() {
   }
 }
 
-/* ===== Sonido agradable (pequeño “chime” de 2 tonos) ===== */
+/* ===== Sonidos ===== */
 function playChime() {
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -87,6 +87,27 @@ function playChime() {
 
     mk(523.25, 0.00, 0.24, 0.20); // C5
     mk(659.25, 0.12, 0.30, 0.18); // E5
+  } catch { /* noop */ }
+}
+function playCheck() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AC();
+    const now = ctx.currentTime;
+    const mk = (freq, start, dur, gain=0.25) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(freq, now + start);
+      g.gain.setValueAtTime(0.0001, now + start);
+      g.gain.exponentialRampToValueAtTime(gain, now + start + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + start + dur);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(now + start);
+      o.stop(now + start + dur + 0.02);
+    };
+    mk(880, 0, 0.18, 0.3);      // A5
+    mk(1175, 0.08, 0.22, 0.25); // D6
   } catch { /* noop */ }
 }
 
@@ -132,6 +153,11 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const inputClienteRef = useRef(null);
   const flyLayerRef = useRef(null);
 
+  // 🔔 UI feedback de coincidencia
+  const [mensajeCoincidencia, setMensajeCoincidencia] = useState('');
+  const [highlightSlotId, setHighlightSlotId] = useState(null);
+  const lastCheckRef = useRef({ client: '', slot: null });
+
   // LS keys
   const LAST_COMPANY_KEY             = 'ultimaCompania';
   const LAST_SLOT_BY_COMPANY_KEY     = 'ultimaBaldaPorCompania';
@@ -143,8 +169,16 @@ export default function AnadirPaquete({ modoRapido = false }) {
     () => new Map(baldas.map(b => [String(b.codigo).toUpperCase(), b])),
     [baldas]
   );
+  const baldaMapById = useMemo(
+    () => new Map(baldas.map(b => [String(b.id), b])),
+    [baldas]
+  );
   const lanesByName = useMemo(
     () => new Map(lanes.map(l => [String(l.name).toUpperCase(), l])),
+    [lanes]
+  );
+  const lanesById = useMemo(
+    () => new Map(lanes.map(l => [String(l.id), l])),
     [lanes]
   );
 
@@ -414,7 +448,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
     setSugs(list);
   }, [cliente, topClientes]);
 
-  /* ======= Selección inteligente de compartimento ======= */
+  /* ===== Conteo base (tal cual vienen los paquetes) ===== */
   const conteo = useMemo(() => {
     const c = {};
     const inc = (k) => { if (!k) return; const s = String(k).toUpperCase(); c[s] = (c[s] || 0) + 1; };
@@ -428,7 +462,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
         if (laneId)   inc(laneId);
       } else {
         const code = (p.compartimento || p?.baldas?.codigo || '').toUpperCase().trim();
-        const id   = Number.isFinite(Number(p?.balda_id)) ? String(Number(p.balda_id)) : null;
+        const id   = Number.isFinite(Number(p?.balda_id)) ? String(p.balda_id) : null;
         if (code) inc(code);
         if (id)   inc(id);
       }
@@ -436,6 +470,46 @@ export default function AnadirPaquete({ modoRapido = false }) {
     return c;
   }, [paquetes, layoutMode]);
 
+  /* ===== Conteo unificado por slot (robusto) ===== */
+  const occupancy = useMemo(() => {
+    if (layoutMode === 'racks') {
+      const byId = new Map();
+      for (const b of baldas) {
+        const idKey = String(b.id);
+        const codeKey = String(b.codigo).toUpperCase();
+        const count = (conteo[idKey] || 0) + (conteo[codeKey] || 0);
+        byId.set(b.id, { count, code: codeKey, b });
+      }
+      return { racks: byId, lanes: null };
+    } else {
+      const byId = new Map();
+      for (const l of lanes) {
+        const idKey = String(l.id);
+        const nameKey = String(l.name).toUpperCase();
+        const count = (conteo[idKey] || 0) + (conteo[nameKey] || 0);
+        byId.set(l.id, { count, name: l.name, l });
+      }
+      return { racks: null, lanes: byId };
+    }
+  }, [layoutMode, baldas, lanes, conteo]);
+
+  const getMostEmptySlot = useCallback(() => {
+    if (layoutMode === 'racks') {
+      const arr = Array.from((occupancy.racks || new Map()).values());
+      if (!arr.length) return null;
+      arr.sort((a,b)=> (a.count - b.count) || a.code.localeCompare(b.code));
+      const best = arr[0];
+      return best ? { type:'shelf', id: best.b.id, label: best.code } : null;
+    } else {
+      const arr = Array.from((occupancy.lanes || new Map()).values());
+      if (!arr.length) return null;
+      arr.sort((a,b)=> (a.count - b.count) || String(a.name).localeCompare(String(b.name)));
+      const best = arr[0];
+      return best ? { type:'lane', id: best.l.id, label: best.name } : null;
+    }
+  }, [layoutMode, occupancy]);
+
+  /* ===== Lista de compartimentos solo para mostrar (no para lógica) ===== */
   const listaCompartimentos = useMemo(() => {
     if (layoutMode === 'lanes') return lanes.map(l => l.name);
     return baldas.map(b => String(b.codigo).toUpperCase());
@@ -447,74 +521,57 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const setUltimaBaldaPorCliente = (cliente, slot) => { try { const map = JSON.parse(localStorage.getItem(LAST_SLOT_BY_CLIENT_KEY) || '{}'); map[cliente] = slot; localStorage.setItem(LAST_SLOT_BY_CLIENT_KEY, JSON.stringify(map)); } catch {} };
 
   const calcularBaldaSugerida = useCallback(() => {
-    if (!listaCompartimentos.length) return '';
-    const ranking = listaCompartimentos
-      .map(nombre => ({ nombre, cantidad: conteo[nombre] || 0 }))
-      .sort((a,b)=> (a.cantidad-b.cantidad) || a.nombre.localeCompare(b.nombre));
-    return ranking[0]?.nombre || listaCompartimentos[0];
-  }, [listaCompartimentos, conteo]);
+    const best = getMostEmptySlot();
+    return best?.label || (listaCompartimentos[0] || '');
+  }, [getMostEmptySlot, listaCompartimentos]);
 
+  // 🔎 Lógica de selección (match → misma balda, si no → MÁS VACÍA)
   const smartSlotFor = useCallback((clienteNombre, company) => {
     const upper = toUpperVis(clienteNombre || '');
-    if (!upper) return null;
-
-    // 1) Pendiente exacto
-    const matchExact = paquetes.find(p =>
-      (p.entregado === false || p.entregado == null) &&
-      toUpperVis(p.nombre_cliente || '') === upper
-    );
-    if (matchExact) {
-      if (layoutMode === 'racks') {
-        const byId = matchExact.balda_id ? baldas.find(b => String(b.id) === String(matchExact.balda_id)) : null;
-        const byCode = matchExact.compartimento ? baldaMapByCodigo.get(String(matchExact.compartimento).toUpperCase()) : null;
-        const b = byId || byCode;
-        if (b) return { type:'shelf', id:b.id, label:String(b.codigo).toUpperCase() };
-      } else {
-        const byId = matchExact.lane_id ? lanes.find(l => Number(l.id) === Number(matchExact.lane_id)) : null;
-        const byName = matchExact.compartimento ? lanesByName.get(String(matchExact.compartimento).toUpperCase()) : null;
-        const l = byId || byName;
-        if (l) return { type:'lane', id:l.id, label:l.name };
+    if (upper) {
+      // 1) Misma balda si ya tiene paquetes
+      const matchExact = paquetes.find(p =>
+        (p.entregado === false || p.entregado == null) &&
+        toUpperVis(p.nombre_cliente || '') === upper
+      );
+      if (matchExact) {
+        setMensajeCoincidencia('Misma balda que otro paquete de este cliente');
+        if (layoutMode === 'racks') {
+          const b =
+            (matchExact.balda_id && baldaMapById.get(String(matchExact.balda_id))) ||
+            (matchExact.compartimento && baldaMapByCodigo.get(String(matchExact.compartimento).toUpperCase())) ||
+            null;
+          if (b) {
+            setHighlightSlotId(b.id);
+            if (lastCheckRef.current.client !== upper || lastCheckRef.current.slot !== b.id) {
+              playCheck();
+              lastCheckRef.current = { client: upper, slot: b.id };
+            }
+            return { type:'shelf', id:b.id, label:String(b.codigo).toUpperCase() };
+          }
+        } else {
+          const l =
+            (matchExact.lane_id && lanesById.get(String(matchExact.lane_id))) ||
+            (matchExact.compartimento && lanesByName.get(String(matchExact.compartimento).toUpperCase())) ||
+            null;
+          if (l) {
+            setHighlightSlotId(l.id);
+            if (lastCheckRef.current.client !== upper || lastCheckRef.current.slot !== l.id) {
+              playCheck();
+              lastCheckRef.current = { client: upper, slot: l.id };
+            }
+            return { type:'lane', id:l.id, label:l.name };
+          }
+        }
       }
     }
 
-    // 2) Similar con historial
-    const sim = topClientes.find(c => fuzzyScore(c.nombre, upper) >= 0.72);
-    if (sim?.topSlot) {
-      if (layoutMode === 'racks') {
-        const byId = baldas.find(b => String(b.id) === String(sim.topSlot));
-        const byCode = baldaMapByCodigo.get(String(sim.topSlot).toUpperCase());
-        const b = byId || byCode;
-        if (b) return { type:'shelf', id:b.id, label:String(b.codigo).toUpperCase() };
-      } else {
-        const byId = lanes.find(l => String(l.id) === String(sim.topSlot));
-        const byName = lanesByName.get(String(sim.topSlot).toUpperCase());
-        const l = byId || byName;
-        if (l) return { type:'lane', id:l.id, label:l.name };
-      }
-    }
-
-    // 3) Últimos usados
-    const lastByClient = getUltimaBaldaPorCliente(upper);
-    const lastByCompany = company ? getUltimaBaldaPorCompania(company) : '';
-    const tryCode = (code) => {
-      if (!code) return null;
-      if (layoutMode === 'racks') {
-        const b = baldaMapByCodigo.get(String(code).toUpperCase());
-        return b ? { type:'shelf', id:b.id, label:String(b.codigo).toUpperCase() } : null;
-      } else {
-        const l = lanesByName.get(String(code).toUpperCase());
-        return l ? { type:'lane', id:l.id, label:l.name } : null;
-      }
-    };
-    const byClient = tryCode(lastByClient);
-    if (byClient) return byClient;
-    const byCompany = tryCode(lastByCompany);
-    if (byCompany) return byCompany;
-
-    // 4) Más vacío
-    const sugerida = calcularBaldaSugerida();
-    return tryCode(sugerida);
-  }, [layoutMode, paquetes, baldas, lanes, lanesByName, baldaMapByCodigo, topClientes, calcularBaldaSugerida]);
+    // 2) Sin coincidencias → balda/carril más vacía
+    setMensajeCoincidencia('');
+    setHighlightSlotId(null);
+    lastCheckRef.current = { client: upper, slot: null };
+    return getMostEmptySlot();
+  }, [paquetes, layoutMode, baldaMapByCodigo, baldaMapById, lanesByName, lanesById, getMostEmptySlot]);
 
   const selectSlot = useCallback((slot, manual=false) => {
     if (!slot) return;
@@ -525,9 +582,9 @@ export default function AnadirPaquete({ modoRapido = false }) {
 
   useEffect(() => {
     if (seleccionManual) return;
-    const slot = smartSlotFor(cliente, compania);
+    const slot = smartSlotFor(cliente, compania) || getMostEmptySlot();
     if (slot) selectSlot(slot, false);
-  }, [cliente, compania, paquetes, layoutMode, seleccionManual, smartSlotFor, selectSlot]);
+  }, [cliente, compania, paquetes, layoutMode, seleccionManual, smartSlotFor, getMostEmptySlot, selectSlot]);
 
   const puedeGuardar = useMemo(() => {
     if (!cliente.trim() || !compania || !compartimento || !slotSel) return false;
@@ -566,7 +623,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
       parcel.style.setProperty('--ey', `${ey}px`);
 
       parcel.classList.add('animate');
-      setTimeout(() => { try { layer.removeChild(parcel); } catch {} }, 1200); // coincide con animación (1.15s aprox)
+      setTimeout(() => { try { layer.removeChild(parcel); } catch {} }, 1200);
     } catch { /* noop */ }
   }, [slotSel]);
 
@@ -653,9 +710,10 @@ export default function AnadirPaquete({ modoRapido = false }) {
   }, [layoutMode, baldas]);
 
   const sugerenciaPrimaria = useMemo(() => {
+    if (slotSel && !seleccionManual) return slotSel.label;
     if (seleccionManual && compartimento) return compartimento;
     return calcularBaldaSugerida() || compartimento || '';
-  }, [seleccionManual, compartimento, calcularBaldaSugerida]);
+  }, [slotSel, seleccionManual, compartimento, calcularBaldaSugerida]);
 
   return (
     <div className="anadir-paquete" style={brandVars}>
@@ -695,6 +753,12 @@ export default function AnadirPaquete({ modoRapido = false }) {
               <datalist id="clientes-sugeridos">
                 {sugs.map(n => <option key={n} value={n} />)}
               </datalist>
+
+              {mensajeCoincidencia && (
+                <div className="coincidencia-msg">
+                  <FaInfoCircle aria-hidden="true" /> {mensajeCoincidencia}
+                </div>
+              )}
             </div>
 
             <div className="campo">
@@ -711,7 +775,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
           {/* ===== BLOQUE CENTRAL ===== */}
           <div className="bloque-central">
             <div className="chips">
-              <span className="chip chip--hint">
+              <span className={`chip chip--hint ${highlightSlotId ? 'parpadeo' : ''}`}>
                 <FaLightbulb aria-hidden="true" />
                 <span className="lbl">Sugerencia principal</span>
                 <code className="pill">{sugerenciaPrimaria || '—'}</code>
@@ -756,7 +820,8 @@ export default function AnadirPaquete({ modoRapido = false }) {
                     if (!lane) return <div key={`cell-${r}-${c}`} className="lane-cell empty" />;
 
                     const activa = slotSel?.type==='lane' && slotSel?.id === lane.id;
-                    const cantidad = (conteo[String(lane.id)] ?? conteo[lane.name] ?? 0);
+                    const occObj = occupancy.lanes?.get(lane.id);
+                    const cantidad = occObj?.count ?? 0;
 
                     const laneColor = lane.color || '#f59e0b';
                     const laneTint  = hexToRgba(laneColor, 0.08);
@@ -767,7 +832,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
                         key={`cell-${r}-${c}`}
                         type="button"
                         ref={(el) => { if (el) laneRefs.current.set(String(lane.id), el); }}
-                        className={`lane ${cantidad <= 4 ? 'verde' : cantidad < 10 ? 'naranja' : 'rojo'} ${activa ? 'activa pulse' : ''}`}
+                        className={`lane ${cantidad <= 4 ? 'verde' : cantidad < 10 ? 'naranja' : 'rojo'} ${activa ? 'activa pulse' : ''} ${highlightSlotId===lane.id ? 'parpadeo' : ''}`}
                         style={{ '--lane': laneColor, '--lane-rgba': laneTint, '--sel-ring': laneRing }}
                         onClick={()=>{ selectSlot({ type:'lane', id:lane.id, label: lane.name }, true); }}
                         aria-pressed={activa}
@@ -820,14 +885,15 @@ export default function AnadirPaquete({ modoRapido = false }) {
                         <div className="baldas-grid">
                           {list.map(b => {
                             const activa = slotSel?.type==='shelf' && slotSel?.id === b.id;
-                            const cantidad = (conteo[String(b.id)] ?? conteo[String(b.codigo).toUpperCase()] ?? 0);
+                            const occObj = occupancy.racks?.get(b.id);
+                            const cantidad = occObj?.count ?? 0;
 
                             return (
                               <button
                                 type="button"
                                 key={b.id}
                                 ref={(el) => { if (el) baldaRefs.current.set(String(b.id), el); }}
-                                className={`balda ${cantidad <= 4 ? 'verde' : cantidad < 10 ? 'naranja' : 'rojo'} ${activa ? 'activa pulse' : ''}`}
+                                className={`balda ${cantidad <= 4 ? 'verde' : cantidad < 10 ? 'naranja' : 'rojo'} ${activa ? 'activa pulse' : ''} ${highlightSlotId===b.id ? 'parpadeo' : ''}`}
                                 onClick={() => { selectSlot({type:'shelf', id:b.id, label:String(b.codigo).toUpperCase() }, true); }}
                                 aria-pressed={activa}
                               >
