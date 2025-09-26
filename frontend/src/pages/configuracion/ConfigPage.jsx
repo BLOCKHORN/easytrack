@@ -682,7 +682,7 @@ export default function ConfigPage() {
           )}
 
           {section === 'account' && <AccountSettings />}
-          <BillingCard />
+
         </ConfigLayout>
 
         {dirty && (
