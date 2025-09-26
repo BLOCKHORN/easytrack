@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import '../styles/subscription-gate.scss';
 import anime from 'animejs/lib/anime.es.js';
 import { supabase } from '../utils/supabaseClient';
+import { apiPath } from '../utils/apiBase';
 
 export default function SubscriptionGate() {
   const params  = new URLSearchParams(location.search);
@@ -24,13 +25,13 @@ export default function SubscriptionGate() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
 
-        // 1) Canon: /api/tenants/me
-        const r = await fetch('/api/tenants/me', {
+        // 1) Canon: /api/tenants/me (ruta absoluta en prod, relativa en dev)
+        const r = await fetch(apiPath('/api/tenants/me'), {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
         if (r.ok) {
           const json = await r.json().catch(() => ({}));
-          const ent  = json?.entitlements;
+          const ent  = json?.entitlements || json;
           if (ent?.canUseApp) {
             try { sessionStorage.removeItem('sub_block'); } catch {}
             const back = ctx?.returnTo || '/';
@@ -40,19 +41,19 @@ export default function SubscriptionGate() {
         }
 
         // 2) Fallback: /api/limits/me (legacy)
-        const r2 = await fetch('/api/limits/me', {
+        const r2 = await fetch(apiPath('/api/limits/me'), {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
         if (r2.ok) {
           const j2 = await r2.json().catch(() => ({}));
-          const ent2 = j2?.entitlements;
+          const ent2 = j2?.entitlements || j2;
           if (ent2?.canUseApp) {
             try { sessionStorage.removeItem('sub_block'); } catch {}
             const back = ctx?.returnTo || '/';
             return window.location.replace(back);
           }
-          const remaining = Number(j2?.limits?.remaining ?? 0);
-          const softBlocked = !!j2?.limits?.soft_blocked;
+          const remaining = Number(j2?.limits?.remaining ?? j2?.limits?.packages_left ?? 0);
+          const softBlocked = !!(j2?.limits?.soft_blocked);
           if (!softBlocked && remaining > 0) {
             try { sessionStorage.removeItem('sub_block'); } catch {}
             const back = ctx?.returnTo || '/';

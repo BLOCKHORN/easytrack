@@ -20,12 +20,13 @@ const AUTH_ONLY_EXACT = new Set([
   '/api/tenants/me',
 ]);
 
-// ⬇️ añade aquí los prefijos que usa tu ConfigPage
+// ⬇️ añadimos '/api/tenants' completo para lecturas de estado
 const AUTH_ONLY_PREFIXES = [
   '/api/dashboard',
   '/api/imagenes',
-  '/api/limits',     // consulta de entitlements/limits
-  '/api/config',     // ⬅️ tu carga inicial de configuración
+  '/api/limits',
+  '/api/tenants',   // <— NUEVO
+  '/api/config',
 ];
 
 const APP_API_REGEX = /^\/(?:[^/]+\/)?api\/?/;

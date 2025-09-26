@@ -1,19 +1,16 @@
-// frontend/src/hooks/useSubscription.js
 import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
+import { apiPath } from '../utils/apiBase';
 
 function normalizeEntitlements(src) {
   if (!src || typeof src !== 'object') return null;
-
   const status = String(src.status || src.subscription_status || '').toLowerCase();
   const untilStr = src.until_at || src.current_period_end || src.trial_end || null;
   const untilMs  = untilStr ? Date.parse(untilStr) : null;
   const now      = Date.now();
+  const onTrial  = status === 'trialing' && (!untilMs || untilMs > now);
+  const active   = status === 'active' || onTrial || !!src.canUseApp;
 
-  const onTrial = status === 'trialing' && (!untilMs || untilMs > now);
-  const active  = status === 'active' || onTrial || !!src.canUseApp;
-
-  // límites opcionales: packages_left | remaining
   const rawLeft = src?.limits?.packages_left ?? src?.limits?.remaining;
   const left    = Number.isFinite(Number(rawLeft)) ? Number(rawLeft) : null;
 
@@ -50,14 +47,14 @@ export function useSubscription() {
           if (!cancelled) setState({ loading:false, active:false, reason:'unauthenticated', entitlements:null });
           return;
         }
-        const headers = {
-          Authorization: `Bearer ${session.access_token}`,
-          'Cache-Control': 'no-store',
-        };
+        // ❗ No metas 'Cache-Control' como header -> rompe el preflight CORS
+        const headers = { Authorization: `Bearer ${session.access_token}` };
+        const opts = { headers, cache: 'no-store' }; // usa la opción 'cache' en vez del header
 
-        // 1) Preferido: /api/tenants/me
+        const ts = Date.now();
+
         try {
-          const r = await fetch(`/api/tenants/me?ts=${Date.now()}`, { headers });
+          const r = await fetch(apiPath(`/api/tenants/me?ts=${ts}`), opts);
           if (r.ok) {
             const j = await r.json().catch(() => ({}));
             const ent = normalizeEntitlements(j?.entitlements || j);
@@ -68,9 +65,8 @@ export function useSubscription() {
           }
         } catch {}
 
-        // 2) Fallback: /api/limits/me
         try {
-          const r2 = await fetch(`/api/limits/me?ts=${Date.now()}`, { headers });
+          const r2 = await fetch(apiPath(`/api/limits/me?ts=${ts}`), opts);
           if (r2.ok) {
             const j2 = await r2.json().catch(() => ({}));
             const ent2 = normalizeEntitlements(j2?.entitlements || j2);

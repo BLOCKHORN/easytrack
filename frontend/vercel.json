@@ -5,6 +5,7 @@
     { "source": "/planes/(.*)", "destination": "/precios", "permanent": true }
   ],
   "rewrites": [
+    { "source": "/api/(.*)",    "destination": "https://TU-BACKEND/api/$1" },
     { "source": "/assets/(.*)", "destination": "/assets/$1" },
     { "source": "/(.+\\..+)",   "destination": "/$1" },
     { "source": "/(.*)",        "destination": "/index.html" }
