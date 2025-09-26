@@ -28,7 +28,7 @@ export default function NavbarActions({
           <button className="navbar__link" onClick={openLogin}>
             <FaLock /> <span>Login</span>
           </button>
-          <Link to="/precios" className="btn btn-primary">Empezar prueba gratis</Link>
+          <Link to="/registro" className="btn btn-primary">Empezar prueba gratis</Link>
         </>
       ) : (
         <>

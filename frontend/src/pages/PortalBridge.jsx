@@ -1,48 +1,55 @@
-// frontend/src/pages/PortalBridge.jsx
+// src/pages/PortalBridge.jsx
 import { useEffect, useState } from 'react';
-import { apiFetch } from '../utils/fetcher';
 import { supabase } from '../utils/supabaseClient';
+import { openBillingPortal } from '../services/billingService';
 
 export default function PortalBridge() {
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
   useEffect(() => {
-    let abort = false;
     (async () => {
       try {
-        // fuerza sesión fresca por si el tab cambió
-        await supabase.auth.getSession();
+        setLoading(true); setErr('');
+        const { data: sdata } = await supabase.auth.getSession();
+        if (!sdata?.session) throw new Error('NO_SESSION');
 
-        const res = await apiFetch('/api/billing/portal', { method: 'GET' });
-
-        if (res.status === 401) {
-          if (!abort) window.location.replace('/');
-          return;
-        }
-        if (!res.ok) throw new Error('No se pudo generar el portal');
-
-        const data = await res.json().catch(() => ({}));
-        const url = data.url || data.portal_url;
-        if (!url) throw new Error('Respuesta del portal inválida');
-
-        if (!abort) window.location.replace(url);
+        const url = await openBillingPortal();
+        if (!url) throw new Error('No se pudo obtener el portal de facturación.');
+        // Redirige al portal
+        window.location.assign(url);
       } catch (e) {
-        if (!abort) setErr(e.message || 'Error al abrir el portal');
+        setErr(e.message || 'Error abriendo el portal.');
+        setLoading(false);
       }
     })();
-    return () => { abort = true; };
   }, []);
 
+  async function retry() {
+    try {
+      setErr(''); setLoading(true);
+      const url = await openBillingPortal();
+      if (!url) throw new Error('No se pudo obtener el portal de facturación.');
+      window.location.assign(url);
+    } catch (e) {
+      setErr(e.message || 'Error abriendo el portal.');
+      setLoading(false);
+    }
+  }
+
   return (
-    <section style={{ maxWidth: 560, margin: '56px auto', padding: 24 }}>
-      <h1>Abriendo portal de facturación…</h1>
-      <p>Te estamos llevando al portal seguro para ver/actualizar tu método de pago.</p>
-      {err && (
-        <p style={{ color: 'crimson' }}>
-          {err} — <button onClick={() => window.location.reload()}>Reintentar</button>
-        </p>
+    <section style={{ maxWidth: 520, margin: '56px auto', padding: 24 }}>
+      <h1>Portal de facturación</h1>
+      {loading && <p>Redirigiendo al portal…</p>}
+      {!loading && err && (
+        <>
+          <p style={{ color: '#b91c1c' }}>{err}</p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" onClick={retry}>Reintentar</button>
+            <a className="btn ghost" href="/dashboard">Volver al panel</a>
+          </div>
+        </>
       )}
-      <p><a className="btn" href="/">Volver al inicio</a></p>
     </section>
   );
 }

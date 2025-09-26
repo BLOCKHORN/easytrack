@@ -134,7 +134,7 @@ async function upsertBaldaPuente(tenantId, laneId, codigoMostrado) {
 /* Handlers                                                            */
 /* ──────────────────────────────────────────────────────────────────── */
 
-/** ✅ NO ADIVINA: requiere balda_id (racks) o lane_id (carril). */
+/** ✅ Crear paquete con control de trial (trigger de BD aplica el límite 20) */
 const crearPaquete = async (req, res) => {
   try {
     const tenantId = await resolveTenantId(req);
@@ -177,14 +177,13 @@ const crearPaquete = async (req, res) => {
       return res.status(400).json({ error: "Debes indicar balda_id (racks) o lane_id (carril)." });
     }
 
-    // 2) Insert
+    // 2) Insert (trigger de BD controla el límite del trial)
     const payload = {
       tenant_id: tenantId,
       empresa_id: empresaId,
       nombre_cliente: nombre_cliente.trim(),
       empresa_transporte: empresa_transporte.trim(),
       balda_id: finalBaldaId,
-      // compartimento queda solo como display (opcional)
       ...(compartimento ? { compartimento: String(compartimento) } : {})
     };
 
@@ -194,12 +193,55 @@ const crearPaquete = async (req, res) => {
       .select("id, nombre_cliente, fecha_llegada, fecha_entregado, entregado, empresa_transporte, balda_id, baldas (estante, balda, id)");
 
     if (errorInsert) {
+      const msg = String(errorInsert?.message || '').toUpperCase();
+      if (msg.includes('TRIAL_LIMIT_REACHED')) {
+        return res.status(402).json({
+          ok: false,
+          error: 'TRIAL_LIMIT_REACHED',
+          message: 'Has alcanzado el límite de 20 paquetes de la versión de prueba. Actualiza tu plan para seguir.'
+        });
+      }
       console.error("[crearPaquete] insert:", errorInsert);
       return res.status(500).json({ error: "Error al guardar el paquete." });
     }
 
     const p = inserted?.[0];
     if (!p) return res.status(500).json({ error: "No se pudo insertar el paquete." });
+
+    /* 2.5) Incremento de trial (CAS) — SOLO si tu trigger NO incrementa ya trial_used
+       - Lee trial_* del tenant.
+       - Si sigue activo y queda cupo, intenta CAS: trial_used pasa de X a X+1.
+       - Si alguien se te adelanta, el eq('trial_used', X) hará que este update no afecte filas (OK).
+       - ⚠️ Si tu TRIGGER YA incrementa trial_used, borra este bloque para no duplicar. */
+    try {
+      const { data: t, error: tErr } = await supabase
+        .from('tenants')
+        .select('trial_active, trial_quota, trial_used')
+        .eq('id', tenantId)
+        .maybeSingle();
+
+      if (!tErr && t?.trial_active) {
+        const quota = Number(t.trial_quota ?? 0);
+        const used  = Number(t.trial_used ?? 0);
+
+        if (used < quota) {
+          const { error: incErr } = await supabase
+            .from('tenants')
+            .update({ trial_used: used + 1 })
+            .eq('id', tenantId)
+            .eq('trial_active', true)
+            .eq('trial_used', used)       // CAS: solo si nadie lo cambió entre lectura y escritura
+            .lt('trial_used', quota);     // seguridad adicional
+          if (incErr) {
+            // No bloquear por contador — solo log si te interesa
+            // console.warn('[crearPaquete] trial_used++ fallo CAS:', incErr);
+          }
+        }
+      }
+    } catch (incEx) {
+      // No bloquear al usuario por el contador
+      // console.warn('[crearPaquete] trial_used++ excepcion:', incEx);
+    }
 
     return res.status(200).json({
       paquete: {
@@ -211,6 +253,14 @@ const crearPaquete = async (req, res) => {
       },
     });
   } catch (error) {
+    const msg = String(error?.message || '').toUpperCase();
+    if (msg.includes('TRIAL_LIMIT_REACHED')) {
+      return res.status(402).json({
+        ok: false,
+        error: 'TRIAL_LIMIT_REACHED',
+        message: 'Has alcanzado el límite de 20 paquetes de la versión de prueba. Actualiza tu plan para seguir.'
+      });
+    }
     console.error("[crearPaquete] inesperado:", error);
     return res.status(500).json({ error: "Error interno del servidor." });
   }

@@ -1,5 +1,7 @@
+// frontend/src/pages/configuracion/ConfigPage.jsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../utils/supabaseClient';
+import { ensureTenantResolved } from '../../utils/ensureTenant';
 import Toast from '../../components/Toast';
 
 import Hero from './Hero';
@@ -8,6 +10,7 @@ import WarehouseCard from './WarehouseCard';
 import CarriersCard from './CarriersCard';
 import FooterActions from './FooterActions';
 import Skeleton from './Skeleton';
+import BillingCard from '../../components/billing/BillingCard';
 
 import ConfigLayout from './ConfigLayout';
 import AccountSettings from './AccountSettings';
@@ -102,7 +105,7 @@ export default function ConfigPage() {
       setNombre(tenantData?.nombre_empresa || '');
     }
 
-    // Layout meta (RPC)
+    // Layout meta (RPC opcional)
     let layoutResp = null;
     try {
       const { data, error } = await supabase.rpc('get_warehouse_layout', { p_org: forTenantId });
@@ -218,7 +221,6 @@ export default function ConfigPage() {
             const fromDb   = baldasMap.get(idx1) || 0;
             const shelvesCount = Math.max(1, fromDb, fromMeta);
 
-            // Alias y nombres manuales desde payload (si existen)
             const alias = (typeof rData?.name === 'string') ? rData.name : "";
             const listedNames = Array.isArray(rData?.shelves) ? rData.shelves.map(s => s?.name || "") : [];
             const shelf_names = listedNames.slice(0, shelvesCount);
@@ -235,7 +237,7 @@ export default function ConfigPage() {
         }
         prevModeRef.current = mode;
       } else {
-        // Default 2x2 lanes si no hay nada
+        // Default 2x2 lanes
         setNomenclatura(prev => ({ ...DEFAULT_NOMEN, ...prev, layout_mode: 'lanes', lanes_rows: 2, lanes_cols: 2 }));
         setEstructura([
           { estante:1, color:DEFAULT_LANE_COLOR, pos:{ r:1, c:1 } },
@@ -295,19 +297,14 @@ export default function ConfigPage() {
         if (!user) { if (!cancelRef.current) setCargando(false); return; }
         if (!cancelRef.current) setUsuario(user);
 
-        const nombreOnboarding =
-          localStorage.getItem('onboarding_nombre_negocio') ||
-          user?.user_metadata?.business_name || '';
+        // ✅ Nuevo: asegurar/obtener tenant de forma idempotente (sin RPC ensure_tenant_)
+        const { tenant: ensuredTenant } = await ensureTenantResolved();
+        if (!ensuredTenant?.id) throw new Error('TENANT_NOT_FOUND');
 
-        const { data: ensuredData, error: ensureErr } = await supabase.rpc(
-          'ensure_tenant_for_current_user', { p_nombre: nombreOnboarding || null }
-        );
-        if (ensureErr) throw ensureErr;
-        const ensuredRow = Array.isArray(ensuredData) ? ensuredData[0] : ensuredData;
-        if (!ensuredRow?.id) throw new Error('RPC ensure_tenant_for_current_user sin id');
+        // limpiar metadatos de onboarding (opcional)
+        try { localStorage.removeItem('onboarding_nombre_negocio'); } catch {}
 
-        localStorage.removeItem('onboarding_nombre_negocio');
-        await loadAll(ensuredRow.id, cancelRef);
+        await loadAll(ensuredTenant.id, cancelRef);
       } catch (err) {
         console.error('[ConfigPage] cargarDatos error:', err);
         mostrarToast('No se pudieron cargar los datos.', 'error');
@@ -321,7 +318,7 @@ export default function ConfigPage() {
       }
     })();
     return () => { cancelRef.current = true; };
-    // eslint-disable-next-line react-hooks/exexpr
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Dirty tracking
@@ -423,7 +420,6 @@ export default function ConfigPage() {
     const count = Math.max(1, estructura.length || (nomenclatura.rack_rows * nomenclatura.rack_cols));
     const { rows, cols } = fitGrid(count, nomenclatura.rack_rows, nomenclatura.rack_cols);
 
-    // normalizamos estructura (y aseguramos alias/shelf_names)
     const fixedEstructura = Array.from({ length: count }, (_, idx) => {
       const base = estructura[idx] || {};
       const r = Math.floor(idx / cols) + 1;
@@ -686,6 +682,7 @@ export default function ConfigPage() {
           )}
 
           {section === 'account' && <AccountSettings />}
+          <BillingCard />
         </ConfigLayout>
 
         {dirty && (

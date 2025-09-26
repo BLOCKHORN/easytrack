@@ -1,0 +1,77 @@
+/* src/styles/UpgradeSuccess.scss */
+.ups {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - 120px);
+  padding: 32px 16px;
+  background:
+    radial-gradient(1200px 500px at 80% -10%, rgba(37,99,235,.08), transparent 60%),
+    radial-gradient(1000px 400px at 0% 100%, rgba(99,102,241,.08), transparent 60%);
+
+  .ups__card {
+    width: 100%;
+    max-width: 720px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.05);
+
+    &--loading {
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+      text-align: center;
+    }
+  }
+
+  h1 { margin: 8px 0 6px; font-size: 28px; line-height: 1.2; }
+  .ups__lead { color: #4b5563; margin-bottom: 16px; }
+
+  .ups__icon {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: #f3f4f6; margin: 6px 0;
+    &.ok { background: #ecfdf5; border: 1px solid #10b98122; }
+    &.warn { background: #fef2f2; border: 1px solid #ef444422; }
+    position: relative;
+    &::before {
+      content: "✓";
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      font-weight: 900; color: #10b981;
+    }
+    &.warn::before { content: "!" ; color: #ef4444; }
+  }
+
+  .ups__grid {
+    margin: 10px 0 2px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    .ups__row {
+      display: grid; grid-template-columns: 1fr 2fr;
+      padding: 12px 14px;
+      &:not(:last-child){ border-bottom: 1px solid #e5e7eb; }
+      .label { color:#6b7280; }
+      .value { font-weight: 600; }
+    }
+  }
+
+  .ups__actions {
+    margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap;
+    .btn {
+      padding: 10px 14px; border-radius: 10px; border: 1px solid #e5e7eb;
+      background: #fff; color:#111827; text-decoration: none; font-weight: 600;
+      &--primary { background:#111827; color:#fff; border-color:#111827; }
+      &--ghost { background:#fff; }
+    }
+  }
+
+  .ups__hint { margin-top: 10px; color:#6b7280; font-size: 14px; }
+
+  .spinner {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 3px solid #e5e7eb; border-top-color:#111827; animation: spin .9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+}

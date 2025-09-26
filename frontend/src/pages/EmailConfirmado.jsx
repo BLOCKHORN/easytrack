@@ -1,23 +1,34 @@
+// src/pages/EmailConfirmado.jsx
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
-import { FiCheck, FiExternalLink, FiLock } from 'react-icons/fi';
 import '../styles/EmailConfirmado.scss';
 
-const CHECKOUT_URL   = '/billing/success';
-const CREATE_PWD_URL = '/crear-password';
+const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/,'');
+const LOGIN_URL = '/login';
 
 export default function EmailConfirmado() {
-  const [email, setEmail] = useState('');
-  const [info, setInfo]   = useState('');
+  const [msg, setMsg] = useState('Conectando con tu cuenta…');
 
-  const hasCheckoutSession = useMemo(() => {
-    try { return !!localStorage.getItem('last_session_id'); } catch { return false; }
+  const lastKnownSlug = useMemo(() => {
+    try { return localStorage.getItem('et:last_slug') || ''; } catch { return ''; }
   }, []);
+
+  const goDashboard = (slugMaybe) => {
+    const slug = slugMaybe || lastKnownSlug || '';
+    const url  = (slug ? `/${slug}/dashboard` : '/dashboard').replace(/\/{2,}/g,'/');
+    window.location.replace(url);
+  };
+
+  const goLogin = () => {
+    const next = encodeURIComponent('/auth/email-confirmado');
+    window.location.replace(`${LOGIN_URL}?next=${next}`);
+  };
 
   useEffect(() => {
     (async () => {
       try {
-        const hash = window.location.hash.startsWith('#')
+        // 1) ¿Llegamos desde el magic link de Supabase?
+        const hash = window.location.hash?.startsWith('#')
           ? new URLSearchParams(window.location.hash.slice(1))
           : new URLSearchParams();
         const qp = new URLSearchParams(window.location.search);
@@ -27,65 +38,83 @@ export default function EmailConfirmado() {
         const error_code    = hash.get('error_code') || qp.get('error_code') || qp.get('error');
         const error_desc    = hash.get('error_description') || qp.get('error_description');
 
-        if (error_code) setInfo(decodeURIComponent(error_desc || error_code));
+        if (error_code) setMsg(decodeURIComponent(error_desc || error_code));
 
-        if (access_token && refresh_token) {
-          try {
-            await supabase.auth.setSession({ access_token, refresh_token });
-            history.replaceState({}, document.title, window.location.pathname + window.location.search);
-          } catch (e) {
-            setInfo(e.message || 'No se pudo establecer la sesión.');
-          }
+        // 2) Sesión actual
+        const { data: sdata } = await supabase.auth.getSession();
+        const hasSession = !!sdata?.session;
+
+        // 3) Si no hay tokens ni sesión → no permitido: al login
+        if (!access_token && !refresh_token && !hasSession) {
+          return goLogin();
         }
 
-        const { data } = await supabase.auth.getUser();
-        const u = data?.user || null;
+        // 4) Si hay tokens en hash → establecer sesión y limpiar hash
+        if (access_token && refresh_token) {
+          setMsg('Verificando tu email y creando tu espacio…');
+          await supabase.auth.setSession({ access_token, refresh_token });
+          history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        }
+
+        // 5) Usuario actual (ya confirmado)
+        const { data: udata } = await supabase.auth.getUser();
+        const u = udata?.user || null;
         if (u?.email) {
-          setEmail(u.email);
           try {
             localStorage.setItem('et:email_confirmed', '1');
             localStorage.setItem('signup_email', u.email);
           } catch {}
+        }
 
+        // 6) Token para bootstrap
+        const { data: fresh } = await supabase.auth.getSession();
+        const token = fresh?.session?.access_token;
+        if (!token) {
+          // Si no hay token a estas alturas, no estamos logueados → login
+          return goLogin();
+        }
+
+        // 7) Bootstrap idempotente (tenant + membership + trial)
+        setMsg('Preparando tu panel…');
+        const resp = await fetch(`${API}/api/auth/bootstrap`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({}),
+        });
+        const j = await resp.json().catch(() => ({}));
+        if (!resp.ok || j?.ok === false) {
+          throw new Error(j?.error || `HTTP ${resp.status}`);
+        }
+
+        const slug = j?.tenant?.slug || '';
+        if (slug) {
+          try { localStorage.setItem('et:last_slug', slug); } catch {}
           try {
             if ('BroadcastChannel' in window) {
               const bc = new BroadcastChannel('et-auth');
-              bc.postMessage({ type: 'EMAIL_CONFIRMED', email: u.email });
+              bc.postMessage({ type: 'EMAIL_CONFIRMED', email: u?.email || '' });
               bc.close();
             }
           } catch {}
         }
+
+        // 8) A tu panel
+        goDashboard(slug);
       } catch (e) {
-        setInfo(e.message || 'Error inesperado al confirmar el email.');
+        // Si algo falla, mejor llevar al login para que el usuario reintente
+        setMsg('No hemos podido completar el acceso de forma segura. Redirigiendo al login…');
+        setTimeout(goLogin, 800);
       }
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Pantalla transitoria mínima (no mostramos acciones: esto es una pasarela)
   return (
-    <section className="eok">
-      <div className="eok-card">
-        <div className="eok-icon"><FiCheck aria-hidden="true" /></div>
-        <h1 className="eok-title">¡Email confirmado!</h1>
-        <p className="eok-muted">
-          {email ? <>Tu usuario <strong>{email}</strong> ya está verificado.</> : 'Tu usuario ya está verificado.'}
-        </p>
-
-        <div className="eok-actions">
-          <a className="eok-btn eok-btn--primary" href={CHECKOUT_URL}>
-            Volver al checkout <FiExternalLink />
-          </a>
-          <a className="eok-btn eok-btn--ghost" href={CREATE_PWD_URL}>
-            <FiLock /> Crear mi contraseña aquí
-          </a>
-        </div>
-
-        {hasCheckoutSession ? (
-          <p className="eok-hint">Si tenías abierto el checkout, esa ventana se actualizará automáticamente.</p>
-        ) : (
-          <p className="eok-hint">Si cerraste el checkout, puedes crear tu contraseña aquí y seguir.</p>
-        )}
-
-        {info && <div className="eok-alert">{info}</div>}
+    <section className="eok eok--gate">
+      <div className="eok-loader">
+        <div className="eok-loader__spinner" aria-hidden="true" />
+        <p className="eok-loader__msg" role="status">{msg}</p>
       </div>
     </section>
   );

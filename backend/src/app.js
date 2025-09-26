@@ -24,7 +24,10 @@ const tenantsRoutes = require('./routes/tenants.routes');
 const metricsRouter = require('./routes/metrics.routes');
 
 const billingRoutes = require('./routes/billing.routes');
-const { stripeWebhook } = require('./routes/stripe.webhook');
+const { stripeWebhook } = require('./routes/stripe.webhook'); // mantiene tu ruta actual
+
+// NUEVO: límites/estado (trial remaining, sub activa)
+const limitsRoutes = require('./routes/limits.routes');
 
 const adminRoutes = require('./routes/admin.routes');
 
@@ -77,8 +80,8 @@ app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
 /* ============== Healthchecks ============== */
-app.get('/health', (_, res) => res.json({ ok: true }));
-app.get('/.well-known/health', (_, res) => res.json({ ok: true }));
+app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/.well-known/health', (_req, res) => res.json({ ok: true }));
 
 /* =========================================================
    STRIPE WEBHOOK (RAW) — SIEMPRE antes de express.json()
@@ -124,13 +127,27 @@ authOnly('/:tenantSlug/api/dashboard', dashboardRoutes);
 authOnly('/:tenantSlug/api/imagenes', imagenesRoutes);
 authOnly('/:tenantSlug/api/estantes', estantesRoutes);
 
-/* ============== Rutas protegidas (login + firewall) ============== */
-gate('/api/tenants', tenantsRoutes);
-gate('/api/paquetes', paquetesRoutes);
-gate('/api/area-personal', areaPersonalRoutes);
+/* =========================================================
+   Trial-friendly: SIN subscriptionFirewall
+   - Paquetes y Área personal quedan disponibles en modo prueba.
+   - El límite de 20 paquetes lo hace tu trigger en BD.
+   ========================================================= */
+authOnly('/api/paquetes', paquetesRoutes);
+authOnly('/api/area-personal', areaPersonalRoutes);
 
-gate('/:tenantSlug/api/paquetes', paquetesRoutes);
-gate('/:tenantSlug/api/area-personal', areaPersonalRoutes);
+authOnly('/:tenantSlug/api/paquetes', paquetesRoutes);
+authOnly('/:tenantSlug/api/area-personal', areaPersonalRoutes);
+
+/* =========================================================
+   Tenants: si quieres mantener firewall aquí, lo dejamos
+   (puedes pasar a authOnly si quieres abrirlo en trial)
+   ========================================================= */
+gate('/api/tenants', tenantsRoutes);
+
+/* =========================================================
+   Límites/Estado (trial remaining, sub activa) — solo login
+   ========================================================= */
+authOnly('/api/limits', limitsRoutes);
 
 /* ============== 404 ============== */
 app.use((req, res) => {

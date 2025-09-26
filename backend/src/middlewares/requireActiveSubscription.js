@@ -2,13 +2,26 @@
 
 const {
   fetchSubscriptionForTenant,
-  isSubscriptionActive,
   resolveTenantId,
 } = require('../utils/subscription');
 
+const { supabase } = require('../utils/supabaseClient');
+const { computeEntitlements } = require('../utils/entitlements');
+
+// Lee tenant con campos de trial/soft_blocked
+async function getTenantById(id) {
+  const { data, error } = await supabase
+    .from('tenants')
+    .select('id, slug, nombre_empresa, email, trial_active, trial_quota, trial_used, soft_blocked')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
 /**
- * Bloquea el acceso a endpoints de la app si la suscripción no está activa.
- * Devuelve 402 (Payment Required) con un motivo.
+ * Bloquea solo si NO hay sub activa NI queda trial.
+ * Devuelve 402 con entitlements cuando bloquea.
  */
 module.exports = function requireActiveSubscription() {
   return async (req, res, next) => {
@@ -18,22 +31,35 @@ module.exports = function requireActiveSubscription() {
         return res.status(400).json({ ok: false, error: 'TENANT_NOT_RESOLVED' });
       }
 
-      const sub = await fetchSubscriptionForTenant(tenantId);
-      const { active, reason } = isSubscriptionActive(sub);
+      const [tenant, sub] = await Promise.all([
+        getTenantById(tenantId),
+        fetchSubscriptionForTenant(tenantId)
+      ]);
 
-      if (!active) {
+      const ent = computeEntitlements({ tenant, subscription: sub });
+
+      // Headers de depuración (útiles en Network)
+      try {
+        res.setHeader('X-SubFirewall', 'active-required');
+        res.setHeader('X-CanUseApp', ent.canUseApp ? '1' : '0');
+        res.setHeader('X-Ent-Reason', String(ent.reason || ''));
+      } catch {}
+
+      if (!ent.canUseApp) {
         return res.status(402).json({
           ok: false,
-          error: 'SUBSCRIPTION_INACTIVE',
-          reason,
+          error: 'PAYMENT_REQUIRED',
+          reason: ent.reason || 'inactive',
+          entitlements: ent,
           tenant_id: tenantId,
         });
       }
 
-      // Propaga info por si la necesitas en controladores
+      // Propagar por si interesa
       req.tenantId = tenantId;
       req.subscription = sub;
-      if (!req.tenant) req.tenant = { id: tenantId };
+      req.entitlements = ent;
+      if (!req.tenant) req.tenant = tenant || { id: tenantId };
 
       return next();
     } catch (err) {

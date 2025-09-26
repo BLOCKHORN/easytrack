@@ -1,43 +1,79 @@
 // frontend/src/hooks/useSubscription.js
 import { useEffect, useState } from 'react';
-import { apiFetch } from '../utils/fetcher';
+import { supabase } from '../utils/supabaseClient';
 
 export function useSubscription() {
-  const [state, setState] = useState({ loading: true, active: false, tenant: null, reason: null });
+  const [state, setState] = useState({
+    loading: true,
+    active: false,
+    reason: null,
+    entitlements: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const r = await apiFetch('/api/tenants/me');
-        if (r.status === 200) {
-          const json = await r.json(); // { tenant, subscription }
-          const sub  = json?.subscription;
-          const now = Date.now();
-          const status = String(sub?.status || '').toLowerCase();
-          const cpe = sub?.current_period_end ? new Date(sub.current_period_end).getTime() : null;
-          const trialEnd = sub?.trial_ends_at ? new Date(sub.trial_ends_at).getTime() : null;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          if (!cancelled) setState({ loading:false, active:false, reason:'unauthenticated', entitlements:null });
+          return;
+        }
 
-          let active = false;
-          if (status === 'active') active = (cpe == null) || (cpe > now);
-          else if (status === 'trialing') active = (trialEnd == null) || (trialEnd > now);
-          else if (status === 'canceled') active = (cpe != null) && (cpe > now);
+        // 1) Canon: /api/tenants/me
+        const r = await fetch('/api/tenants/me', {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        if (r.ok) {
+          const j = await r.json().catch(() => ({}));
+          const ent = j?.entitlements || null;
+          if (!cancelled && ent) {
+            setState({
+              loading: false,
+              active: !!ent.canUseApp,
+              reason: ent.reason || null,
+              entitlements: ent,
+            });
+            return;
+          }
+        }
 
+        // 2) Fallback: /api/limits/me
+        const r2 = await fetch('/api/limits/me', {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        if (r2.ok) {
+          const j2 = await r2.json().catch(() => ({}));
+          const ent2 = j2?.entitlements || null;
+          if (!cancelled && ent2) {
+            setState({
+              loading: false,
+              active: !!ent2.canUseApp,
+              reason: ent2.reason || null,
+              entitlements: ent2,
+            });
+            return;
+          }
+          const remaining = Number(j2?.limits?.remaining ?? 0);
+          const softBlocked = !!j2?.limits?.soft_blocked;
+          const can = !softBlocked && remaining > 0;
           if (!cancelled) {
             setState({
               loading: false,
-              active,
-              tenant: json?.tenant || null,
-              reason: active ? null : (status || 'inactive'),
+              active: can,
+              reason: can ? null : 'trial_exhausted',
+              entitlements: null,
             });
+            return;
           }
-        } else {
-          if (!cancelled) setState({ loading: false, active: false, tenant: null, reason: 'inactive' });
         }
+
+        if (!cancelled) setState({ loading:false, active:false, reason:'inactive', entitlements:null });
       } catch {
-        if (!cancelled) setState({ loading: false, active: false, tenant: null, reason: 'inactive' });
+        if (!cancelled) setState({ loading:false, active:false, reason:'inactive', entitlements:null });
       }
     })();
+
     return () => { cancelled = true; };
   }, []);
 

@@ -19,6 +19,7 @@ import "../styles/Dashboard.scss";
 import { supabase } from "../utils/supabaseClient";
 import ModalImagenBanner from "../components/ModalImagenBanner";
 import { useBanner } from "../context/BannerContext";
+import TrialBanner from '../components/billing/TrialBanner';
 
 export default function Dashboard({ paquetes, actualizarPaquetes }) {
   const location = useLocation();
@@ -84,6 +85,14 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
     if (mostrarModal) el.style.overflow = "hidden";
     else el.style.overflow = prev || "";
     return () => { el.style.overflow = prev || ""; };
+  }, [mostrarModal]);
+
+  // Cerrar con ESC
+  useEffect(() => {
+    if (!mostrarModal) return;
+    const onKey = (e) => { if (e.key === "Escape") setMostrarModal(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [mostrarModal]);
 
   // Cargar negocio
@@ -209,6 +218,7 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
           </div>
         </div>
       </div>
+      <TrialBanner />
 
       {/* Estadísticas */}
       <div className="bloque-estadisticas">
@@ -255,7 +265,7 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
             }
           }}
         >
-          <div className="modal-contenido" role="dialog" aria-modal="true" aria-label="Añadir paquete">
+          <div className="modal-contenido modal-rapido" role="dialog" aria-modal="true" aria-label="Añadir paquete">
             <header className="modal-head">
               <h3>Añadir paquete</h3>
               <button
@@ -268,9 +278,13 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
               </button>
             </header>
 
-            {/* 👉 cuerpo con scroll interno para que nada se corte */}
+            {/* 👉 cuerpo con scroll autosuficiente y layout compacto */}
             <div className="modal-body">
-              <AnadirPaquete modoRapido paquetes={paquetes} actualizarPaquetes={actualizarPaquetes} />
+              <AnadirPaquete
+                modoRapido
+                paquetes={paquetes}
+                actualizarPaquetes={actualizarPaquetes}
+              />
             </div>
           </div>
         </div>

@@ -9,6 +9,8 @@ import VerEstantes from './pages/VerEstantes';
 import ConfigPage from './pages/configuracion/ConfigPage';
 import Dashboard from './pages/Dashboard';
 import AreaPersonal from './pages/AreaPersonal';
+import Registro from './pages/Registro';
+import UpgradeSuccess from './pages/UpgradeSuccess';
 
 import Navbar from './components/navbar/Navbar';
 import Footer from './components/Footer';
@@ -25,14 +27,15 @@ import CookiesPage from './pages/Cookies';
 
 import Planes from './pages/Planes';
 import PortalSuscripcion from './pages/PortalSuscripcion';
-import CheckoutSuccess from './pages/CheckoutSuccess';
-import CheckoutCancel from './pages/CheckoutCancel';
+// ⛔️ Flujo standalone antiguo eliminado:
+// import CheckoutSuccess from './pages/CheckoutSuccess';
+// import CheckoutCancel from './pages/CheckoutCancel';
 import CrearPassword from './pages/CrearPassword';
 import EmailConfirmado from './pages/EmailConfirmado';
 
 import { supabase } from './utils/supabaseClient';
 
-// ==== NUEVO: guard y página de reactivación ====
+// ==== Guard y puerta de suscripción ====
 import RequireActive from './components/RequireActive';
 import SubscriptionGate from './pages/SubscriptionGate';
 import PortalBridge from './pages/PortalBridge';
@@ -71,7 +74,7 @@ function Redirect({ to }) {
   return null;
 }
 
-// NUEVO: redirección que conserva ?query y #hash
+// Redirección que conserva ?query y #hash
 function RedirectPreserveHash({ to }) {
   const navigate = useNavigate();
   const loc = useLocation();
@@ -83,9 +86,10 @@ function RedirectPreserveHash({ to }) {
 
 function RedirectToMyTenant() {
   const navigate = useNavigate();
+  const loc = useLocation();
   useEffect(() => {
     (async () => {
-      const { data: { session} } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session) return navigate('/', { replace: true });
 
       const r = await fetch(`${API}/api/tenants/me`, {
@@ -98,9 +102,10 @@ function RedirectToMyTenant() {
       const { tenant } = await r.json();
       if (!tenant?.slug) return navigate('/', { replace: true });
 
-      navigate(`/${tenant.slug}/dashboard`, { replace: true });
+      // conservamos query/hash (útil tras upgrades)
+      navigate(`/${tenant.slug}/dashboard${loc.search || ''}${loc.hash || ''}`, { replace: true });
     })();
-  }, [navigate]);
+  }, [navigate, loc.search, loc.hash]);
   return null;
 }
 
@@ -209,16 +214,16 @@ export default function App() {
         <Route path="/changelog" element={<Redirect to="/soporte#faq" />} />
         <Route path="/blog" element={<Redirect to="/soporte" />} />
 
-        {/* Checkout */}
-        <Route path="/billing/success" element={<CheckoutSuccess />} />
-        <Route path="/checkout/success" element={<CheckoutSuccess />} />
-        <Route path="/billing/cancel" element={<CheckoutCancel />} />
-        <Route path="/checkout/cancel" element={<CheckoutCancel />} />
-        <Route path="/crear-password" element={<CrearPassword />} />
-        {/* Alias inglés -> español preservando query/hash */}
-        <Route path="/create-password" element={<RedirectPreserveHash to="/crear-password" />} />
+        {/* NUEVO: página de éxito post-Stripe */}
+        <Route path="/upgrade/success" element={<UpgradeSuccess />} />
+        {/* Alias opcionales para compat */}
+        <Route path="/billing/success" element={<UpgradeSuccess />} />
+        <Route path="/checkout/success" element={<UpgradeSuccess />} />
 
-        {/* Puente de confirmación */}
+        {/* Crear contraseña / Confirmación email */}
+        <Route path="/crear-password" element={<CrearPassword />} />
+        <Route path="/create-password" element={<RedirectPreserveHash to="/crear-password" />} />
+        <Route path="/registro" element={<Registro />} />
         <Route path="/auth/email-confirmado" element={<EmailConfirmado />} />
 
         {/* Reactivación */}

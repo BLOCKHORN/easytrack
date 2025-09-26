@@ -1,11 +1,9 @@
-// frontend/src/pages/SubscriptionGate.jsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import '../styles/subscription-gate.scss';
 import anime from 'animejs/lib/anime.es.js';
 import { supabase } from '../utils/supabaseClient';
 
 export default function SubscriptionGate() {
-  // Motivo (query ?reason=...)
   const params  = new URLSearchParams(location.search);
   const [reason, setReason] = useState(params.get('reason') || 'inactive');
 
@@ -19,53 +17,61 @@ export default function SubscriptionGate() {
   const [err,  setErr]  = useState('');
   const bgRef   = useRef(null);
 
-  // ⛔️ Antes: salíamos si /api/tenants/me devolvía 200 (siempre 200 por whitelist)
-  // ✅ Ahora: solo salimos si la suscripción está ACTIVA de verdad.
+  // ✅ Salimos si entitlements.canUseApp === true; fallback a /api/limits/me
   useEffect(() => {
     (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return; // no logueado → que vea la puerta
+        if (!session) return;
 
+        // 1) Canon: /api/tenants/me
         const r = await fetch('/api/tenants/me', {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
-        if (!r.ok) return; // si falla, mantenemos la puerta visible
-
-        const json = await r.json().catch(() => ({}));
-        const sub  = json?.subscription;
-        const now = Date.now();
-        const status = String(sub?.status || '').toLowerCase();
-        const cpe = sub?.current_period_end ? new Date(sub.current_period_end).getTime() : null;
-        const trialEnd = sub?.trial_ends_at ? new Date(sub.trial_ends_at).getTime() : null;
-
-        let active = false;
-        if (status === 'active')   active = (cpe == null) || (cpe > now);
-        else if (status === 'trialing') active = (trialEnd == null) || (trialEnd > now);
-        else if (status === 'canceled') active = (cpe != null) && (cpe > now);
-
-        if (active) {
-          const back = ctx?.returnTo || '/';
-          window.location.replace(back);
-        } else {
-          // Ajusta el motivo mostrado para que sea coherente con el estado real
-          setReason(status === 'trialing' ? 'trial' : (status || 'inactive'));
+        if (r.ok) {
+          const json = await r.json().catch(() => ({}));
+          const ent  = json?.entitlements;
+          if (ent?.canUseApp) {
+            try { sessionStorage.removeItem('sub_block'); } catch {}
+            const back = ctx?.returnTo || '/';
+            return window.location.replace(back);
+          }
+          if (ent) setReason(ent?.reason || 'inactive');
         }
-      } catch {
-        // si algo falla, dejamos la puerta visible
-      }
+
+        // 2) Fallback: /api/limits/me (legacy)
+        const r2 = await fetch('/api/limits/me', {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        if (r2.ok) {
+          const j2 = await r2.json().catch(() => ({}));
+          const ent2 = j2?.entitlements;
+          if (ent2?.canUseApp) {
+            try { sessionStorage.removeItem('sub_block'); } catch {}
+            const back = ctx?.returnTo || '/';
+            return window.location.replace(back);
+          }
+          const remaining = Number(j2?.limits?.remaining ?? 0);
+          const softBlocked = !!j2?.limits?.soft_blocked;
+          if (!softBlocked && remaining > 0) {
+            try { sessionStorage.removeItem('sub_block'); } catch {}
+            const back = ctx?.returnTo || '/';
+            return window.location.replace(back);
+          }
+          setReason(remaining <= 0 ? 'trial_exhausted' : 'inactive');
+        }
+      } catch { /* deja la puerta visible */ }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Título por motivo
   const headline = {
     inactive: 'Tu suscripción no está activa',
     expired: 'Tu suscripción ha expirado',
     past_due: 'Hay un problema con tu pago',
     canceled: 'Tu suscripción está cancelada',
     cancel_at_period_end: 'Tu suscripción quedará cancelada',
-    trial: 'Termina tu prueba para seguir usando EasyTrack',
+    trial_exhausted: 'Has agotado tu prueba gratuita',
   }[reason] || 'Suscripción requerida';
 
   useEffect(() => {
@@ -74,7 +80,6 @@ export default function SubscriptionGate() {
 
     const prefersReduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-    // Burbujas
     let bubbles = [];
     if (!prefersReduce) {
       root.innerHTML = '';
@@ -92,7 +97,6 @@ export default function SubscriptionGate() {
       root.appendChild(frag);
     }
 
-    // Fondo flotante
     const loop = !prefersReduce ? anime({
       targets: bubbles,
       translateX: () => anime.random(-40, 40),
@@ -106,7 +110,6 @@ export default function SubscriptionGate() {
       autoplay: true
     }) : null;
 
-    // Entrada de contenido
     const intro = anime.timeline({ easing: 'easeOutQuad', autoplay: true })
       .add({ targets: '.gate_main', opacity: [0,1], translateY: [10,0], duration: 420 })
       .add({ targets: '.reveal',    opacity: [0,1], translateY: [8,0], delay: anime.stagger(60), duration: 360 }, '-=220');
@@ -136,7 +139,7 @@ export default function SubscriptionGate() {
   function openPortal() {
     setBusy(true); setErr('');
     try {
-      window.location.assign('/portal'); // puente → backend /billing/portal
+      window.location.assign('/portal');
     } catch {
       setErr('No se pudo abrir el portal de facturación.');
       setBusy(false);
@@ -149,9 +152,7 @@ export default function SubscriptionGate() {
 
       <div className="gate_wrap">
         <header className="gate_head reveal">
-          <div className="brand">
-            <span className="dot" /> EasyTrack
-          </div>
+          <div className="brand"><span className="dot" /> EasyTrack</div>
           <button className="btn btn--ghost" onClick={volver}>Volver</button>
         </header>
 
@@ -159,14 +160,14 @@ export default function SubscriptionGate() {
           <h1 className="reveal">{headline}</h1>
           <p className="lead reveal">
             Tu cuenta está protegida y tus datos siguen a salvo. Para continuar usando EasyTrack,
-            revisa nuestros planes y reactiva la suscripción cuando quieras.
+            revisa nuestros planes y reactivas cuando quieras.
           </p>
 
           <div className="info_cards reveal">
             <div className="info_card">
               <div className="ic_title">¿Por qué veo esto?</div>
               <div className="ic_body">
-                Tu suscripción está inactiva o hubo un problema con el cobro.
+                Tu suscripción no está activa o has agotado la prueba gratuita.
                 Puedes reactivarla en un minuto.
               </div>
             </div>
@@ -186,12 +187,7 @@ export default function SubscriptionGate() {
 
           <div className="cta_row reveal">
             <a className="btn" href="/precios">Ver planes y reactivar</a>
-            <button
-              className="btn btn--ghost"
-              onClick={openPortal}
-              disabled={busy}
-              title="Abrir portal de facturación"
-            >
+            <button className="btn btn--ghost" onClick={openPortal} disabled={busy}>
               {busy ? 'Abriendo…' : 'Ver/actualizar método de pago'}
             </button>
           </div>

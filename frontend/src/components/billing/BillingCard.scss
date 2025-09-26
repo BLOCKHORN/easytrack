@@ -1,0 +1,31 @@
+// BillingCard — SCSS
+$border: #e5e7eb;
+$muted: #334155;
+
+.bc {
+  display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px;
+  border: 1px solid $border; border-radius: 14px; padding: 16px; background: #fff;
+
+  &__right {
+    background: linear-gradient(135deg, #e0f2fe, #f5f3ff);
+    border-radius: 12px; min-height: 120px;
+  }
+
+  &__badge {
+    display: inline-block; font-size: 12px; padding: 4px 8px; border-radius: 999px;
+    background: #f1f5f9; color: $muted;
+  }
+
+  h4 { margin: 8px 0 2px; font-size: 18px; font-weight: 700; }
+  p { margin: 4px 0 10px; color: #475569; }
+
+  &__actions { display: flex; gap: 10px; margin-top: 6px; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px;
+    &--primary { background: #111827; color: #fff; border: none; cursor: pointer; }
+    &--ghost { color: $muted; text-decoration: none; border: 1px solid $border; }
+  }
+
+  &__error { margin-top: 8px; color: #b91c1c; display: flex; align-items: center; gap: 6px; }
+}

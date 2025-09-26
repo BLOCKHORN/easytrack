@@ -166,9 +166,6 @@ export default function Trustbar({ businessesCount, uptime }) {
       </div>
 
       <div className="et-trustbar__foot">
-        <p className="tb-footnote">
-          * Métrica demostrativa. Al activar EasyTrack verás tus datos reales.
-        </p>
         {updatedAgo && (tenantsFmt || pkgsFmt) && (
           <span className="tb-updated" title="Refrescado automáticamente">{updatedAgo}</span>
         )}

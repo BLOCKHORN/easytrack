@@ -25,7 +25,7 @@ export default function Hero({ onPrimaryCta }) {
     try {
       if (typeof onPrimaryCta === "function") onPrimaryCta();
     } catch {}
-    navigate("/precios");
+    navigate("/registro");
   };
 
   const DEMO_VIDEO = ""; // '/videos/easytrack-demo.mp4'
@@ -42,7 +42,7 @@ export default function Hero({ onPrimaryCta }) {
 
       <div className="hero__inner">
         <p className="eyebrow" data-reveal="fade-down" data-duration="600">
-          Para tiendas, estancos, farmacias y puntos de recogida
+          La solución para pickups y puntos de recogida.
         </p>
 
         {/* SEO: categoría + segmento en H1 */}
@@ -52,10 +52,10 @@ export default function Hero({ onPrimaryCta }) {
             data-reveal="fade-up"
             data-delay="0"
           >
-            Gestión de paquetería
+            Mas volumen de paquetes
           </span>
           <span className="line" data-reveal="fade-up" data-delay="80">
-            rápida y sin errores en mostrador
+            en menos tiempo
           </span>
         </h1>
 
@@ -66,9 +66,8 @@ export default function Hero({ onPrimaryCta }) {
           data-reveal="fade-up"
           data-delay="140"
         >
-          Ubica por <b>estante/balda</b>, registra en segundos y entrega con
-          control básico. Conciliación con transportistas <b>sin Excel</b>.{" "}
-          <strong>30 días gratis.</strong>
+          Ubica por <b>busca y entrega</b>, 
+          <strong> sin complicaciones.</strong>
         </p>
 
         {/* CTA principal */}
@@ -80,7 +79,7 @@ export default function Hero({ onPrimaryCta }) {
           data-delay="220"
         >
           <button className="btn btn--primary btn--xl" onClick={startNow}>
-            Empezar gratis 30 días
+            Empieza ahora!
           </button>
           <button
             className="btn btn--ghost btn--xl"
@@ -116,8 +115,7 @@ export default function Hero({ onPrimaryCta }) {
           data-delay="80"
           data-duration="600"
         >
-          Datos medios en clientes piloto. Pueden variar según volumen y
-          operación.
+          Pensado para tu negocio
         </p>
 
         {/* Ornamento SVG */}

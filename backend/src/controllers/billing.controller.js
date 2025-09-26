@@ -11,6 +11,10 @@ const stripe       = STRIPE_KEY ? new Stripe(STRIPE_KEY, { apiVersion: '2024-06-
 
 const TRIAL_DAYS = 30;
 
+// ⚠️ Nuevo: NO usar fallback a reset salvo que lo habilites
+const ALLOW_INVITE_RESET_FALLBACK =
+  String(process.env.ALLOW_INVITE_RESET_FALLBACK || '').toLowerCase() === 'true';
+
 function toEmail(v){ return String(v || '').toLowerCase().trim(); }
 function makeIdemKey(req, keyA, keyB){
   const hdr = req.get && req.get('x-idem-key'); if (hdr) return hdr;
@@ -35,16 +39,13 @@ async function listPlans(_req, res) {
   }
 }
 
-/**
- * Solo crea la Checkout Session en Stripe.
- */
+/** Crea la Checkout Session */
 async function startCheckout(req, res) {
   try {
     const email = toEmail(req.user?.email || req.body?.email);
     if (!email) return res.status(400).json({ ok:false, error:'email requerido' });
 
     const tenantName = String(req.body?.tenant_name || '').trim();
-
     const planCode = String(req.body?.plan_code || '').trim();
     if (!planCode) return res.status(400).json({ ok:false, error:'plan_code requerido' });
 
@@ -54,8 +55,8 @@ async function startCheckout(req, res) {
       .eq('code', planCode)
       .eq('active', true)
       .single();
-
     if (perr || !plan) return res.status(404).json({ ok:false, error:'Plan no encontrado' });
+
     if (PROVIDER !== 'stripe' || !stripe) {
       return res.status(503).json({ ok:false, error:'Proveedor de pago no configurado (Stripe).' });
     }
@@ -88,8 +89,9 @@ async function startCheckout(req, res) {
       tax_id_collection: { enabled: true },
       billing_address_collection: 'auto',
       allow_promotion_codes: true,
-      success_url: `${FRONTEND_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${FRONTEND_URL}/planes?plan=${encodeURIComponent(plan.code)}&cancel=1`,
+      // 🔁 éxito → NUEVA ruta
+      success_url: `${FRONTEND_URL}/upgrade/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${FRONTEND_URL}/precios?plan=${encodeURIComponent(plan.code)}&cancel=1`,
       metadata: meta,
       subscription_data: {
         trial_period_days: trialDays || undefined,
@@ -111,7 +113,7 @@ async function startCheckout(req, res) {
 /** GET /billing/checkout/verify?session_id=cs_xxx */
 async function verifyCheckout(req, res) {
   const fail = (code, message) => {
-    const urlsObj = { portal: '', dashboard: `${FRONTEND_URL}/app`, plans: `${FRONTEND_URL}/planes` };
+    const urlsObj = { portal: '', dashboard: `${FRONTEND_URL}/app`, plans: `${FRONTEND_URL}/precios` };
     const urlsArr = [urlsObj.portal, urlsObj.dashboard, urlsObj.plans].filter(Boolean);
     return res.status(code).json({ ok: false, error: message, urls: urlsObj, checkoutUrls: urlsArr });
   };
@@ -152,7 +154,7 @@ async function verifyCheckout(req, res) {
     const urlsObj = {
       portal: portalUrl,
       dashboard: `${FRONTEND_URL}/app`,
-      plans: `${FRONTEND_URL}/planes`
+      plans: `${FRONTEND_URL}/precios`
     };
     const urlsArr = [urlsObj.portal, urlsObj.dashboard, urlsObj.plans].filter(Boolean);
 
@@ -175,6 +177,7 @@ async function verifyCheckout(req, res) {
   }
 }
 
+/** Estado para portal (si lo usas) */
 async function getPortal(req, res) {
   try {
     const tenantId = req.user?.tenant_id;
@@ -231,13 +234,20 @@ async function resendInvite(req, res) {
     }
 
     const redirectTo = `${FRONTEND_URL}/auth/email-confirmado`;
-
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
     if (!error) return res.json({ ok:true, kind:'invite', data });
 
     const msg = String(error.message || '').toLowerCase();
     const already = msg.includes('already been registered') || msg.includes('user already registered');
     if (already) {
+      if (!ALLOW_INVITE_RESET_FALLBACK) {
+        return res.status(200).json({
+          ok: true,
+          kind: 'account_exists',
+          message: 'La cuenta ya existe. Usa “He olvidado mi contraseña” para acceder.'
+        });
+      }
+      console.info('[billing/resendInvite] sending password recovery to', email);
       const { error: rerr } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
       if (rerr) {
         console.error('[billing] resendInvite reset fallback error:', rerr);

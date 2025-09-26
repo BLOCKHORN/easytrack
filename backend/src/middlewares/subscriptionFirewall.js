@@ -16,12 +16,12 @@ const BYPASS = process.env.SUBSCRIPTION_FIREWALL_BYPASS === '1';
 const PUBLIC_PREFIXES = [
   '/health',
   '/.well-known/health',
-  '/webhooks',      // p.ej. /webhooks/stripe
-  '/billing',       // handlers de billing validan por su cuenta; /api/billing también
+  '/webhooks',
+  '/billing',
   '/api/billing',
   '/api/auth',
   '/api/metrics',
-  '/admin',         // /admin protege internamente
+  '/admin',
 ];
 
 // Endpoints exactos “solo auth”
@@ -31,8 +31,9 @@ const AUTH_ONLY_EXACT = new Set([
 
 // Prefijos “solo auth” (tanto con como sin slug)
 const AUTH_ONLY_PREFIXES = [
-  '/api/dashboard', // resumen, negocio, etc.
-  '/api/imagenes',  // obtener, subir, etc.
+  '/api/dashboard',
+  '/api/imagenes',
+  '/api/limits',     // ✅ necesario para que el gate consulte límites/entitlements sin bloquear
 ];
 
 // Detección de API de la app: /api/* ó /:slug/api/*
@@ -50,7 +51,7 @@ function normalizeAppPath(path) {
   // Si ya empieza por '/api/', lo deja igual.
   if (!path) return '/';
   const m = path.match(/^\/([^/]+)(\/api\/.*)$/);
-  if (m && !path.startsWith('/api/')) return m[2]; // segunda parte a partir de /api/...
+  if (m && !path.startsWith('/api/')) return m[2];
   return path;
 }
 
@@ -69,36 +70,30 @@ module.exports = function subscriptionFirewall() {
   return (req, res, next) => {
     const rawPath = req.path;
     const isAppApi = APP_API_REGEX.test(rawPath);
-    if (!isAppApi) return next(); // No es API de la app
+    if (!isAppApi) return next();
 
-    // Normalizamos ruta para que reglas funcionen con y sin slug
     const path = normalizeAppPath(rawPath);
 
-    // Públicos totales
     if (isPublicPrefix(path)) return next();
 
-    // BYPASS para debug/control: exige login pero no sub
     if (BYPASS) {
       res.setHeader('X-SubFirewall', 'bypass');
       return requireAuth(req, res, next);
     }
 
-    // Solo-auth exactos
     if (AUTH_ONLY_EXACT.has(path)) {
       res.setHeader('X-SubFirewall', 'auth-only-exact');
       return requireAuth(req, res, next);
     }
 
-    // Solo-auth por prefijo (dashboard, imagenes…)
     if (startsWithAny(path, AUTH_ONLY_PREFIXES)) {
       res.setHeader('X-SubFirewall', 'auth-only-prefix');
       return requireAuth(req, res, next);
     }
 
-    // Resto: auth + suscripción activa
     return requireAuth(req, res, (err) => {
       if (err) return next(err);
-      res.setHeader('X-SubFirewall', 'active-required');
+      // El header 'active-required' también lo pone el middleware interno
       return requireActiveSubscription(req, res, next);
     });
   };

@@ -9,6 +9,7 @@ import {
 } from '../services/paquetesService';
 import { FaBoxOpen, FaLightbulb, FaCheckCircle, FaCube, FaInfoCircle } from 'react-icons/fa';
 import '../styles/AnadirPaquete.scss';
+import { useSubscription } from '../hooks/useSubscription';
 
 /* ================= Utils ================= */
 const toUpperVis = (s='') => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
@@ -114,6 +115,10 @@ function playCheck() {
 export default function AnadirPaquete({ modoRapido = false }) {
   const [tenant, setTenant] = useState(null);
 
+  /* ===== Estado de suscripción (ahora correctamente dentro del componente) ===== */
+  const { entitlements } = useSubscription();
+  const canCreate = !!entitlements?.canCreatePackage; // controla botón y guardado
+
   // Layout & catálogo
   const [layoutMode, setLayoutMode] = useState('racks'); // 'lanes' | 'racks'
   const [grid, setGrid]   = useState({ rows: 1, cols: 1 });
@@ -144,6 +149,9 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const [paquetes, setPaquetes] = useState([]);
   const [loading, setLoading]   = useState(false);
   const [exito, setExito]       = useState(false);
+
+  // ✅ NUEVO: recordar dónde se guardó realmente (para el modal)
+  const [ultimoGuardado, setUltimoGuardado] = useState(null);
 
   // READY flags
   const [readyEmpresas, setReadyEmpresas] = useState(false);
@@ -541,7 +549,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
             (matchExact.balda_id && baldaMapById.get(String(matchExact.balda_id))) ||
             (matchExact.compartimento && baldaMapByCodigo.get(String(matchExact.compartimento).toUpperCase())) ||
             null;
-          if (b) {
+        if (b) {
             setHighlightSlotId(b.id);
             if (lastCheckRef.current.client !== upper || lastCheckRef.current.slot !== b.id) {
               playCheck();
@@ -587,11 +595,12 @@ export default function AnadirPaquete({ modoRapido = false }) {
   }, [cliente, compania, paquetes, layoutMode, seleccionManual, smartSlotFor, getMostEmptySlot, selectSlot]);
 
   const puedeGuardar = useMemo(() => {
+    if (!canCreate) return false; // 🚫 sin permiso para crear
     if (!cliente.trim() || !compania || !compartimento || !slotSel) return false;
     if (layoutMode === 'racks') return slotSel.type === 'shelf' && Number.isFinite(Number(slotSel.id));
     if (layoutMode === 'lanes') return slotSel.type === 'lane'  && Number.isFinite(Number(slotSel.id));
     return false;
-  }, [cliente, compania, compartimento, slotSel, layoutMode]);
+  }, [canCreate, cliente, compania, compartimento, slotSel, layoutMode]);
 
   /* ===== Vuelo paquete ===== */
   const flyFromInputToSlot = useCallback(() => {
@@ -631,6 +640,10 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const guardar = useCallback(async (e) => {
     e?.preventDefault();
     if (!puedeGuardar || loading) return;
+    if (!canCreate) {
+      alert('Tu prueba está agotada. Elige un plan para seguir creando paquetes.');
+      return;
+    }
     try {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
@@ -641,6 +654,9 @@ export default function AnadirPaquete({ modoRapido = false }) {
       const ahora = new Date().toISOString();
       const tempId = `temp_${Date.now()}`;
 
+      // 🧷 snapshot del slot al guardar
+      const slotAtSave = { type: slotSel.type, id: Number(slotSel.id), label: String(slotSel.label) };
+
       const temp = {
         id: tempId,
         nombre_cliente: upperCliente,
@@ -648,10 +664,10 @@ export default function AnadirPaquete({ modoRapido = false }) {
         entregado: false,
         fecha_llegada: ahora,
         created_at: ahora,
-        compartimento: String(slotSel.label),
+        compartimento: String(slotAtSave.label),
         ...(layoutMode === 'lanes'
-            ? { lane_id: Number(slotSel.id) }
-            : { balda_id: Number(slotSel.id) })
+            ? { lane_id: Number(slotAtSave.id) }
+            : { balda_id: Number(slotAtSave.id) })
       };
       setPaquetes(prev => [temp, ...prev]);
 
@@ -659,10 +675,10 @@ export default function AnadirPaquete({ modoRapido = false }) {
         nombre_cliente: upperCliente,
         empresa_transporte: compania,
         tenant_id: tenant.id,
-        compartimento: String(slotSel.label),
+        compartimento: String(slotAtSave.label),
         ...(layoutMode === 'lanes'
-            ? { lane_id: Number(slotSel.id) }
-            : { balda_id: Number(slotSel.id) })
+            ? { lane_id: Number(slotAtSave.id) }
+            : { balda_id: Number(slotAtSave.id) })
       };
 
       // ✈️ animación
@@ -676,19 +692,22 @@ export default function AnadirPaquete({ modoRapido = false }) {
         p.id === tempId ? { ...p, id: created.id, balda_id: created.balda_id ?? p.balda_id, lane_id: created.lane_id ?? p.lane_id } : p
       ));
 
-      const slot = String(slotSel.label);
+      const slot = String(slotAtSave.label);
       localStorage.setItem(LAST_COMPANY_KEY, compania);
       try {
         const mapC = JSON.parse(localStorage.getItem(LAST_SLOT_BY_COMPANY_KEY) || '{}'); mapC[compania] = slot; localStorage.setItem(LAST_SLOT_BY_COMPANY_KEY, JSON.stringify(mapC));
         const mapU = JSON.parse(localStorage.getItem(LAST_SLOT_BY_CLIENT_KEY) || '{}'); mapU[upperCliente] = slot; localStorage.setItem(LAST_SLOT_BY_CLIENT_KEY, JSON.stringify(mapU));
       } catch {}
 
-      // 🔔 sonido “chime” y modal
+      // ✅ slot real guardado
+      setUltimoGuardado(slotAtSave);
+
+      // 🔔 sonido y modal
       playChime();
       setExito(true);
       setTimeout(()=>setExito(false), 1800);
 
-      // 🧹 limpiar cliente (mantener empresa)
+      // 🧹 limpiar cliente
       setCliente('');
       setSeleccionManual(false);
       startTransition(() => inputClienteRef.current?.focus());
@@ -698,7 +717,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
     } finally {
       setLoading(false);
     }
-  }, [puedeGuardar, loading, tenant, cliente, compania, slotSel, layoutMode, flyFromInputToSlot]);
+  }, [puedeGuardar, loading, canCreate, tenant, cliente, compania, slotSel, layoutMode, flyFromInputToSlot]);
 
   /* ======= UI ======= */
   const estanteriasAgrupadas = useMemo(() => {
@@ -731,6 +750,13 @@ export default function AnadirPaquete({ modoRapido = false }) {
       </header>
 
       <form className="form" onSubmit={guardar}>
+        {/* ===== Aviso de plan/prueba ===== */}
+        {!canCreate && (
+          <div className="alert warn" role="status" style={{ marginBottom: 12 }}>
+            Tu prueba está agotada. No puedes añadir más paquetes. Elige un plan para continuar.
+          </div>
+        )}
+
         {/* ===== Datos ===== */}
         <section className="panel datos">
           <h2>Datos del paquete</h2>
@@ -789,8 +815,13 @@ export default function AnadirPaquete({ modoRapido = false }) {
             </div>
 
             <div className="acciones-centro">
-              <button type="submit" className="btn-primary btn-xl" disabled={!puedeGuardar || loading}>
-                {loading ? 'Guardando…' : 'Guardar paquete'}
+              <button
+                type="submit"
+                className="btn-primary btn-xl"
+                disabled={!puedeGuardar || loading || !canCreate}
+                title={!canCreate ? 'Tu prueba está agotada. Elige un plan para seguir creando.' : undefined}
+              >
+                {!canCreate ? 'Desbloquear plan' : (loading ? 'Guardando…' : 'Guardar paquete')}
               </button>
             </div>
           </div>
@@ -925,7 +956,8 @@ export default function AnadirPaquete({ modoRapido = false }) {
             <FaCheckCircle aria-hidden="true" />
             <div>
               <h3>¡Paquete guardado!</h3>
-              <p>Se registró correctamente en <strong>{compartimento}</strong>.</p>
+              {/* Usamos el slot real guardado, no la siguiente sugerencia */}
+              <p>Se registró correctamente en <strong>{ultimoGuardado?.label}</strong>.</p>
             </div>
           </div>
         </div>

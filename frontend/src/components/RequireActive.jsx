@@ -1,24 +1,30 @@
-// frontend/src/components/RequireActive.jsx
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSubscription } from '../hooks/useSubscription';
 import '../styles/require-active.scss';
 
+/**
+ * Guard que SOLO redirige a /reactivar cuando es un bloqueo “duro”.
+ * Si el motivo es trial_exhausted, permitimos ver el panel (no crear).
+ */
 export default function RequireActive({ children }) {
   const { loading, active, reason } = useSubscription();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Evita flicker: no muestres nada si tarda <180ms
   const [showProgress, setShowProgress] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setShowProgress(true), 180);
     return () => clearTimeout(t);
   }, []);
 
-  // Redirección si está inactiva
   useEffect(() => {
-    if (!loading && !active) {
+    if (loading) return;
+
+    // Permitimos trial_exhausted: se puede entrar a ver el panel.
+    const allowedWhileInactive = new Set(['trial_exhausted']);
+
+    if (!active && !allowedWhileInactive.has(reason || '')) {
       const q = new URLSearchParams({ reason: reason || 'inactive' });
       navigate(`/reactivar?${q.toString()}`, {
         replace: true,
@@ -27,7 +33,6 @@ export default function RequireActive({ children }) {
     }
   }, [loading, active, reason, navigate, location]);
 
-  // Loading: sin texto, solo topbar (y label oculta para a11y)
   if (loading) {
     if (!showProgress) return null;
     return (
