@@ -55,16 +55,18 @@ async function fetchSubscriptionForTenant(tenantId) {
 function isSubscriptionActive(sub) {
   if (!sub) return { active: false, reason: 'no_subscription' };
 
-  const status = String(sub.status || '').toLowerCase();
-  const now = Date.now();
-  const cpe = sub.current_period_end ? new Date(sub.current_period_end).getTime() : null;
+  const status   = String(sub.status || '').toLowerCase();
+  const now      = Date.now();
+  const cpe      = sub.current_period_end ? new Date(sub.current_period_end).getTime() : null;
   const trialEnd = sub.trial_ends_at ? new Date(sub.trial_ends_at).getTime() : null;
 
-  const windowValid = (cpe == null) || (cpe > now);
+  // Ventana válida: fin de periodo o, si no hay, fin de trial
+  const untilTs = (cpe ?? trialEnd ?? null);
+  const windowValid = (untilTs == null) || (untilTs > now);
 
   if (status === 'active')    return { active: windowValid, reason: windowValid ? null : 'expired' };
-  if (status === 'trialing')  return { active: (trialEnd == null) || (trialEnd > now), reason: (trialEnd && trialEnd <= now) ? 'trial_expired' : null };
-  if (status === 'canceled')  return { active: (cpe != null) && (cpe > now), reason: (cpe && cpe <= now) ? 'canceled' : null };
+  if (status === 'trialing')  return { active: windowValid, reason: (untilTs && untilTs <= now) ? 'trial_expired' : null };
+  if (status === 'canceled')  return { active: windowValid, reason: (untilTs && untilTs <= now) ? 'canceled' : null };
   if (['past_due','unpaid','incomplete'].includes(status)) return { active: false, reason: status };
 
   return { active: false, reason: status || 'inactive' };

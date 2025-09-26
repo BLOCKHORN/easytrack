@@ -1,10 +1,7 @@
 'use strict';
 
 /**
- * Cálculo unificado de permisos.
- * - canUseApp: puede entrar y ver la app (dashboard, historial, etc.)
- * - canCreatePackage: puede crear paquetes (trial con remaining > 0 o sub activa)
- * - reason: motivo informativo para UI (e.g. 'trial_exhausted')
+ * Cálculo unificado de permisos + flags de UI.
  */
 function computeEntitlements({ tenant = null, subscription = null } = {}) {
   const subStatus = String(subscription?.status || '').toLowerCase();
@@ -16,13 +13,10 @@ function computeEntitlements({ tenant = null, subscription = null } = {}) {
   const remaining    = Math.max(0, trialQuota - trialUsed);
   const softBlocked  = !!tenant?.soft_blocked;
 
-  // ❗️Regla clave:
-  // - Aunque el trial esté agotado, se puede "usar la app" (ver panel, histórico…)
-  // - Lo que se bloquea es CREAR más paquetes si no hay sub activa.
+  // Crear paquetes si hay sub activa o trial con saldo
   const canCreatePackage = subscriptionActive || (trialActive && remaining > 0);
 
-  // Puedes decidir si el soft_blocked debe bloquear la app entera. Aquí NO bloquea.
-  // Úsalo como “pausa suave” para limitar otras acciones si alguna vez lo necesitas.
+  // Entrar a la app (no bloqueamos por soft_blocked aquí)
   const canUseApp = subscriptionActive || trialActive || !softBlocked;
 
   let reason = null;
@@ -31,10 +25,18 @@ function computeEntitlements({ tenant = null, subscription = null } = {}) {
     else if (!trialActive) reason = 'inactive';
   }
 
+  // Banner de “versión de prueba”: solo si NO hay suscripción activa
+  const showTrialBanner = !subscriptionActive && trialActive;
+
+  // Campo de conveniencia para UI
+  const is_paid = subscriptionActive; // “de pago” (incluye trialing del plan contratado)
+
   return {
     canUseApp,
     canCreatePackage,
     subscriptionActive,
+    is_paid,
+    showTrialBanner,
     trial: {
       active: trialActive,
       quota: trialQuota,

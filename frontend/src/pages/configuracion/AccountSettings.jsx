@@ -8,7 +8,6 @@ import { supabase } from "../../utils/supabaseClient";
 import { getTenantIdOrThrow } from "../../utils/tenant";
 import "./AccountSettings.scss";
 
-/* ===== (opcional) endpoints para cancelar/reanudar si los tienes en tu API ===== */
 const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
 
 /* ===== Reauth helpers ===== */
@@ -43,15 +42,15 @@ function scorePassword(pwd){
 }
 const strengthClass = (label) => label==="Fuerte"?"strong":label==="Media"?"medium":label==="Débil"?"weak":"very-weak";
 
-/* ===== Billing formatters ===== */
+/* ===== Billing helpers ===== */
 const eur0 = (c) => (Number.isFinite(+c) ? (c/100).toLocaleString("es-ES",{maximumFractionDigits:0}) : "—");
 const fmtDate = (iso) => { if(!iso) return "—"; const d=new Date(iso); return isNaN(+d)?"—":d.toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}); };
 const humanRemaining = (iso) => { if(!iso) return "—"; const ms=new Date(iso).getTime()-Date.now(); if(ms<=0) return "hoy"; const days=Math.ceil(ms/86400000); return days>60?`en ${Math.round(days/30)} meses`:`en ${days} día${days!==1?"s":""}`; };
 const periodLabel = (m) => (m===12?"1 año":m===1?"1 mes":`${m} meses`);
+const marketingName = (code, fallback) => (code === 'monthly' ? 'Premium' : (fallback || 'Plan'));
 
-/* ===== Carga desde Supabase con fallback por memberships ===== */
+/* ===== Carga de suscripción ===== */
 async function fetchSubscriptionFromDB(userId){
-  // 1) tenant “actual” (si falla, probamos todos los tenants del usuario)
   let primaryTenant = null;
   try { primaryTenant = await getTenantIdOrThrow(); } catch {}
   let tenantIds = [];
@@ -61,8 +60,6 @@ async function fetchSubscriptionFromDB(userId){
     const { data: { user } } = await supabase.auth.getUser();
     userId = user?.id || null;
   }
-
-  // 2) añade todos los tenants en los que el usuario es miembro (por si el “actual” no coincide)
   try {
     if (userId) {
       const { data: memRows } = await supabase
@@ -76,24 +73,28 @@ async function fetchSubscriptionFromDB(userId){
 
   if (tenantIds.length === 0) return null;
 
-  // helper para obtener la fila + plan
   const getWithPlan = async (subRow) => {
     if (!subRow) return null;
+
     let plan = null;
     try {
       const { data: p } = await supabase
         .from("billing_plans")
-        .select("id,name,base_price_cents,period_months")
+        .select("id,code,name,base_price_cents,period_months")
         .eq("id", subRow.plan_id)
         .maybeSingle();
       plan = p || null;
     } catch {}
-    const base = Number(plan?.base_price_cents)||0;
+
+    const base   = Number(plan?.base_price_cents)||0;
     const months = Number(plan?.period_months)||1;
     const perMonth = months>0 ? Math.round(base/months) : base;
 
+    // ventana temporal unificada
     const isTrial = String(subRow.status||"").toLowerCase()==="trialing" && subRow.trial_ends_at;
-    const nextAt = isTrial ? subRow.trial_ends_at : subRow.current_period_end;
+    const nextAt  = subRow.current_period_end || subRow.trial_ends_at || null;
+    const pStart  = subRow.current_period_start || subRow.created_at || null;
+    const pEnd    = subRow.current_period_end || subRow.trial_ends_at || null;
 
     return {
       id: subRow.id,
@@ -104,7 +105,8 @@ async function fetchSubscriptionFromDB(userId){
       current_period_start: subRow.current_period_start,
       current_period_end: subRow.current_period_end,
 
-      plan_label: plan?.name || "Plan",
+      plan_code: plan?.code || null,
+      plan_label: marketingName(plan?.code, plan?.name),
       price_cents: base,
       price_month_cents: perMonth,
       period_months: months,
@@ -114,12 +116,12 @@ async function fetchSubscriptionFromDB(userId){
       next_billing_at: nextAt,
       remaining_label: humanRemaining(nextAt),
 
-      period_start: isTrial ? (subRow.created_at || subRow.current_period_start) : subRow.current_period_start,
-      period_end: isTrial ? subRow.trial_ends_at : subRow.current_period_end,
+      period_start: pStart,
+      period_end: pEnd,
     };
   };
 
-  // 3) primero intentamos por el tenant principal
+  // 1º tenant principal
   if (primaryTenant) {
     try {
       const { data: sub } = await supabase
@@ -133,7 +135,7 @@ async function fetchSubscriptionFromDB(userId){
     } catch {}
   }
 
-  // 4) si no hay nada, buscamos en cualquiera de los tenants del usuario
+  // 2º cualquiera de los tenants
   try {
     const { data: subsAny } = await supabase
       .from("subscriptions")
@@ -147,7 +149,7 @@ async function fetchSubscriptionFromDB(userId){
   return null;
 }
 
-/* ===== API para cancelar/reanudar (si la tienes) ===== */
+/* ===== API helper ===== */
 async function authedFetch(path, opts = {}){
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -163,12 +165,10 @@ export default function AccountSettings(){
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // email
   const [email, setEmail] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
   const [emailMsg, setEmailMsg] = useState("");
 
-  // password
   const [pwd1, setPwd1] = useState("");
   const [pwd2, setPwd2] = useState("");
   const [savingPwd, setSavingPwd] = useState(false);
@@ -181,7 +181,6 @@ export default function AccountSettings(){
 
   const provider = useMemo(() => user?.app_metadata?.provider || user?.identities?.[0]?.provider || "email", [user]);
 
-  // suscripción
   const [sub, setSub] = useState(null);
   const [subLoading, setSubLoading] = useState(true);
   const [subMsg, setSubMsg] = useState("");
@@ -229,7 +228,6 @@ export default function AccountSettings(){
         setLoading(false);
       }
     })();
-    // carga la suscripción al montar
     loadSubscription().catch(()=>{});
     return () => { mounted = false; };
   }, []);
@@ -272,7 +270,6 @@ export default function AccountSettings(){
 
   return (
     <div className="acct card">
-      {/* Header */}
       <header className="card__header acct__header">
         <div className="acct__left">
           <div className="acct__avatar" aria-hidden>{initialFromEmail(user?.email)}</div>
@@ -283,9 +280,7 @@ export default function AccountSettings(){
         </div>
       </header>
 
-      {/* Contenido */}
       <div className="acct__stack">
-        {/* Suscripción */}
         <section className="acct__block acct__block--billing">
           <div className="blk__head">
             <h4 className="blk__title"><MdAutorenew /> Suscripción</h4>
@@ -335,7 +330,6 @@ export default function AccountSettings(){
                 ) : (
                   <button className="btn btn--primary" onClick={resumeRenewal}><MdAutorenew /> Reanudar renovación</button>
                 )}
-                {/* Sin botón de “Ver facturas / cambiar tarjeta” por ahora */}
               </div>
 
               {subMsg && <div className="note" role="status"><MdInfo aria-hidden /> {subMsg}</div>}

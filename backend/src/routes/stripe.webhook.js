@@ -12,7 +12,7 @@ const stripe      = STRIPE_KEY ? new Stripe(STRIPE_KEY, { apiVersion: '2024-06-2
 
 /* --------------------------------- Helpers -------------------------------- */
 
-// Buscar tenant por customerId (rápido)
+// tenant por customerId de Stripe
 async function findTenantByCustomer(customerId) {
   if (!customerId) return null;
   const { data, error } = await supabase
@@ -25,7 +25,7 @@ async function findTenantByCustomer(customerId) {
   return data?.id || null;
 }
 
-// Extraer el primer priceId de una subscription (objeto Stripe)
+// primer priceId de una Subscription (con o sin expand)
 function getFirstPriceId(sub) {
   try {
     const item = sub?.items?.data?.[0];
@@ -37,15 +37,15 @@ function getFirstPriceId(sub) {
   }
 }
 
-// Asegurar que tenemos la subs con price expandido; si no, reconsultar a Stripe
+// garantiza que la sub trae price expandido
 async function ensureSubWithPrice(sub) {
-  const hasPrice = !!getFirstPriceId(sub);
+  if (!sub?.id) return sub;
+  const hasPrice = !!getFirstPriceId(sub) || !!sub?.plan?.id;
   if (hasPrice) return sub;
-  // Re-fetch con expand
   return await stripe.subscriptions.retrieve(sub.id, { expand: ['items.data.price'] });
 }
 
-// Mapear priceId -> billing_plans.id
+// map priceId -> billing_plans.id
 async function resolvePlanIdFromPriceId(priceId) {
   if (!priceId) return null;
   const { data, error } = await supabase
@@ -58,10 +58,7 @@ async function resolvePlanIdFromPriceId(priceId) {
   return data?.id || null;
 }
 
-// Estado normalizado
 const mapStatus = (s) => (s || '').toLowerCase();
-
-// Timestamps Stripe (segundos) -> ISO
 const toISO = (sec) => (sec ? new Date(sec * 1000).toISOString() : null);
 
 /* ------------------------- Upsert de suscripción (DB) ---------------------- */
@@ -69,21 +66,16 @@ const toISO = (sec) => (sec ? new Date(sec * 1000).toISOString() : null);
 async function upsertSubscription(tenantId, stripeSub) {
   if (!tenantId || !stripeSub) return;
 
-  // Garantiza que tenemos priceId disponible
+  // 1) asegurar priceId
   const sub = await ensureSubWithPrice(stripeSub);
-  let priceId = getFirstPriceId(sub);
+  let priceId = getFirstPriceId(sub) || sub?.plan?.id || null;
 
-  // Si aún no hay priceId, intenta legacy (sub.plan?.id)
-  if (!priceId) priceId = sub?.plan?.id || null;
-
-  // 1) intenta mapear plan por priceId
+  // 2) calcular plan_id (por priceId o reusar el existente)
   let planId = await resolvePlanIdFromPriceId(priceId);
-
-  // 2) si no lo encuentra, reutiliza plan_id existente (si ya hay fila)
   if (!planId) {
     const { data: existing, error: exErr } = await supabase
       .from('subscriptions')
-      .select('id, plan_id')
+      .select('plan_id')
       .eq('provider', 'stripe')
       .eq('provider_subscription_id', sub.id)
       .limit(1)
@@ -91,18 +83,15 @@ async function upsertSubscription(tenantId, stripeSub) {
     if (exErr) throw exErr;
     if (existing?.plan_id) planId = existing.plan_id;
   }
-
-  // 3) si sigue sin planId, aborta (Stripe reintentará)
   if (!planId) {
-    console.error('[stripe.webhook] PLAN_ID_REQUIRED', {
-      subId: sub.id, priceId, itemsLen: sub?.items?.data?.length || 0
-    });
-    throw new Error('PLAN_ID_REQUIRED');
+    console.error('[stripe.webhook] PLAN_ID_REQUIRED', { subId: sub.id, priceId });
+    throw new Error('PLAN_ID_REQUIRED'); // 500 => Stripe reintenta
   }
 
+  // 3) payload normalizado
   const row = {
     tenant_id: tenantId,
-    plan_id: planId,                               // ✅ NOT NULL
+    plan_id: planId, // NOT NULL
     provider: 'stripe',
     provider_customer_id: sub.customer || null,
     provider_subscription_id: sub.id,
@@ -114,45 +103,61 @@ async function upsertSubscription(tenantId, stripeSub) {
     updated_at: new Date().toISOString(),
   };
 
-  // Requiere índice único: (provider, provider_subscription_id)
+  // 4) upsert idempotente por (provider, provider_subscription_id)
   const { error } = await supabase
     .from('subscriptions')
     .upsert(row, { onConflict: 'provider,provider_subscription_id' });
   if (error) throw error;
+
+  // 5) desactivar “trial” del tenant cuando hay sub válida
+  if (['active', 'trialing', 'past_due'].includes(row.status)) {
+    await supabase.from('tenants').update({ trial_active: false }).eq('id', tenantId);
+  }
 }
 
 /* --------------------------------- Router --------------------------------- */
 
 async function handleEvent(evt) {
   switch (evt.type) {
-    // Checkout completado: tenemos customer y subscription
+    // Checkout completado
     case 'checkout.session.completed': {
       const cs = evt.data.object;
-      const customerId = cs.customer;
-      const subId = cs.subscription;
-      const tenantId = await findTenantByCustomer(customerId);
-      if (!tenantId || !subId) return;
-      const sub = await stripe.subscriptions.retrieve(subId, { expand: ['items.data.price'] });
+      const tenantId = await findTenantByCustomer(cs.customer);
+      const sub = cs.subscription
+        ? await stripe.subscriptions.retrieve(cs.subscription, { expand: ['items.data.price'] })
+        : null;
+      if (!tenantId || !sub) return;
       await upsertSubscription(tenantId, sub);
       return;
     }
 
-    // Altas, cambios de plan, cancelaciones: viene la subscription en el evento
+    // Altas / cambios / cancelaciones
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
     case 'customer.subscription.deleted': {
-      const sub = evt.data.object;
-      const customerId = sub.customer;
-      const tenantId = await findTenantByCustomer(customerId);
+      const rawSub = evt.data.object;
+      const tenantId = await findTenantByCustomer(rawSub.customer);
+      if (!tenantId) return;
+      await upsertSubscription(tenantId, rawSub); // upsert hará ensureSubWithPrice si falta price
+      return;
+    }
+
+    // Pago fallido: refrescar estado y fechas
+    case 'invoice.payment_failed': {
+      const inv = evt.data.object;
+      if (!inv?.subscription) return;
+      const sub = await stripe.subscriptions.retrieve(inv.subscription, { expand: ['items.data.price'] });
+      const tenantId = await findTenantByCustomer(sub.customer);
       if (!tenantId) return;
       await upsertSubscription(tenantId, sub);
       return;
     }
 
-    // Pagos fallidos: refrescamos estado de la subs
-    case 'invoice.payment_failed': {
-      const inv = evt.data.object;
-      const subId = inv.subscription;
+    // (Opcional) cuando se paga y pasa a active
+    case 'invoice.paid':
+    case 'customer.subscription.resumed': {
+      const obj = evt.data.object;
+      const subId = obj?.subscription || obj?.id;
       if (!subId) return;
       const sub = await stripe.subscriptions.retrieve(subId, { expand: ['items.data.price'] });
       const tenantId = await findTenantByCustomer(sub.customer);
@@ -162,8 +167,7 @@ async function handleEvent(evt) {
     }
 
     default:
-      // Ignora eventos no usados
-      return;
+      return; // ignoramos el resto
   }
 }
 

@@ -5,12 +5,12 @@ const {
   resolveTenantId,
 } = require('../utils/subscription');
 
-const { supabase } = require('../utils/supabaseClient');
+const { supabaseAdmin } = require('../utils/supabaseAdmin');  // ⬅️ admin
 const { computeEntitlements } = require('../utils/entitlements');
 
-// Lee tenant con campos de trial/soft_blocked
+// Lee tenant con campos de trial/soft_blocked (sin RLS)
 async function getTenantById(id) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('tenants')
     .select('id, slug, nombre_empresa, email, trial_active, trial_quota, trial_used, soft_blocked')
     .eq('id', id)
@@ -21,7 +21,7 @@ async function getTenantById(id) {
 
 /**
  * Bloquea solo si NO hay sub activa NI queda trial.
- * Devuelve 402 con entitlements cuando bloquea.
+ * Devuelve 402 JSON con entitlements cuando bloquea.
  */
 module.exports = function requireActiveSubscription() {
   return async (req, res, next) => {
@@ -38,11 +38,11 @@ module.exports = function requireActiveSubscription() {
 
       const ent = computeEntitlements({ tenant, subscription: sub });
 
-      // Headers de depuración (útiles en Network)
       try {
         res.setHeader('X-SubFirewall', 'active-required');
         res.setHeader('X-CanUseApp', ent.canUseApp ? '1' : '0');
         res.setHeader('X-Ent-Reason', String(ent.reason || ''));
+        res.setHeader('Cache-Control', 'no-store');
       } catch {}
 
       if (!ent.canUseApp) {
@@ -55,7 +55,6 @@ module.exports = function requireActiveSubscription() {
         });
       }
 
-      // Propagar por si interesa
       req.tenantId = tenantId;
       req.subscription = sub;
       req.entitlements = ent;
