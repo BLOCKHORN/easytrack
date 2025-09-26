@@ -1,14 +1,11 @@
+// middlewares/requireActiveSubscription.js
 'use strict';
 
-const {
-  fetchSubscriptionForTenant,
-  resolveTenantId,
-} = require('../utils/subscription');
-
-const { supabaseAdmin } = require('../utils/supabaseAdmin');  // ⬅️ admin
+const { fetchSubscriptionForTenant, resolveTenantId } = require('../utils/subscription');
+const { supabaseAdmin } = require('../utils/supabaseAdmin');
 const { computeEntitlements } = require('../utils/entitlements');
 
-// Lee tenant con campos de trial/soft_blocked (sin RLS)
+// SERVICE ROLE para leer tenant sin RLS
 async function getTenantById(id) {
   const { data, error } = await supabaseAdmin
     .from('tenants')
@@ -19,51 +16,37 @@ async function getTenantById(id) {
   return data || null;
 }
 
-/**
- * Bloquea solo si NO hay sub activa NI queda trial.
- * Devuelve 402 JSON con entitlements cuando bloquea.
- */
 module.exports = function requireActiveSubscription() {
   return async (req, res, next) => {
     try {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+
       const tenantId = await resolveTenantId(req);
-      if (!tenantId) {
-        return res.status(400).json({ ok: false, error: 'TENANT_NOT_RESOLVED' });
-      }
+      if (!tenantId) return res.status(400).json({ ok:false, error:'TENANT_NOT_RESOLVED' });
 
       const [tenant, sub] = await Promise.all([
         getTenantById(tenantId),
-        fetchSubscriptionForTenant(tenantId)
+        fetchSubscriptionForTenant(tenantId)     // ver #2 más abajo
       ]);
 
       const ent = computeEntitlements({ tenant, subscription: sub });
-
-      try {
-        res.setHeader('X-SubFirewall', 'active-required');
-        res.setHeader('X-CanUseApp', ent.canUseApp ? '1' : '0');
-        res.setHeader('X-Ent-Reason', String(ent.reason || ''));
-        res.setHeader('Cache-Control', 'no-store');
-      } catch {}
+      res.setHeader('X-SubFirewall', 'active-required');
+      res.setHeader('X-CanUseApp', ent.canUseApp ? '1' : '0');
+      res.setHeader('X-Ent-Reason', String(ent.reason || ''));
 
       if (!ent.canUseApp) {
-        return res.status(402).json({
-          ok: false,
-          error: 'PAYMENT_REQUIRED',
-          reason: ent.reason || 'inactive',
-          entitlements: ent,
-          tenant_id: tenantId,
-        });
+        return res.status(402).json({ ok:false, error:'PAYMENT_REQUIRED', reason: ent.reason || 'inactive', entitlements: ent, tenant_id: tenantId });
       }
 
       req.tenantId = tenantId;
       req.subscription = sub;
       req.entitlements = ent;
       if (!req.tenant) req.tenant = tenant || { id: tenantId };
-
-      return next();
+      next();
     } catch (err) {
       console.error('requireActiveSubscription error:', err);
-      return res.status(500).json({ ok: false, error: 'SUBSCRIPTION_CHECK_FAILED' });
+      return res.status(500).json({ ok:false, error:'SUBSCRIPTION_CHECK_FAILED' });
     }
   };
 };
