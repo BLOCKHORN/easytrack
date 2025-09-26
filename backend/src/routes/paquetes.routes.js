@@ -1,8 +1,12 @@
 // backend/src/routes/paquetes.routes.js
-const express = require('express')
+'use strict';
+
+const express = require('express');
 // mergeParams:true => recoge params del path padre (/:tenantSlug/...)
-const router = express.Router({ mergeParams: true })
-const requireAuth = require('../middlewares/requireAuth')
+const router = express.Router({ mergeParams: true });
+
+const requireAuth = require('../middlewares/requireAuth');
+const requireActiveSubscription = require('../middlewares/requireActiveSubscription');
 
 const {
   crearPaquete,
@@ -10,13 +14,19 @@ const {
   eliminarPaquete,
   entregarPaquete,
   editarPaquete
-} = require('../controllers/paquetes.controller')
+} = require('../controllers/paquetes.controller');
 
-// Todas protegidas. Si existe req.params.tenantSlug, requireAuth ya lo valida.
-router.post('/crear', requireAuth, crearPaquete)
-router.get('/listar', requireAuth, listarPaquetes)
-router.delete('/:id', requireAuth, eliminarPaquete)
-router.patch('/entregar/:id', requireAuth, entregarPaquete)
-router.put('/:id', requireAuth, editarPaquete)
+/**
+ * Lectura -> solo requiere login
+ */
+router.get('/listar', requireAuth, listarPaquetes);
 
-module.exports = router
+/**
+ * Escritura -> requiere login + suscripción activa o trial vigente
+ */
+router.post('/crear', requireAuth, requireActiveSubscription(), crearPaquete);
+router.patch('/entregar/:id', requireAuth, requireActiveSubscription(), entregarPaquete);
+router.put('/:id', requireAuth, requireActiveSubscription(), editarPaquete);
+router.delete('/:id', requireAuth, requireActiveSubscription(), eliminarPaquete);
+
+module.exports = router;

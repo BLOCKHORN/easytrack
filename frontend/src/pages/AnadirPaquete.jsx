@@ -116,8 +116,19 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const [tenant, setTenant] = useState(null);
 
   /* ===== Estado de suscripción (ahora correctamente dentro del componente) ===== */
-  const { entitlements } = useSubscription();
-  const canCreate = !!entitlements?.canCreatePackage; // controla botón y guardado
+const { entitlements, loading: subLoading } = useSubscription();
+const canCreate = !!(
+  entitlements?.canCreatePackage ??
+  (
+    (entitlements?.status === 'active' ||
+     (entitlements?.status === 'trialing' &&
+      (!entitlements?.until_at || Date.parse(entitlements.until_at) > Date.now())
+     )) && // si no hay contador, asumimos permitido
+    (Number.isFinite(Number(entitlements?.limits?.packages_left))
+      ? Number(entitlements.limits.packages_left) > 0
+      : true)
+  )
+);
 
   // Layout & catálogo
   const [layoutMode, setLayoutMode] = useState('racks'); // 'lanes' | 'racks'
@@ -751,11 +762,11 @@ export default function AnadirPaquete({ modoRapido = false }) {
 
       <form className="form" onSubmit={guardar}>
         {/* ===== Aviso de plan/prueba ===== */}
-        {!canCreate && (
-          <div className="alert warn" role="status" style={{ marginBottom: 12 }}>
-            Tu prueba está agotada. No puedes añadir más paquetes. Elige un plan para continuar.
-          </div>
-        )}
+{!subLoading && !canCreate && (
+  <div className="alert warn" role="status" style={{ marginBottom: 12 }}>
+    Tu prueba está agotada. No puedes añadir más paquetes. Elige un plan para continuar.
+  </div>
+)}
 
         {/* ===== Datos ===== */}
         <section className="panel datos">
