@@ -1,9 +1,38 @@
 .plan-badge {
-  display:inline-flex; align-items:center; gap:.5rem;
-  font-weight:600; font-size:.9rem; padding:.35rem .6rem;
-  border-radius:999px; border:1px solid rgba(0,0,0,.08);
-  background:#fff;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: .5ch;
+  padding: .28rem .66rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: .82rem;
+  letter-spacing: .02em;
+  user-select: none;
+  white-space: nowrap;
+
+  /* Meta pequeña al final (quedan X) */
+  &__meta {
+    font-weight: 600;
+    opacity: .9;
+    margin-left: .25rem;
+  }
+
+  /* Estados base */
+  &--free   { background: #eef2f7; color: #334155; }
+  &--trial  { background: #fff7ed; color: #9a3412; }
+  &--paid   { background: #e6f6ef; color: #0b7a48; }
+
+  /* Tiers visuales (se apilan con --paid) */
+  &--premium { background: #e7f5ef; color: #0a7a42; /* verde elegante */ }
+  &--plus    { background: #eef2ff; color: #3730a3; /* índigo */ }
+  &--basic   { background: #f1f5f9; color: #1f2937; /* gris oscuro */ }
+
+  /* Sombra suave para que se lea en el héroe */
+  box-shadow: 0 1px 0 rgba(0,0,0,.03), 0 1px 8px rgba(0,0,0,.04);
+
+  /* Accesibilidad/hover */
+  &:hover {
+    filter: brightness(0.98);
+  }
 }
-.plan-badge--paid  { color:#065f46; background:#ecfdf5; border-color:#a7f3d0; }
-.plan-badge--trial { color:#92400e; background:#fffbeb; border-color:#fcd34d; }
-.plan-badge--free  { color:#374151; background:#f3f4f6; border-color:#e5e7eb; }
