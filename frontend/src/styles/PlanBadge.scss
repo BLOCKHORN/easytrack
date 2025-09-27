@@ -11,28 +11,19 @@
   user-select: none;
   white-space: nowrap;
 
-  /* Meta pequeña al final (quedan X) */
-  &__meta {
-    font-weight: 600;
-    opacity: .9;
-    margin-left: .25rem;
-  }
+  /* 👇 Todas las declaraciones van antes de las reglas anidadas */
+  box-shadow: 0 1px 0 rgba(0,0,0,.03), 0 1px 8px rgba(0,0,0,.04);
 
-  /* Estados base */
+  &:hover { filter: brightness(0.98); }
+
+  &__meta { font-weight: 600; opacity: .9; margin-left: .25rem; }
+
   &--free   { background: #eef2f7; color: #334155; }
   &--trial  { background: #fff7ed; color: #9a3412; }
   &--paid   { background: #e6f6ef; color: #0b7a48; }
 
-  /* Tiers visuales (se apilan con --paid) */
-  &--premium { background: #e7f5ef; color: #0a7a42; /* verde elegante */ }
-  &--plus    { background: #eef2ff; color: #3730a3; /* índigo */ }
-  &--basic   { background: #f1f5f9; color: #1f2937; /* gris oscuro */ }
-
-  /* Sombra suave para que se lea en el héroe */
-  box-shadow: 0 1px 0 rgba(0,0,0,.03), 0 1px 8px rgba(0,0,0,.04);
-
-  /* Accesibilidad/hover */
-  &:hover {
-    filter: brightness(0.98);
-  }
+  /* variantes por cadencia */
+  &--monthly  { background: #eef2ff; color: #3730a3; }  /* índigo */
+  &--annual   { background: #e7f5ef; color: #0a7a42; }  /* verde */
+  &--biennial { background: #fff4ed; color: #9a3412; }  /* naranja suave */
 }

@@ -7,10 +7,6 @@ const Stripe = require('stripe');
 const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || process.env.STRIPE_API_KEY || '';
 const stripe = STRIPE_KEY ? new Stripe(STRIPE_KEY, { apiVersion: '2024-06-20' }) : null;
 
-/**
- * Enriquecer una fila de suscripción con datos reales de Stripe
- * (price/product/fechas). Si no hay Stripe o falla, devolvemos tal cual.
- */
 async function enrichWithStripe(row) {
   if (!row) return row;
   if (!stripe) return row;
@@ -24,7 +20,6 @@ async function enrichWithStripe(row) {
 
     const price = s.items?.data?.[0]?.price || null;
     const product = price?.product || null;
-
     const toIso = (sec) => (sec ? new Date(sec * 1000).toISOString() : null);
 
     return {
@@ -35,7 +30,7 @@ async function enrichWithStripe(row) {
       current_period_end: toIso(s.current_period_end) || row.current_period_end,
       trial_end: toIso(s.trial_end) || row.trial_end || row.trial_ends_at,
 
-      // anidamos price/product para que computeEntitlements pueda sacar plan
+      // exponemos price + product con recurring & metadata (clave para la UI)
       price: price
         ? {
             id: price.id,
@@ -43,15 +38,15 @@ async function enrichWithStripe(row) {
             currency: price.currency,
             unit_amount: price.unit_amount,
             unit_amount_decimal: price.unit_amount_decimal,
-            recurring: price.recurring,
-            metadata: price.metadata,
+            recurring: price.recurring,         // <- interval & interval_count
+            metadata: price.metadata || {},
           }
         : null,
       product: product
         ? {
             id: product.id,
             name: product.name,
-            metadata: product.metadata,
+            metadata: product.metadata || {},
           }
         : null,
     };
@@ -61,9 +56,6 @@ async function enrichWithStripe(row) {
   }
 }
 
-/**
- * Trae la suscripción “actual” desde tu vista y la enriquece con Stripe.
- */
 async function fetchSubscriptionForTenant(tenantId) {
   if (!tenantId) return null;
 
@@ -83,16 +75,11 @@ async function fetchSubscriptionForTenant(tenantId) {
   }
   if (!data) return null;
 
-  // Enriquecemos con Stripe (si procede) y devolvemos
   return enrichWithStripe(data);
 }
 
-/**
- * Helpers existentes (sin cambios)
- */
 function isSubscriptionActive(sub) {
   if (!sub) return { active: false, reason: 'no_subscription' };
-
   const status = String(sub.status || '').toLowerCase();
   const untilTs =
     sub.current_period_end ? new Date(sub.current_period_end).getTime()
