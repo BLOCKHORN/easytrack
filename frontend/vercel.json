@@ -5,10 +5,12 @@
     { "source": "/planes/(.*)", "destination": "/precios", "permanent": true }
   ],
   "rewrites": [
-    { "source": "/api/(.*)",    "destination": "https://TU-BACKEND/api/$1" },
-    { "source": "/assets/(.*)", "destination": "/assets/$1" },
-    { "source": "/(.+\\..+)",   "destination": "/$1" },
-    { "source": "/(.*)",        "destination": "/index.html" }
+    { "source": "/api/(.*)",     "destination": "https://easytrack-backend-am4t.onrender.com/api/$1" },
+    { "source": "/billing/(.*)", "destination": "https://easytrack-backend-am4t.onrender.com/billing/$1" },
+    { "source": "/portal",       "destination": "https://easytrack-backend-am4t.onrender.com/portal" },
+    { "source": "/assets/(.*)",  "destination": "/assets/$1" },
+    { "source": "/(.+\\..+)",    "destination": "/$1" },
+    { "source": "/(.*)",         "destination": "/index.html" }
   ],
   "headers": [
     { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },

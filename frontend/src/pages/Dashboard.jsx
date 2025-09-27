@@ -20,6 +20,7 @@ import { supabase } from "../utils/supabaseClient";
 import ModalImagenBanner from "../components/ModalImagenBanner";
 import { useBanner } from "../context/BannerContext";
 import TrialBanner from '../components/billing/TrialBanner';
+import PlanBadge from '../components/PlanBadge';
 
 export default function Dashboard({ paquetes, actualizarPaquetes }) {
   const location = useLocation();
@@ -218,6 +219,7 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
           </div>
         </div>
       </div>
+      <PlanBadge />
       <TrialBanner />
 
       {/* Estadísticas */}
