@@ -204,12 +204,14 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
           </button>
 
           <div className="banner-izquierda">
+            
             <h2>
               <FaUserCircle aria-hidden="true" /> Bienvenido de nuevo <span>{negocio?.nombre_empresa}</span>
             </h2>
             <div className="chips">
-              <span className={`chip`}>Estructura: {estructuraAlmacen}</span>
+              <span className={`chip`}>Estructura: {estructuraAlmacen}</span> <PlanBadge />
             </div>
+            
           </div>
 
           <div className="banner-derecha">
@@ -219,7 +221,7 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
           </div>
         </div>
       </div>
-      <PlanBadge />
+      
       <TrialBanner />
 
       {/* Estadísticas */}
