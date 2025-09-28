@@ -1,4 +1,3 @@
-// frontend/src/pages/configuracion/ConfigPage.jsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../utils/supabaseClient';
 import { ensureTenantResolved } from '../../utils/ensureTenant';
@@ -10,11 +9,9 @@ import WarehouseCard from './WarehouseCard';
 import CarriersCard from './CarriersCard';
 import FooterActions from './FooterActions';
 import Skeleton from './Skeleton';
-import BillingCard from '../../components/billing/BillingCard';
-
-import ConfigLayout from './ConfigLayout';
 import AccountSettings from './AccountSettings';
 
+import ConfigLayout from './ConfigLayout';
 import './ConfigBase.scss';
 
 import { MdTune, MdLocalShipping, MdPerson } from 'react-icons/md';
@@ -64,7 +61,6 @@ export default function ConfigPage() {
   const [empresasDisponibles, setEmpresasDisponibles] = useState([]);
   const [toast, setToast] = useState(null);
 
-  const [section, setSection] = useState('warehouse');
   const [nomenclatura, setNomenclatura] = useState(DEFAULT_NOMEN);
 
   const [snapshot, setSnapshot] = useState(null);
@@ -96,7 +92,6 @@ export default function ConfigPage() {
 
   /* ---------- CARGA ---------- */
   const loadAll = async (forTenantId, cancelRef) => {
-    // Tenant
     const { data: tenantData, error: tErr } = await supabase
       .from('tenants').select('*').eq('id', forTenantId).maybeSingle();
     if (tErr) throw tErr;
@@ -105,7 +100,6 @@ export default function ConfigPage() {
       setNombre(tenantData?.nombre_empresa || '');
     }
 
-    // Layout meta (RPC opcional)
     let layoutResp = null;
     try {
       const { data, error } = await supabase.rpc('get_warehouse_layout', { p_org: forTenantId });
@@ -115,7 +109,6 @@ export default function ConfigPage() {
       console.warn('[ConfigPage] get_warehouse_layout no disponible; uso defaults.', e);
     }
 
-    // Fallback: contar baldas reales por estante
     let baldasMap = new Map();
     try {
       const { data: baldasRows } = await supabase
@@ -137,11 +130,7 @@ export default function ConfigPage() {
       if (Array.isArray(rData?.shelves)) return rData.shelves.length;
       if (Array.isArray(rData?.shelves_list)) return rData.shelves_list.length;
       const n = Number(
-        rData?.shelves ??
-        rData?.shelf_count ??
-        rData?.shelves_count ??
-        rData?.num_shelves ??
-        rData?.count
+        rData?.shelves ?? rData?.shelf_count ?? rData?.shelves_count ?? rData?.num_shelves ?? rData?.count
       );
       return Number.isFinite(n) && n > 0 ? n : null;
     };
@@ -183,11 +172,7 @@ export default function ConfigPage() {
             const l = lanesArr[idx] || {};
             const r = Math.floor(idx / cols) + 1;
             const c = (idx % cols) + 1;
-            return {
-              estante: idx + 1,
-              color: l?.color || DEFAULT_LANE_COLOR,
-              pos: { r, c }
-            };
+            return { estante: idx + 1, color: l?.color || DEFAULT_LANE_COLOR, pos: { r, c } };
           }));
         } else {
           // === ESTANTES ===
@@ -221,18 +206,12 @@ export default function ConfigPage() {
             const fromDb   = baldasMap.get(idx1) || 0;
             const shelvesCount = Math.max(1, fromDb, fromMeta);
 
-            const alias = (typeof rData?.name === 'string') ? rData.name : "";
-            const listedNames = Array.isArray(rData?.shelves) ? rData.shelves.map(s => s?.name || "") : [];
+            const alias = (typeof rData?.name === 'string') ? rData.name : '';
+            const listedNames = Array.isArray(rData?.shelves) ? rData.shelves.map(s => s?.name || '') : [];
             const shelf_names = listedNames.slice(0, shelvesCount);
-            while (shelf_names.length < shelvesCount) shelf_names.push("");
+            while (shelf_names.length < shelvesCount) shelf_names.push('');
 
-            return {
-              estante: idx1,
-              baldas: shelvesCount,
-              pos: { r, c },
-              alias,
-              shelf_names
-            };
+            return { estante: idx1, baldas: shelvesCount, pos: { r, c }, alias, shelf_names };
           }));
         }
         prevModeRef.current = mode;
@@ -275,11 +254,7 @@ export default function ConfigPage() {
         .eq('entregado', false);
       const pending = count ?? 0;
       const current_mode = layoutResp?.layout_mode || 'lanes';
-      if (!cancelRef.current) setModeLock({
-        locked: pending > 0,
-        pending,
-        current_mode
-      });
+      if (!cancelRef.current) setModeLock({ locked: pending > 0, pending, current_mode });
     } catch (e) {
       console.warn('[ConfigPage] pending count no disponible.', e);
       if (!cancelRef.current) setModeLock({ locked:false, pending:0, current_mode: layoutResp?.layout_mode || 'lanes' });
@@ -297,11 +272,9 @@ export default function ConfigPage() {
         if (!user) { if (!cancelRef.current) setCargando(false); return; }
         if (!cancelRef.current) setUsuario(user);
 
-        // ✅ Nuevo: asegurar/obtener tenant de forma idempotente (sin RPC ensure_tenant_)
         const { tenant: ensuredTenant } = await ensureTenantResolved();
         if (!ensuredTenant?.id) throw new Error('TENANT_NOT_FOUND');
 
-        // limpiar metadatos de onboarding (opcional)
         try { localStorage.removeItem('onboarding_nombre_negocio'); } catch {}
 
         await loadAll(ensuredTenant.id, cancelRef);
@@ -328,33 +301,23 @@ export default function ConfigPage() {
     setDirty(!sameJSON(current, snapshot));
   }, [nombre, estructura, empresas, nomenclatura, snapshot]);
 
-  // Atajos: Guardar y Revertir
+  // Atajos guardar/revertir
   useEffect(() => {
     const onKey = (e) => {
       const key = e.key?.toLowerCase();
-      if ((e.ctrlKey || e.metaKey) && key === 's') {
-        e.preventDefault();
-        handleGuardar();
-      }
-      if (key === 'escape' && dirty && snapshot) {
-        e.preventDefault();
-        revertirCambios();
-      }
+      if ((e.ctrlKey || e.metaKey) && key === 's') { e.preventDefault(); handleGuardar(); }
+      if (key === 'escape' && dirty && snapshot) { e.preventDefault(); revertirCambios(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [dirty, snapshot]); // eslint-disable-line
 
-  /* ======= Normalización previa a guardar ======= */
-
+  /* ======= Normalización previa y guardado ======= */
   const fitGrid = (count, rows, cols) => {
     let r = Math.max(1, parseInt(rows ?? 0) || 0);
     let c = Math.max(1, parseInt(cols ?? 0) || 0);
     if (r * c >= Math.max(1, count)) return { rows: r, cols: c };
-    if (c > 0) {
-      r = Math.ceil(Math.max(1, count) / c);
-      return { rows: r, cols: c };
-    }
+    if (c > 0) { r = Math.ceil(Math.max(1, count) / c); return { rows: r, cols: c }; }
     const side = Math.ceil(Math.sqrt(Math.max(1, count)));
     return { rows: side, cols: side };
   };
@@ -370,7 +333,6 @@ export default function ConfigPage() {
     return String(idx1);
   };
 
-  /* ======= Builder de payload (con alias + nombres de baldas) ======= */
   const sanitizeAndBuildPayload = () => {
     if ((nomenclatura.layout_mode || 'lanes') === 'lanes') {
       const count = Math.max(1, estructura.length || (nomenclatura.lanes_rows * nomenclatura.lanes_cols));
@@ -380,11 +342,7 @@ export default function ConfigPage() {
         const base = estructura[idx] || {};
         const r = Math.floor(idx / cols) + 1;
         const c = (idx % cols) + 1;
-        return {
-          estante: idx + 1,
-          color: base?.color || DEFAULT_LANE_COLOR,
-          pos: { r, c }
-        };
+        return { estante: idx + 1, color: base?.color || DEFAULT_LANE_COLOR, pos: { r, c } };
       });
 
       const fixedNomen = {
@@ -404,15 +362,8 @@ export default function ConfigPage() {
       }));
 
       return {
-        payload: {
-          layout_mode: 'lanes',
-          grid: { rows, cols },
-          lanes,
-          name_scheme: fixedNomen.lane_name_scheme,
-          name_case: fixedNomen.lane_name_case
-        },
-        fixedEstructura,
-        fixedNomen
+        payload: { layout_mode: 'lanes', grid: { rows, cols }, lanes, name_scheme: fixedNomen.lane_name_scheme, name_case: fixedNomen.lane_name_case },
+        fixedEstructura, fixedNomen
       };
     }
 
@@ -426,61 +377,33 @@ export default function ConfigPage() {
       const c = (idx % cols) + 1;
       const baldas = Math.max(1, parseInt(base?.baldas) || 1);
       const arr = Array.isArray(base?.shelf_names) ? base.shelf_names.slice(0, baldas) : [];
-      while (arr.length < baldas) arr.push("");
-      return {
-        estante: idx + 1,
-        baldas,
-        alias: base?.alias || "",
-        shelf_names: arr,
-        pos: { r, c }
-      };
+      while (arr.length < baldas) arr.push('');
+      return { estante: idx + 1, baldas, alias: base?.alias || '', shelf_names: arr, pos: { r, c } };
     });
 
     const fixedNomen = {
-      ...nomenclatura,
-      layout_mode: 'racks',
-      rack_rows: rows,
-      rack_cols: cols,
-      col_scheme: nomenclatura.col_scheme || 'alpha'
+      ...nomenclatura, layout_mode: 'racks', rack_rows: rows, rack_cols: cols, col_scheme: nomenclatura.col_scheme || 'alpha'
     };
 
-    // mapa de inicio global por estante para "B1, B2, ..."
     const starts = (() => {
-      let run = 1;
-      const m = new Map();
-      for (const r of fixedEstructura) {
-        m.set(r.estante, run);
-        run += Math.max(1, r.baldas || 1);
-      }
+      let run = 1; const m = new Map();
+      for (const r of fixedEstructura) { m.set(r.estante, run); run += Math.max(1, r.baldas || 1); }
       return m;
     })();
 
     const racks = fixedEstructura.map((r, i) => {
       const labelDefault = (fixedNomen.col_scheme === 'numeric') ? String(i + 1) : (numToAlpha(i + 1) || String(i + 1));
       const rackName = r.alias || labelDefault;
-
       const shelves = Array.from({ length: r.baldas }, (_, j) => {
-        const idx1 = j + 1;
         const auto = `B${(starts.get(r.estante) || 1) + j}`;
         const name = r.shelf_names?.[j] || auto;
-        return { index: idx1, name };
+        return { index: j + 1, name };
       });
-
       return { id: i + 1, name: rackName, position: { row: r.pos.r, col: r.pos.c }, shelves };
     });
 
-    return {
-      payload: {
-        layout_mode: 'racks',
-        grid: { rows, cols },
-        racks
-      },
-      fixedEstructura,
-      fixedNomen
-    };
+    return { payload: { layout_mode: 'racks', grid: { rows, cols }, racks }, fixedEstructura, fixedNomen };
   };
-
-  /* ===== Guardar ===== */
 
   const sanitizeCarriers = () => {
     const trimmed = empresas.map(e => ({
@@ -551,32 +474,25 @@ export default function ConfigPage() {
     const carriersPayload = buildCarriersPayload();
     if (carriersPayload === null) return;
 
-    if (!dirty) {
-      mostrarToast('Nada que guardar.', 'success');
-      return;
-    }
+    if (!dirty) { mostrarToast('Nada que guardar.', 'success'); return; }
 
     setGuardando(true);
     try {
       const tId = tenant?.id;
       if (!tId) throw new Error('Tenant no encontrado');
 
-      // 1) Nombre del tenant
       const { error: nameErr } = await supabase.rpc('update_tenant_name_secure', {
         p_tenant: tId, p_nombre: nombre.trim(),
       });
       if (nameErr) throw nameErr;
       setTenant(prev => prev ? { ...prev, nombre_empresa: nombre.trim() } : prev);
 
-      // 2) Guardar meta-layout
       const { fixedEstructura: structForSync } = await saveLayoutToDb();
 
-      // 3) Sincronizar tabla BALDAS cuando es Estantes
       if ((nomenclatura.layout_mode || 'lanes') === 'racks') {
         await syncEstructuraSecure(tId, structForSync);
       }
 
-      // 4) Carriers
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (token && (carriersPayload?.length ?? 0) > 0) {
@@ -587,59 +503,78 @@ export default function ConfigPage() {
       setSnapshot(newSnap);
       setDirty(false);
 
-      // Refrescar bloqueo
       try {
         const { count } = await supabase
           .from('paquetes')
           .select('*', { count: 'exact', head: true })
           .eq('tenant_id', tId)
           .eq('entregado', false);
-        setModeLock({
-          locked: (count ?? 0) > 0,
-          pending: count ?? 0,
-          current_mode: (nomenclatura.layout_mode || 'lanes')
-        });
+        setModeLock({ locked: (count ?? 0) > 0, pending: count ?? 0, current_mode: (nomenclatura.layout_mode || 'lanes') });
       } catch {}
 
       mostrarToast('Configuración guardada correctamente.', 'success');
     } catch (err) {
       const e = err?.error ?? err;
-      console.error('[ConfigPage] guardar error:', {
-        message: e?.message,
-        details: e?.details,
-        hint: e?.hint,
-        code: e?.code,
-        status: e?.status
-      });
-
+      console.error('[ConfigPage] guardar error:', e);
       const msg = String(e?.message || e);
       if (msg.includes('LAYOUT_SWITCH_BLOCKED_PENDING')) {
         mostrarToast('No puedes cambiar el modo de layout: hay paquetes pendientes sin entregar.', 'error');
-      } else if (msg.includes('LAYOUT_INVALID_MODE')) {
-        mostrarToast('Modo de layout inválido.', 'error');
-      } else if (msg.includes('LAYOUT_INVALID_GRID')) {
-        mostrarToast('La rejilla debe tener al menos 1×1.', 'error');
-      } else if (msg.includes('LAYOUT_SAVE_ERROR')) {
-        const det = e?.details ? ` (${e.details})` : '';
-        mostrarToast(`Error guardando el layout${det}.`, 'error');
-      } else if (e?.status === 400) {
-        const det = e?.details ? ` (${e.details})` : '';
-        mostrarToast(`El servidor rechazó la solicitud (400)${det}.`, 'error');
       } else {
         mostrarToast('Error al guardar la configuración.', 'error');
       }
-    } finally {
-      setGuardando(false);
-    }
+    } finally { setGuardando(false); }
   };
 
-  const sections = [
-    { id: 'warehouse', label: 'Almacén', icon: MdTune },
-    { id: 'carriers',  label: 'Empresas de transporte', icon: MdLocalShipping },
-    { id: 'account',   label: 'Cuenta', icon: MdPerson },
-  ];
-
   if (cargando) return <Skeleton />;
+
+  /* ---------- Secciones (content) para el layout tipo Render ---------- */
+  const sectionsSpec = [
+    {
+      id: 'warehouse',
+      label: 'Almacén',
+      icon: MdTune,
+      content: (
+        <section className="config__grid">
+          <IdentityCard nombre={nombre} setNombre={setNombre} usuario={usuario} />
+          <WarehouseCard
+            estructura={estructura}
+            setEstructura={setEstructura}
+            nomenclatura={nomenclatura}
+            setNomenclatura={setNomenclatura}
+            modeLocked={!!modeLock?.locked}
+            lockInfo={modeLock}
+          />
+        </section>
+      )
+    },
+    {
+      id: 'carriers',
+      label: 'Empresas de transporte',
+      icon: MdLocalShipping,
+      content: (
+        <div ref={carriersRef} style={{ display: 'contents' }}>
+          <CarriersCard
+            empresas={empresas}
+            empresasDisponibles={empresasDisponibles}
+            INGRESOS={INGRESOS}
+            añadirEmpresa={() => setEmpresas([...empresas, { nombre: '', ingreso_por_entrega: '' }])}
+            actualizarEmpresa={(i,c,v) => setEmpresas(empresas.map((e, idx) => idx===i ? { ...e, [c]: v } : e))}
+            eliminarEmpresa={(i) => {
+              if (window.confirm('¿Eliminar esta empresa de transporte?')) {
+                setEmpresas(empresas.filter((_, idx) => idx !== i));
+              }
+            }}
+          />
+        </div>
+      )
+    },
+    {
+      id: 'account',
+      label: 'Cuenta',
+      icon: MdPerson,
+      content: (<AccountSettings />)
+    }
+  ];
 
   return (
     <main className="configuracion">
@@ -648,42 +583,8 @@ export default function ConfigPage() {
       <div className="config__container">
         <Hero tenant={tenant} usuario={usuario} />
 
-        <ConfigLayout title="Configuración" sections={sections} active={section} onChange={setSection}>
-          {section === 'warehouse' && (
-            <section className="config__grid">
-              <IdentityCard nombre={nombre} setNombre={setNombre} usuario={usuario} />
-
-              <WarehouseCard
-                estructura={estructura}
-                setEstructura={setEstructura}
-                nomenclatura={nomenclatura}
-                setNomenclatura={setNomenclatura}
-                modeLocked={!!modeLock?.locked}
-                lockInfo={modeLock}
-              />
-            </section>
-          )}
-
-          {section === 'carriers' && (
-            <div ref={carriersRef} style={{ display: 'contents' }}>
-              <CarriersCard
-                empresas={empresas}
-                empresasDisponibles={empresasDisponibles}
-                INGRESOS={INGRESOS}
-                añadirEmpresa={() => setEmpresas([...empresas, { nombre: '', ingreso_por_entrega: '' }])}
-                actualizarEmpresa={(i,c,v) => setEmpresas(empresas.map((e, idx) => idx===i ? { ...e, [c]: v } : e))}
-                eliminarEmpresa={(i) => {
-                  if (window.confirm('¿Eliminar esta empresa de transporte?')) {
-                    setEmpresas(empresas.filter((_, idx) => idx !== i));
-                  }
-                }}
-              />
-            </div>
-          )}
-
-          {section === 'account' && <AccountSettings />}
-
-        </ConfigLayout>
+        {/* Modo Render: todas las secciones */}
+        <ConfigLayout title="Configuración" sections={sectionsSpec} active="warehouse" />
 
         {dirty && (
           <div className="config__status">

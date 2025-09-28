@@ -165,3 +165,6 @@
 @media (min-width: 1440px){
   .configuracion .config__container{ --container-max: 1440px; }
 }
+/* Para que el sticky funcione: que el scroll lo lleve la ventana, no el contenedor */
+.configuracion,
+.configuracion .config__container { overflow: visible !important; }

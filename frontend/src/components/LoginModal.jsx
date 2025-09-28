@@ -1,3 +1,4 @@
+// src/components/LoginModal.jsx
 import '../styles/LoginModal.scss'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -18,7 +19,6 @@ export default function LoginModal() {
   const [loading, setLoading] = useState(false)
   const [emailNotConfirmed, setEmailNotConfirmed] = useState(false)
 
-  // Reset password UI
   const [showReset, setShowReset] = useState(false)
   const [resetEmail, setResetEmail] = useState('')
   const [resetLoading, setResetLoading] = useState(false)
@@ -33,6 +33,20 @@ export default function LoginModal() {
   const pwdRef = useRef(null)
   const resetRef = useRef(null)
 
+  // Si ya hay sesión, cerramos modal y navegamos
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!mounted) return
+      if (session?.access_token) {
+        closeModal()
+        navigate('/dashboard', { replace: true })
+      }
+    })()
+    return () => { mounted = false }
+  }, [closeModal, navigate])
+
   useEffect(() => {
     emailRef.current?.focus()
     const onEsc = (e) => { if (e.key === 'Escape' && !loading && !resetLoading) closeModal() }
@@ -44,6 +58,11 @@ export default function LoginModal() {
       document.documentElement.style.overflow = prev
     }
   }, [closeModal, loading, resetLoading])
+
+  const goToDashboard = () => {
+    closeModal()
+    navigate('/dashboard', { replace: true })
+  }
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -58,33 +77,37 @@ export default function LoginModal() {
 
     setLoading(true)
     try {
+      // 1) login en tu backend
       const res = await fetch(`${API}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, password: cleanPassword }),
       })
+
       let data = null
       try { data = await res.json() } catch {}
 
       if (!res.ok) {
-        const msg = data?.error || 'Error al iniciar sesión.'
+        const msg = data?.error || `Error de login (HTTP ${res.status}).`
         setError(msg)
         if (data?.code === 'EMAIL_NOT_CONFIRMED') setEmailNotConfirmed(true)
         return
       }
 
+      // 2) establecer sesión local de Supabase
       const access_token = data?.session?.access_token
       const refresh_token = data?.session?.refresh_token
-
       if (access_token && refresh_token) {
         const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token })
         if (setErr) { setError('No se pudo establecer la sesión local.'); return }
       }
 
+      // 3) compat localStorage (si lo usas en la app)
       localStorage.setItem('ep_access_token', access_token || '')
       localStorage.setItem('ep_refresh_token', refresh_token || '')
       localStorage.setItem('ep_user_email', (data?.user?.email || cleanEmail) )
 
+      // 4) verificación “best-effort”
       try {
         await fetch(`${API}/api/verificar-usuario`, {
           method: 'POST',
@@ -93,10 +116,17 @@ export default function LoginModal() {
         })
       } catch {}
 
+      // 5) feedback y navegación
       setInfo('Inicio de sesión correcto. Redirigiendo…')
-      setTimeout(() => { closeModal(); navigate('/dashboard') }, 350)
-    } catch {
-      setError('No se pudo conectar con el servidor.')
+      setTimeout(goToDashboard, 300)
+    } catch (e2) {
+      // Si hay error de red/CORS, pero ya tenemos sesión, seguimos
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token) {
+        goToDashboard()
+        return
+      }
+      setError(e2?.message ? `No se pudo conectar: ${e2.message}` : 'No se pudo conectar con el servidor.')
     } finally {
       setLoading(false)
     }
@@ -115,34 +145,17 @@ export default function LoginModal() {
     if (!emailRegex.test(clean)) { setResetError('Escribe un email válido.'); return }
 
     setResetLoading(true)
-    const redirectTo = `${window.location.origin}/crear-password`
-    const candidates = [
-      `${API}/api/auth/forgot-password`,
-      `${API}/api/auth/reset-password`,
-      `${API}/api/auth/request-password-reset`,
-    ]
-
     try {
-      let ok = false
-      for (const ep of candidates) {
-        try {
-          const r = await fetch(ep, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: clean, redirectTo }),
-          })
-          if (r.ok) { ok = true; break }
-        } catch {}
-      }
-
-      if (!ok) {
-        const { error: sbErr } = await supabase.auth.resetPasswordForEmail(clean, { redirectTo })
-        if (sbErr) throw sbErr
-      }
-
+      const r = await fetch(`${API}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: clean }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || !j?.ok) throw new Error(j?.error || `HTTP ${r.status}`)
       setResetInfo('Te enviamos un correo con el enlace para restablecer tu contraseña.')
-    } catch {
-      setResetError('No se pudo iniciar el reseteo. Inténtalo en unos minutos.')
+    } catch (e) {
+      setResetError(e?.message || 'No se pudo iniciar el reseteo. Inténtalo en unos minutos.')
     } finally {
       setResetLoading(false)
     }
@@ -169,8 +182,6 @@ export default function LoginModal() {
     if (e.target === overlayRef.current) closeModal()
   }
 
-  const goPricing = () => { closeModal(); navigate('/precios') }
-
   return (
     <div
       className="ep-login__overlay"
@@ -185,14 +196,16 @@ export default function LoginModal() {
           Inicia sesión en <span>EasyTrack</span>
         </h2>
 
-        <form onSubmit={handleLogin} className="ep-login__form" aria-busy={loading} noValidate>
+        <form onSubmit={handleLogin} className="ep-login__form" aria-busy={loading} noValidate autoComplete="on">
           <div className="field">
             <label htmlFor="email">Correo electrónico</label>
             <input
               id="email"
+              name="username"
               ref={emailRef}
               type="email"
-              autoComplete="email"
+              placeholder="tucorreo@empresa.com"
+              autoComplete="username"
               inputMode="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -206,8 +219,10 @@ export default function LoginModal() {
             <div className="pwd-wrap">
               <input
                 id="password"
+                name="current-password"
                 ref={pwdRef}
                 type={showPwd ? 'text' : 'password'}
+                placeholder="••••••••"
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -226,7 +241,6 @@ export default function LoginModal() {
             </div>
           </div>
 
-          {/* Enlace y panel de recuperación */}
           <div className="minor-actions">
             {!showReset ? (
               <button type="button" className="link-btn" onClick={openReset} disabled={loading}>
@@ -244,6 +258,7 @@ export default function LoginModal() {
             <div className="reset-row">
               <input
                 id="reset-email"
+                name="email"
                 ref={resetRef}
                 type="email"
                 value={resetEmail}
@@ -297,13 +312,6 @@ export default function LoginModal() {
             {loading ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
-
-        <p className="ep-login__foot">
-          ¿Aún no tienes cuenta?{' '}
-          <button type="button" onClick={goPricing} className="link-btn">
-            Elige tu plan
-          </button>
-        </p>
       </div>
     </div>
   )

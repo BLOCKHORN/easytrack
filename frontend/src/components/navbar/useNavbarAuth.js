@@ -22,6 +22,33 @@ export default function useNavbarAuth(navigate) {
     return base.charAt(0).toUpperCase() + base.slice(1)
   }
 
+  const syncLocalFromSession = (session) => {
+    try {
+      if (session?.access_token) {
+        localStorage.setItem('ep_access_token', session.access_token)
+      } else {
+        localStorage.removeItem('ep_access_token')
+      }
+      if (session?.refresh_token) {
+        localStorage.setItem('ep_refresh_token', session.refresh_token)
+      } else {
+        localStorage.removeItem('ep_refresh_token')
+      }
+      if (session?.user?.email) {
+        localStorage.setItem('ep_user_email', session.user.email)
+      }
+    } catch {}
+  }
+
+  const clearEpLocal = () => {
+    try {
+      localStorage.removeItem('empresa_id')
+      localStorage.removeItem('ep_access_token')
+      localStorage.removeItem('ep_refresh_token')
+      localStorage.removeItem('ep_user_email')
+    } catch {}
+  }
+
   const loadTenant = async (session) => {
     try {
       const res = await fetch(`${API_BASE}/api/tenants/me`, {
@@ -48,12 +75,34 @@ export default function useNavbarAuth(navigate) {
         setAvatarUrl(user?.user_metadata?.avatar_url || null)
         const fullname = user?.user_metadata?.full_name || user?.user_metadata?.name
         setDisplayName(fullname || nameFromEmail(email))
-        if (session) await loadTenant(session)
+        if (session) {
+          syncLocalFromSession(session) // 👈 mantenemos ep_* sincronizado
+          await loadTenant(session)
+        } else {
+          clearEpLocal()
+        }
       } finally {
         setChecking(false)
       }
 
-      const { data: subscription } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const { data: subscription } = supabase.auth.onAuthStateChange(async (event, session) => {
+        // Sincroniza/limpia tokens espejo
+        if (event === 'TOKEN_REFRESHED') {
+          syncLocalFromSession(session)
+        }
+        if (event === 'SIGNED_OUT') {
+          clearEpLocal()
+          setIsLoggedIn(false)
+          setUserEmail('')
+          setAvatarUrl(null)
+          setDisplayName('Usuario')
+          setSlug(null)
+          // Evita quedarse zombi en rutas protegidas
+          navigate('/', { replace: true })
+          return
+        }
+
+        // Actualiza UI básica
         const user = session?.user || null
         const email = user?.email || ''
         setIsLoggedIn(!!user)
@@ -67,14 +116,14 @@ export default function useNavbarAuth(navigate) {
     }
     init()
     return () => { if (unsub) unsub() }
-  }, [API_BASE])
+  }, [API_BASE, navigate])
 
+  // 🔒 Cerrar sesión SOLO en este dispositivo
   const handleLogout = async () => {
-    try { await supabase.auth.signOut() } finally {
-      localStorage.removeItem('empresa_id')
-      localStorage.removeItem('ep_access_token')
-      localStorage.removeItem('ep_refresh_token')
-      localStorage.removeItem('ep_user_email')
+    try {
+      await supabase.auth.signOut({ scope: 'local' }) // << clave: local, no global
+    } finally {
+      clearEpLocal()
       setSlug(null)
       navigate('/')
     }

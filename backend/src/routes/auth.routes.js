@@ -301,5 +301,21 @@ router.post('/bootstrap', requireAuth, async (req, res) => {
     return res.status(500).json({ ok:false, error: e.message || 'BOOTSTRAP_ERROR' });
   }
 });
+// ➕ NUEVO: POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const email = toEmail(req.body?.email);
+    const eok = emailSchema.safeParse({ email });
+    if (!eok.success) return res.status(400).json({ ok:false, error:'Email inválido.' });
+
+    const { error } = await supabaseAuth.auth.resetPasswordForEmail(email, { redirectTo: RECOVERY_URL });
+    if (error) return res.status(400).json({ ok:false, error: error.message });
+
+    return res.json({ ok:true, message:'Hemos enviado un enlace para restablecer tu contraseña.' });
+  } catch (e) {
+    console.error('[forgot-password] error', e);
+    return res.status(500).json({ ok:false, error:'FORGOT_PWD_ERROR' });
+  }
+});
 
 module.exports = router;

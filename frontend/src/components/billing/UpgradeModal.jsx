@@ -6,7 +6,9 @@ import "./UpgradeModal.scss";
 
 /* === helpers === */
 const API = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/,"");
-const fmtEUR = (cents=0) => new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format((cents||0)/100);
+const fmtEUR = (cents=0) =>
+  new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" })
+    .format((cents||0)/100);
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
 async function authFetch(path, opts = {}) {
@@ -51,6 +53,7 @@ export default function UpgradeModal({ open, onClose, defaultPlanCode=null }) {
   // cargar planes + prefills del tenant
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     (async () => {
       try {
         setLoading(true); setErr("");
@@ -58,13 +61,15 @@ export default function UpgradeModal({ open, onClose, defaultPlanCode=null }) {
         // 1) planes
         const list = await getPlans();
         const arr  = Array.isArray(list) ? list : (list?.plans || []);
-        setPlans(arr);
+        if (!cancelled) setPlans(arr);
 
-        // escoger plan por defecto (tu misma preferencia)
+        // escoger plan por defecto (preferimos anual, luego mensual)
         const preferred = defaultPlanCode && arr.find(p => p.code === defaultPlanCode);
         const monthly   = arr.find(p => Number(p.period_months) === 1);
         const annual    = arr.find(p => Number(p.period_months) === 12);
-        setSel((preferred || annual || monthly || arr[0])?.code || "");
+        if (!cancelled) {
+          setSel((preferred || annual || monthly || arr[0])?.code || "");
+        }
 
         // 2) prefills tenant
         const { data: sdata } = await supabase.auth.getSession();
@@ -73,7 +78,7 @@ export default function UpgradeModal({ open, onClose, defaultPlanCode=null }) {
           const r = await fetch(`${API}/api/tenants/me`, { headers: { Authorization: `Bearer ${token}` } });
           const j = await r.json().catch(()=> ({}));
           const tenant = j?.tenant;
-          if (tenant) {
+          if (tenant && !cancelled) {
             setName(tenant.nombre_empresa || tenant.billing_name || "");
             setCountry(tenant.billing_country || "ES");
             setState(tenant.billing_state || "");
@@ -85,11 +90,12 @@ export default function UpgradeModal({ open, onClose, defaultPlanCode=null }) {
           }
         }
       } catch (e) {
-        setErr(e.message || "No se pudieron cargar los planes.");
+        if (!cancelled) setErr(e.message || "No se pudieron cargar los planes.");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => { cancelled = true; };
   }, [open, defaultPlanCode]);
 
   // mapa para mostrar precios bonitos
@@ -130,16 +136,26 @@ export default function UpgradeModal({ open, onClose, defaultPlanCode=null }) {
       };
 
       // 0) Asegura tenant/membership por si no existe (idempotente)
-      try { await authFetch('/api/auth/bootstrap', { method: 'POST', body: JSON.stringify({ nombre_empresa: name || undefined }) }); } catch {}
+      try {
+        await authFetch('/api/auth/bootstrap', {
+          method: 'POST',
+          body: JSON.stringify({ nombre_empresa: name || undefined })
+        });
+      } catch {}
 
-      // 0.5) Prefill opcional (tolerante si el endpoint no existe)
-      try { await authFetch('/api/billing/prefill', { method: 'POST', body: JSON.stringify({ 
-        nombre_empresa: name || undefined,
-        country: billing.country,
-        line1: billing.address1, line2: billing.address2,
-        city: billing.city, state: billing.state, postal_code: billing.postal_code,
-        tax_id: billing.tax_id
-      }) }); } catch {}
+      // 0.5) Prefill opcional (si no existe, no rompe)
+      try {
+        await authFetch('/api/billing/prefill', {
+          method: 'POST',
+          body: JSON.stringify({
+            nombre_empresa: name || undefined,
+            country: billing.country,
+            line1: billing.address1, line2: billing.address2,
+            city: billing.city, state: billing.state, postal_code: billing.postal_code,
+            tax_id: billing.tax_id
+          })
+        });
+      } catch {}
 
       // 1) Checkout
       const url = await startCheckout({ plan_code: sel, billing }); // devuelve session.url

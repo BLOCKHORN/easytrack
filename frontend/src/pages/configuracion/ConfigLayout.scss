@@ -1,195 +1,126 @@
-/* ===== ConfigLayout.scss =====
-   Sub-sidebar + tabs móviles + layout ancho tipo Stripe
-   Añadido: sidebar colapsable + modo enfoque (full-width)
-*/
-.cfg {
-  --ink: #0f172a;
-  --muted: #64748b;
-  --border: #e6e9ef;
-  --bg: #ffffff;
-  --primary: #2563eb;
-  --ring: rgba(37,99,235,.18);
+/* ===== ConfigLayout (sub-sidebar a la derecha, sticky que acompaña) ===== */
+.cfg{
+  --ink:#0f172a; --muted:#64748b; --border:#e6e9ef; --bg:#fff;
+  --primary:#2563eb; --ring:rgba(37,99,235,.18);
 
-  color: var(--ink);
+  /* offset del sticky calculado en runtime = altura del header + 12px */
+  --sticky-top: 76px;
+
+  color:var(--ink);
 
   /* ---------- Header ---------- */
   .cfg__head { margin-bottom: 12px; }
-  .cfg__headrow{
-    display:flex; align-items:flex-start; gap:12px; justify-content:space-between;
-  }
+  .cfg__headrow{ display:flex; align-items:flex-start; gap:12px; justify-content:space-between; }
   .cfg__titlegrp{ min-width:0; }
-  .cfg__actions{
-    display:flex; gap:8px; align-items:center; flex:0 0 auto;
-  }
+  h2{ margin:0 0 6px; font-size:1.4rem; font-weight:900; letter-spacing:.2px; line-height:1.2; }
+  .cfg__crumb{ display:flex; align-items:center; gap:6px; color:var(--muted); flex-wrap:wrap; svg{opacity:.7;} }
+
+  .cfg__actions{ display:flex; gap:8px; align-items:center; }
   .cfg__iconbtn{
     inline-size:36px; block-size:36px; display:grid; place-items:center;
     border-radius:10px; border:1px solid var(--border); background:#fff; cursor:pointer;
     transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
-  }
-  .cfg__iconbtn:hover{ background:#f8fafc; }
-  .cfg__iconbtn:focus-visible{ outline:none; box-shadow:0 0 0 3px var(--ring); }
-
-  h2 {
-    margin: 0 0 6px;
-    font-size: 1.4rem;
-    font-weight: 900;
-    letter-spacing: .2px;
-    line-height: 1.2;
-  }
-
-  .cfg__crumb {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--muted);
-    flex-wrap: wrap; /* evita overflow en migas */
-    svg { opacity: .7; }
+    &:hover{ background:#f8fafc; }
+    &:focus-visible{ outline:none; box-shadow:0 0 0 3px var(--ring); }
   }
 
   /* ---------- Tabs móviles ---------- */
-  .cfg__tabs { display: none; }
-
-  .cfg-tab {
-    appearance: none;
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 12px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    background: #fff;
-    color: #111827;
-    white-space: nowrap;
-    cursor: pointer;
+  .cfg__tabs{ display:none; }
+  .cfg-tab{
+    appearance:none; flex:0 0 auto; display:inline-flex; align-items:center; gap:6px;
+    padding:8px 12px; border-radius:999px; border:1px solid var(--border);
+    background:#fff; color:#111827; white-space:nowrap; cursor:pointer;
     transition: background .15s ease, border-color .15s ease, transform .06s ease, box-shadow .15s ease;
+    &:hover{ background:#f8fafc; border-color:#e5e7eb; }
+    &:active{ transform:translateY(1px); }
+    &:focus-visible{ outline:none; box-shadow:0 0 0 3px var(--ring); }
+    &.is-active{ background:#eef4ff; border-color:#dbe7ff; box-shadow:0 6px 16px rgba(2,6,23,.06); }
+    svg{ color:var(--primary); }
+  }
+  .cfg__pill{ margin-left:6px; font-size:.75rem; color:#334155; background:#eef2f7; padding:2px 6px; border-radius:999px; }
 
-    &:hover { background: #f8fafc; border-color: #e5e7eb; }
-    &:active { transform: translateY(1px); }
-    &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+  /* ---------- Body: contenido a la izq. y sidebar sticky a la dcha ---------- */
+  .cfg__body{
+    display:grid;
+    grid-template-columns: minmax(0,1fr) 280px; /* contenido | sidebar */
+    column-gap:24px;
+    align-items:start;
 
-    &.is-active { background: #eef4ff; border-color: #dbe7ff; box-shadow: 0 6px 16px rgba(2,6,23,.06); }
-    svg { color: var(--primary); }
+    /* MUY IMPORTANTE: que este contenedor no cree scroll propio */
+    overflow: visible;
   }
 
-  /* ---------- Body ---------- */
-  .cfg__body {
-    display: grid;
-    grid-template-columns: 320px minmax(0, 1fr);
-    column-gap: 24px;
-    align-items: start;
+  /* Contenido */
+  .cfg__content{ min-height:320px; min-width:0; }
+  .cfg__section{
+    margin-bottom:16px;
+    /* al navegar por anclas, que no quede oculto bajo el header */
+    scroll-margin-top: calc(var(--sticky-top) + 12px);
   }
+  .cfg__secthead{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 12px; border-radius:12px; border:1px solid var(--border); background:#fff;
+    margin:8px 0 10px;
+    .cfg__secticon{ width:28px; height:28px; display:grid; place-items:center; color:var(--primary); background:#eef4ff; border-radius:8px; }
+    h3{ margin:0; font-size:1.05rem; font-weight:800; letter-spacing:.2px; }
+  }
+  .cfg__sectbody{ background:#fff; border:1px solid var(--border); border-radius:14px; padding:16px; }
 
-  /* Sidebar */
-  .cfg__side {
-    align-self: start;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 10px;
+  /* Sidebar (STICKY, acompaña todo el scroll sin solaparse) */
+  .cfg__side{
+    align-self:start;
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:10px;
+
     position: sticky;
-    top: 12px;
-    width: 100%;
-    max-width: 320px;
+    top: var(--sticky-top);  /* arranca justo debajo del header */
+    height: fit-content;     /* clave para sticky en grid */
+    max-height: calc(100vh - var(--sticky-top) - 12px);
+    overflow: auto;          /* si hay muchas secciones, scrollea dentro */
+    will-change: top;
   }
 
-  .cfg__nav {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: grid;
-    gap: 6px;
-  }
-
-  .cfg__navbtn {
-    appearance: none;
-    width: 100%;
-    text-align: left;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 12px;
-    border: 1px solid transparent;
-    color: #111827;
-    background: #fff;
-    cursor: pointer;
+  .cfg__nav{ list-style:none; padding:0; margin:0; display:grid; gap:6px; }
+  .cfg__navbtn{
+    appearance:none; width:100%; text-align:left; display:flex; align-items:center; gap:10px;
+    padding:10px 12px; border-radius:12px; border:1px solid transparent; color:#111827; background:#fff; cursor:pointer;
     transition: background .15s ease, border-color .15s ease, transform .06s ease, box-shadow .15s ease;
-    min-width: 0; /* permite truncado del texto */
-
-    &:hover { background: #f8fafc; border-color: #e5e7eb; }
-    &:active { transform: translateY(1px); }
-    &.is-active { background: #eef4ff; border-color: #dbe7ff; box-shadow: 0 6px 16px rgba(2,6,23,.06); }
-
-    &:focus-visible {
-      outline: none;
-      box-shadow: 0 0 0 3px var(--ring);
-    }
-
-    svg { color: var(--primary); flex: 0 0 auto; }
-    span {
-      flex: 1 1 auto;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap; /* evita empuje del layout */
-    }
-    .cfg__badge {
-      margin-left: auto;
-      font-size: .75rem;
-      color: #334155;
-      background: #eef2f7;
-      padding: 2px 6px;
-      border-radius: 999px;
-    }
+    min-width:0;
+    &:hover{ background:#f8fafc; border-color:#e5e7eb; }
+    &:active{ transform:translateY(1px); }
+    &.is-active{ background:#eef4ff; border-color:#dbe7ff; box-shadow:0 6px 16px rgba(2,6,23,.06); }
+    &:focus-visible{ outline:none; box-shadow:0 0 0 3px var(--ring); }
+    svg{ color:var(--primary); flex:0 0 auto; }
+    span{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cfg__badge{ margin-left:auto; font-size:.75rem; color:#334155; background:#eef2f7; padding:2px 6px; border-radius:999px; }
   }
 
-  .cfg__content {
-    min-height: 320px;
-    max-width: none;
-    min-width: 0; /* que nunca desborde */
+  /* Modo enfoque: oculta sidebar */
+  &.is-focus{
+    .cfg__side{ display:none; }
+    .cfg__body{ grid-template-columns: 1fr; }
   }
 
-  /* ---------- Estado: sidebar colapsado ---------- */
-  &.is-collapsed {
-    .cfg__body { grid-template-columns: 64px minmax(0, 1fr); }
-    .cfg__side { max-width: 64px; padding: 8px; }
-    .cfg__navbtn {
-      justify-content: center;
-      padding: 10px;
+  /* Colapsado en desktop (sidebar estrecho; sigue sticky) */
+  &.is-collapsed{
+    @media (min-width:980px){
+      .cfg__body{ grid-template-columns: minmax(0,1fr) 88px; } /* 64 + 24 gap */
+      .cfg__side{ width:64px; padding:8px; }
+      .cfg__navbtn{ justify-content:center; padding:10px; }
+      .cfg__navbtn span, .cfg__navbtn .cfg__badge{ display:none; }
     }
-    .cfg__navbtn span,
-    .cfg__navbtn .cfg__badge { display: none; }
-  }
-
-  /* ---------- Estado: modo enfoque (full-width) ---------- */
-  &.is-focus {
-    .cfg__body { grid-template-columns: 1fr; }
-    .cfg__side { display: none; }
   }
 
   /* ---------- Responsive ---------- */
-  @media (max-width: 900px) {
-    .cfg__body { grid-template-columns: 1fr; }
-    .cfg__side { display: none; }
-
-    .cfg__tabs {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-      overflow: auto;
-      -webkit-overflow-scrolling: touch;
-      padding-bottom: 2px;
+  @media (max-width: 979.98px){
+    .cfg__body{ grid-template-columns: 1fr; }
+    .cfg__side{ display:none; }
+    .cfg__tabs{
+      display:flex; gap:8px; margin-bottom:12px; overflow:auto; -webkit-overflow-scrolling:touch;
+      padding-bottom:2px;
       mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 16px), transparent);
     }
-  }
-
-  /* ---------- Extra ancho en pantallas grandes ---------- */
-  @media (min-width: 1400px) {
-    .cfg__body {
-      grid-template-columns: 340px minmax(0, 1fr);
-      column-gap: 28px;
-    }
-    .cfg__side { max-width: 340px; }
   }
 }

@@ -1,3 +1,4 @@
+// src/App.jsx
 import { BrowserRouter as Router, Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 
@@ -24,21 +25,15 @@ import Contacto from './pages/Contacto';
 import Privacidad from './pages/Privacidad';
 import Terminos from './pages/Terminos';
 import CookiesPage from './pages/Cookies';
-
-import Planes from './pages/Planes';
+import AutoUpgrade from './components/billing/AutoUpgrade';
 import PortalSuscripcion from './pages/PortalSuscripcion';
-// ⛔️ Flujo standalone antiguo eliminado:
-// import CheckoutSuccess from './pages/CheckoutSuccess';
-// import CheckoutCancel from './pages/CheckoutCancel';
 import CrearPassword from './pages/CrearPassword';
 import EmailConfirmado from './pages/EmailConfirmado';
 
-import { supabase } from './utils/supabaseClient';
-
-// ==== Guard y puerta de suscripción ====
 import RequireActive from './components/RequireActive';
 import SubscriptionGate from './pages/SubscriptionGate';
 import PortalBridge from './pages/PortalBridge';
+import { supabase } from './utils/supabaseClient';
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
@@ -74,7 +69,6 @@ function Redirect({ to }) {
   return null;
 }
 
-// Redirección que conserva ?query y #hash
 function RedirectPreserveHash({ to }) {
   const navigate = useNavigate();
   const loc = useLocation();
@@ -102,7 +96,6 @@ function RedirectToMyTenant() {
       const { tenant } = await r.json();
       if (!tenant?.slug) return navigate('/', { replace: true });
 
-      // conservamos query/hash (útil tras upgrades)
       navigate(`/${tenant.slug}/dashboard${loc.search || ''}${loc.hash || ''}`, { replace: true });
     })();
   }, [navigate, loc.search, loc.hash]);
@@ -181,12 +174,23 @@ function NotFound() {
 }
 
 export default function App() {
-  const { modal, closeModal } = useModal();
+  const { modal, openModal, closeModal } = useModal();
+
+  // ➜ Exponer un hook global para abrir el login modal desde cualquier sitio (Pricing)
+  useEffect(() => {
+    window.__openLoginModal = () => openModal('login');
+    const handler = () => openModal('login');
+    window.addEventListener('login:open', handler);
+    return () => window.removeEventListener('login:open', handler);
+  }, [openModal]);
 
   return (
     <Router>
       <ScrollWithHash />
       <Navbar />
+
+      {/* Escucha de intents (upgrade) ya logueado */}
+      <AutoUpgrade />
 
       <Routes>
         {/* Público */}
@@ -195,7 +199,6 @@ export default function App() {
         {/* Aliases SEO */}
         <Route path="/caracteristicas" element={<LandingSection sectionId="features" />} />
         <Route path="/como-funciona" element={<LandingSection sectionId="como-funciona" />} />
-        <Route path="/precios" element={<Planes />} />
 
         {/* Páginas estáticas */}
         <Route path="/sobre-nosotros" element={<Sobre />} />
@@ -214,13 +217,12 @@ export default function App() {
         <Route path="/changelog" element={<Redirect to="/soporte#faq" />} />
         <Route path="/blog" element={<Redirect to="/soporte" />} />
 
-        {/* NUEVO: página de éxito post-Stripe */}
+        {/* Upgrade success */}
         <Route path="/upgrade/success" element={<UpgradeSuccess />} />
-        {/* Alias opcionales para compat */}
         <Route path="/billing/success" element={<UpgradeSuccess />} />
         <Route path="/checkout/success" element={<UpgradeSuccess />} />
 
-        {/* Crear contraseña / Confirmación email */}
+        {/* Auth */}
         <Route path="/crear-password" element={<CrearPassword />} />
         <Route path="/create-password" element={<RedirectPreserveHash to="/crear-password" />} />
         <Route path="/registro" element={<Registro />} />
@@ -229,7 +231,7 @@ export default function App() {
         {/* Reactivación */}
         <Route path="/reactivar" element={<SubscriptionGate />} />
 
-        {/* Portal (no bloqueado por suscripción) */}
+        {/* Portal */}
         <Route path="/portal" element={<PortalBridge />} />
         <Route
           path="/:tenantSlug/portal"
