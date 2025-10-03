@@ -7,6 +7,9 @@ export default function NavbarMenus({ handleHashClick }) {
       <ul className="navbar__menus">
         <li className="nav-item">
         </li>
+
+        {/* 🔒 Menú de precios ocultado temporalmente */}
+        {/*
         <li className="nav-item">
           <Link
             to="/#pricing"
@@ -16,6 +19,7 @@ export default function NavbarMenus({ handleHashClick }) {
             <span>Precios</span>
           </Link>
         </li>
+        */}
       </ul>
     </div>
   )

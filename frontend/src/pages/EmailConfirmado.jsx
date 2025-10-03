@@ -13,10 +13,11 @@ export default function EmailConfirmado() {
     try { return localStorage.getItem('et:last_slug') || ''; } catch { return ''; }
   }, []);
 
-  const goDashboard = (slugMaybe) => {
+  const goCreatePassword = (slugMaybe) => {
     const slug = slugMaybe || lastKnownSlug || '';
-    const url  = (slug ? `/${slug}/dashboard` : '/dashboard').replace(/\/{2,}/g,'/');
-    window.location.replace(url);
+    const nextDash = (slug ? `/${slug}/dashboard` : '/dashboard').replace(/\/{2,}/g,'/');
+    const qp = new URLSearchParams({ next: nextDash });
+    window.location.replace(`/crear-password?${qp.toString()}`);
   };
 
   const goLogin = () => {
@@ -27,7 +28,7 @@ export default function EmailConfirmado() {
   useEffect(() => {
     (async () => {
       try {
-        // 1) ¿Llegamos desde el magic link de Supabase?
+        // 1) tokens de Supabase
         const hash = window.location.hash?.startsWith('#')
           ? new URLSearchParams(window.location.hash.slice(1))
           : new URLSearchParams();
@@ -40,23 +41,20 @@ export default function EmailConfirmado() {
 
         if (error_code) setMsg(decodeURIComponent(error_desc || error_code));
 
-        // 2) Sesión actual
         const { data: sdata } = await supabase.auth.getSession();
         const hasSession = !!sdata?.session;
 
-        // 3) Si no hay tokens ni sesión → no permitido: al login
         if (!access_token && !refresh_token && !hasSession) {
           return goLogin();
         }
 
-        // 4) Si hay tokens en hash → establecer sesión y limpiar hash
         if (access_token && refresh_token) {
-          setMsg('Verificando tu email y creando tu espacio…');
+          setMsg('Verificando tu email…');
           await supabase.auth.setSession({ access_token, refresh_token });
           history.replaceState({}, document.title, window.location.pathname + window.location.search);
         }
 
-        // 5) Usuario actual (ya confirmado)
+        // 2) guardar email y bootstrap
         const { data: udata } = await supabase.auth.getUser();
         const u = udata?.user || null;
         if (u?.email) {
@@ -66,16 +64,12 @@ export default function EmailConfirmado() {
           } catch {}
         }
 
-        // 6) Token para bootstrap
+        // 3) asegurar tenant + membership
         const { data: fresh } = await supabase.auth.getSession();
         const token = fresh?.session?.access_token;
-        if (!token) {
-          // Si no hay token a estas alturas, no estamos logueados → login
-          return goLogin();
-        }
+        if (!token) return goLogin();
 
-        // 7) Bootstrap idempotente (tenant + membership + trial)
-        setMsg('Preparando tu panel…');
+        setMsg('Preparando tu espacio…');
         const resp = await fetch(`${API}/api/auth/bootstrap`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -98,10 +92,10 @@ export default function EmailConfirmado() {
           } catch {}
         }
 
-        // 8) A tu panel
-        goDashboard(slug);
+        // 4) en vez de dashboard → crea tu contraseña
+        setMsg('Todo listo. Abriendo la creación de contraseña…');
+        goCreatePassword(slug);
       } catch (e) {
-        // Si algo falla, mejor llevar al login para que el usuario reintente
         setMsg('No hemos podido completar el acceso de forma segura. Redirigiendo al login…');
         setTimeout(goLogin, 800);
       }
@@ -109,7 +103,6 @@ export default function EmailConfirmado() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Pantalla transitoria mínima (no mostramos acciones: esto es una pasarela)
   return (
     <section className="eok eok--gate">
       <div className="eok-loader">

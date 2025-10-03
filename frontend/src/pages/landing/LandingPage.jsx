@@ -7,7 +7,7 @@ import './LandingBase.scss'
 import Hero from './Hero'
 import Benefits from './Benefits'
 import HowItWorks from './HowItWorks'
-import Pricing from './Pricing'
+// import Pricing from './Pricing'   // 🔒 Oculto temporalmente
 import Testimonials from './Testimonials'
 import WhatsAppFab from './WhatsAppFab'
 import DemoModal from '../../components/DemoModal'
@@ -48,7 +48,7 @@ export default function LandingPage() {
   }, [location.search])
 
   // CTA a planes (tu App redirige /planes -> /precios)
-  const goPlans = () => navigate('/precios?cta=landing', { replace: false })
+  // const goPlans = () => navigate('/precios?cta=landing', { replace: false })
 
   // -------- Métricas Trustbar (tal cual tenías) --------
   const API_BASE = useMemo(() => {
@@ -133,16 +133,16 @@ export default function LandingPage() {
       </div>
 
       {/* Secciones */}
-      {/* Hero: NO le pases onPrimaryCta (evita el registro). Solo el handler de demo. */}
       <Hero onOpenDemo={openDemo} />
 
       <Benefits />
 
-      {/* HowItWorks: usa el mismo modal de demo */}
       <HowItWorks onOpenDemo={openDemo} />
 
-      {/* Pricing: su CTA principal lleva a /planes */}
+      {/* 🔒 Pricing ocultado temporalmente */}
+      {/*
       <Pricing onPrimaryCta={goPlans} />
+      */}
 
       <Testimonials />
 
@@ -151,7 +151,7 @@ export default function LandingPage() {
         message="Hola, quiero información sobre EasyPack 👋"
       />
 
-      {/* Modal de Demo (reutilizado por Hero/HIW) */}
+      {/* Modal de Demo */}
       <DemoModal open={demoOpen} onClose={closeDemo} />
     </div>
   )

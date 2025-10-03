@@ -1,5 +1,6 @@
 // src/services/paquetesService.js
-// 📦 Funciones relacionadas con la gestión de paquetes (robustas y normalizadas)
+// 📦 Servicio de paquetes (compatible con esquema nuevo y legacy)
+import { getTenantIdOrThrow } from '../utils/tenant';
 
 // Preferimos VITE_API_URL (tu proyecto) y aceptamos VITE_API_BASE_URL como alias.
 const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001')
@@ -23,7 +24,7 @@ async function parseMaybeJson(resp) {
 
 function ensureOk(resp, body, ctx) {
   if (!resp.ok) {
-    const msg = body?.error || body?.message || `${ctx} ${resp.status}`;
+    const msg = body?.error || body?.message || body?.detail || `${ctx} ${resp.status}`;
     const e = new Error(msg);
     e.status = resp.status;
     e.body = body;
@@ -39,126 +40,137 @@ function pickArray(payload) {
   return [];
 }
 
-// Normaliza cada paquete para que el front siempre tenga los mismos campos
+// 🔄 Normaliza salida de 'packages' (nuevo) y 'paquetes' (legacy)
 function normalizePaquete(row = {}) {
-  // Compatibiliza nombres: empresa_transporte vs compania, created_at vs fecha_llegada
   const empresa = row.empresa_transporte ?? row.compania ?? '';
+
+  // NUEVO esquema
+  const ubiIdNew    = row.ubicacion_id ?? null;
+  const ubiLabelNew = row.ubicacion_label ?? null;
+
+  // LEGACY compat
+  const ubiIdLegacy    = row.balda_id ?? null;
+  const ubiLabelLegacy = row.compartimento ?? row?.baldas?.codigo ?? null;
+
+  const ubiId    = ubiIdNew ?? ubiIdLegacy ?? null;
+  const ubiLabel = ubiLabelNew ?? ubiLabelLegacy ?? null;
+
   return {
     id: row.id,
     nombre_cliente: row.nombre_cliente ?? '',
     empresa_transporte: empresa,
-    compania: empresa, // por compat
+    compania: empresa, // compat
     entregado: !!row.entregado,
     fecha_llegada: row.fecha_llegada ?? row.created_at ?? null,
 
-    // ubicación
-    balda_id: row.balda_id ?? null,
-    lane_id: (row.lane_id != null ? Number(row.lane_id) : null),
-    compartimento: typeof row.compartimento === 'string' ? row.compartimento : null,
+    // Nuevo esquema (preferente)
+    ubicacion_id: ubiId,
+    ubicacion_label: typeof ubiLabel === 'string' ? ubiLabel : null,
 
-    // extras opcionales que algunas vistas utilizan
-    estante: (row.estante != null ? Number(row.estante) : null),
-    balda: (row.balda != null ? Number(row.balda) : null),
-    baldas: row.baldas ?? null, // {id,estante,balda,codigo} si viene anidado
+    // Compat para cualquier código viejo que aún mire estos nombres
+    balda_id: ubiId,
+    compartimento: typeof ubiLabel === 'string' ? ubiLabel : null,
+
+    // Extras que a veces envía el backend legacy
+    estante: (row.estante != null ? Number(row.estante) : row?.baldas?.estante ?? null),
+    balda: (row.balda != null ? Number(row.balda) : row?.baldas?.balda ?? null),
+    baldas: row.baldas ?? null,
     ubicacion_hist: row.ubicacion_hist ?? null,
   };
 }
 
 /* ===== API ===== */
 
-// Crear un nuevo paquete (tu backend devuelve { paquete }).
+// Crear un nuevo paquete (el backend devuelve { paquete })
 export async function crearPaqueteBackend(datos, token) {
+  const tid = datos?.tenant_id || await getTenantIdOrThrow();
+
+  // Construimos payload robusto (nuevo + compat)
+  const payload = {
+    tenant_id: tid,
+    nombre_cliente: datos.nombre_cliente,
+    empresa_transporte: datos.empresa_transporte,
+  };
+
+  // Preferimos NUEVO esquema
+  if (datos.ubicacion_id != null)    payload.ubicacion_id = datos.ubicacion_id;
+  if (datos.ubicacion_label != null) payload.ubicacion_label = datos.ubicacion_label;
+
+  // Compat legacy si no vino lo nuevo
+  if (payload.ubicacion_id == null && payload.ubicacion_label == null) {
+    if (datos.balda_id != null)      payload.ubicacion_id = datos.balda_id;
+    if (datos.compartimento != null) payload.ubicacion_label = datos.compartimento;
+  }
+
   const url = `${API_URL}/paquetes/crear`;
-  console.debug('[paquetesService] POST', url, datos);
   const resp = await fetch(url, {
     method: 'POST',
     headers: authHeaders(token),
-    body: JSON.stringify(datos),
+    body: JSON.stringify(payload),
   });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, 'POST /paquetes/crear');
 
-  // Soporta tanto { paquete } como el objeto plano
   const created = body?.paquete ?? body;
   return normalizePaquete(created);
 }
 
-// Obtener lista de paquetes (tu backend: GET /paquetes/listar)
+// Obtener lista de paquetes (SIEMPRE por tenant)
 export async function obtenerPaquetesBackend(token) {
-  const url = `${API_URL}/paquetes/listar`;
-  console.debug('[paquetesService] GET', url);
-  const resp = await fetch(url, {
-    method: 'GET',
-    headers: authHeaders(token),
-  });
+  const tid = await getTenantIdOrThrow();
+  const url = `${API_URL}/paquetes/listar?tenantId=${encodeURIComponent(tid)}`;
+  const resp = await fetch(url, { method: 'GET', headers: authHeaders(token) });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, 'GET /paquetes/listar');
-
   const arr = pickArray(body);
   return arr.map(normalizePaquete);
 }
 
-// Eliminar un paquete (DELETE /paquetes/:id)
+// Eliminar un paquete
 export async function eliminarPaqueteBackend(id, token) {
-  if (!id) throw new Error('[paquetesService] Falta id en eliminarPaqueteBackend');
-  const url = `${API_URL}/paquetes/${id}`;
-  console.debug('[paquetesService] DELETE', url);
-  const resp = await fetch(url, {
-    method: 'DELETE',
-    headers: authHeaders(token),
-  });
+  const tid = await getTenantIdOrThrow();
+  const url = `${API_URL}/paquetes/${id}?tenantId=${encodeURIComponent(tid)}`;
+  const resp = await fetch(url, { method: 'DELETE', headers: authHeaders(token) });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, `DELETE /paquetes/${id}`);
   return { ok: true };
 }
 
-// Marcar un paquete como entregado (PATCH /paquetes/entregar/:id)
+// Marcar como entregado
 export async function entregarPaqueteBackend(id, token) {
-  if (!id) throw new Error('[paquetesService] Falta id en entregarPaqueteBackend');
-  const url = `${API_URL}/paquetes/entregar/${id}`;
-  console.debug('[paquetesService] PATCH', url);
-  const resp = await fetch(url, {
-    method: 'PATCH',
-    headers: authHeaders(token),
-  });
+  const tid = await getTenantIdOrThrow();
+  const url = `${API_URL}/paquetes/entregar/${id}?tenantId=${encodeURIComponent(tid)}`;
+  const resp = await fetch(url, { method: 'PATCH', headers: authHeaders(token) });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, `PATCH /paquetes/entregar/${id}`);
-
-  // si el backend devuelve el paquete actualizado, normalizamos; si no, devolvemos ack
   const updated = body?.paquete ?? body;
   return updated?.id ? normalizePaquete(updated) : { ok: true };
 }
 
-// Editar un paquete existente (PUT /paquetes/:id)
+// Editar (mover de ubicación, cambiar nombre/compañía, etc.)
 export async function editarPaqueteBackend(paquete, token) {
+  const tid = await getTenantIdOrThrow();
   const id = paquete?.id;
   if (!id) throw new Error('[paquetesService] Falta id en editarPaqueteBackend');
-  const url = `${API_URL}/paquetes/${id}`;
-  console.debug('[paquetesService] PUT', url, paquete);
+
+  // Enviamos únicamente campos relevantes
+  const patch = {
+    // básicos
+    nombre_cliente: paquete?.nombre_cliente,
+    empresa_transporte: paquete?.empresa_transporte,
+    // preferimos nuevo esquema
+    ubicacion_id: paquete?.ubicacion_id ?? paquete?.balda_id ?? null,
+    ubicacion_label: paquete?.ubicacion_label ?? paquete?.compartimento ?? null,
+  };
+
+  const url = `${API_URL}/paquetes/${id}?tenantId=${encodeURIComponent(tid)}`;
   const resp = await fetch(url, {
     method: 'PUT',
     headers: authHeaders(token),
-    body: JSON.stringify(paquete),
+    body: JSON.stringify(patch),
   });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, `PUT /paquetes/${id}`);
-
-  // El backend suele devolver el paquete actualizado; normalizamos
   const updated = body?.paquete ?? body;
   return normalizePaquete(updated);
-}
-
-// 🗂 Estructura de estantes (GET /estantes/estructura)
-export async function obtenerEstructuraEstantesYPaquetes(token) {
-  const url = `${API_URL}/estantes/estructura`;
-  console.debug('[paquetesService] GET', url);
-  const resp = await fetch(url, {
-    method: 'GET',
-    headers: authHeaders(token),
-  });
-  const body = await parseMaybeJson(resp);
-  ensureOk(resp, body, 'GET /estantes/estructura');
-
-  // Esperado: { estructura: [...], paquetesPorBalda: {...} }
-  return body;
 }

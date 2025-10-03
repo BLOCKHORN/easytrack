@@ -161,7 +161,9 @@ export default function SubscriptionGate() {
           <h1 className="reveal">{headline}</h1>
           <p className="lead reveal">
             Tu cuenta está protegida y tus datos siguen a salvo. Para continuar usando EasyTrack,
-            revisa nuestros planes y reactivas cuando quieras.
+            {/* 🔒 Texto relacionado con planes/pricing ocultado temporalmente:
+                "revisa nuestros planes y reactivas cuando quieras." */}
+            {' '}reactiva tu acceso desde el portal de facturación.
           </p>
 
           <div className="info_cards reveal">
@@ -178,16 +180,23 @@ export default function SubscriptionGate() {
                 No. Tus datos se conservan. En cuanto reanudes el plan, todo seguirá tal cual lo dejaste.
               </div>
             </div>
+
+            {/* 🔒 Tarjeta sobre elección de planes (pricing) oculta temporalmente */}
+            {/*
             <div className="info_card">
               <div className="ic_title">¿Qué plan elegir?</div>
               <div className="ic_body">
                 Tenemos mensual, anual y bianual. A más tiempo, mejor precio al mes.
               </div>
             </div>
+            */}
           </div>
 
           <div className="cta_row reveal">
+            {/* 🔒 Enlace a /precios ocultado temporalmente */}
+            {/*
             <a className="btn" href="/precios">Ver planes y reactivar</a>
+            */}
             <button className="btn btn--ghost" onClick={openPortal} disabled={busy}>
               {busy ? 'Abriendo…' : 'Ver/actualizar método de pago'}
             </button>

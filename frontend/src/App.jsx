@@ -1,6 +1,6 @@
 // src/App.jsx
 import { BrowserRouter as Router, Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import LandingPage from './pages/landing/LandingPage';
 import DashboardLayout from './components/DashboardLayout';
@@ -173,16 +173,65 @@ function NotFound() {
   );
 }
 
-export default function App() {
-  const { modal, openModal, closeModal } = useModal();
+/* -------------------- FIX: /login abre/espera/cierra bien el modal -------------------- */
+function LoginRoute() {
+  const { modal, openLogin } = useModal(); // ← usamos openLogin del contexto
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [armed, setArmed] = useState(false); // sólo reaccionar al cierre después de abrir
 
-  // ➜ Exponer un hook global para abrir el login modal desde cualquier sitio (Pricing)
+  // Si ya hay sesión → dashboard. Si no, abre el modal (una sola vez).
   useEffect(() => {
-    window.__openLoginModal = () => openModal('login');
-    const handler = () => openModal('login');
+    let cancelled = false;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (session?.access_token) {
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+      if (!armed) {
+        // abrir login modal de forma canónica
+        if (typeof openLogin === 'function') openLogin();
+        setArmed(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [openLogin, navigate, armed]);
+
+  // Cerrar la ruta SOLO cuando:
+  // 1) ya intentamos abrir (armed === true)
+  // 2) el modal ya no está abierto
+  // 3) seguimos en /login (evita interferir con otras rutas)
+  useEffect(() => {
+    if (!armed) return;
+    if (location.pathname !== '/login') return;
+    if (modal !== 'login') {
+      if (window.history.length > 1) navigate(-1);
+      else navigate('/', { replace: true });
+    }
+  }, [modal, armed, navigate, location.pathname]);
+
+  return null; // El modal se renderiza globalmente en <App/>
+}
+/* ------------------------------------------------------------------------------------- */
+
+export default function App() {
+  // NOTA: el contexto expone openLogin/closeModal. No todos los contextos exponen openModal(string).
+  const { modal, openLogin, closeModal } = useModal();
+
+  // ➜ Exponer un hook global para abrir el login modal desde cualquier sitio
+  useEffect(() => {
+    // Si el contexto cambia de API, aquí siempre usamos openLogin()
+    window.__openLoginModal = () => {
+      if (typeof openLogin === 'function') openLogin();
+    };
+    const handler = () => {
+      if (typeof openLogin === 'function') openLogin();
+    };
     window.addEventListener('login:open', handler);
     return () => window.removeEventListener('login:open', handler);
-  }, [openModal]);
+  }, [openLogin]);
 
   return (
     <Router>
@@ -210,7 +259,7 @@ export default function App() {
 
         {/* Back-compat */}
         <Route path="/sobre" element={<Redirect to="/sobre-nosotros" />} />
-        <Route path="/planes" element={<Redirect to="/precios" />} />
+        {/* <Route path="/planes" element={<Redirect to="/precios" />} /> */}
         <Route path="/privacidad" element={<Redirect to="/legal/privacidad" />} />
         <Route path="/terminos" element={<Redirect to="/legal/terminos" />} />
         <Route path="/docs" element={<Redirect to="/soporte#faq" />} />
@@ -227,6 +276,9 @@ export default function App() {
         <Route path="/create-password" element={<RedirectPreserveHash to="/crear-password" />} />
         <Route path="/registro" element={<Registro />} />
         <Route path="/auth/email-confirmado" element={<EmailConfirmado />} />
+
+        {/* NUEVO: ruta profunda que abre el modal de login */}
+        <Route path="/login" element={<LoginRoute />} />
 
         {/* Reactivación */}
         <Route path="/reactivar" element={<SubscriptionGate />} />
@@ -283,6 +335,7 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
 
+      {/* El modal se pinta globalmente */}
       {modal === 'login' && <LoginModal onClose={closeModal} />}
 
       <Footer />

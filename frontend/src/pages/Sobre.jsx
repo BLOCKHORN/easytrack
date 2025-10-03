@@ -32,9 +32,12 @@ export default function Sobre() {
             y obtén métricas claras por negocio y sede.
           </p>
           <div className="sobre__cta">
+            {/* 🔒 Botón a precios ocultado temporalmente */}
+            {/*
             <a href="/precios" className="sobre__btn sobre__btn--primary">
               Ver precios <FiArrowRight />
             </a>
+            */}
             <a href="/soporte#contacto" className="sobre__btn">
               Habla con nosotros
             </a>
@@ -157,11 +160,10 @@ export default function Sobre() {
         <p className="timeline__note"><FiClock /> Las fechas son orientativas; priorizamos necesidades reales de clientes.</p>
       </section>
 
-      {/* SEGURIDAD & CUMPLIMIENTO (orientado a valor) */}
+      {/* SEGURIDAD & CUMPLIMIENTO */}
       <section className="sobre__tech" aria-label="Seguridad y cumplimiento">
         <h2>Seguridad & cumplimiento</h2>
 
-        {/* Beneficios claros para negocio */}
         <ul className="bullets">
           <li>Datos <strong>aislados por negocio</strong> y control de acceso por permisos.</li>
           <li>Cifrado en tránsito (HTTPS/TLS) y <strong>copias de seguridad</strong> gestionadas.</li>
@@ -170,14 +172,12 @@ export default function Sobre() {
           <li><strong>DPA</strong> (acuerdo de encargado) disponible bajo solicitud.</li>
         </ul>
 
-        {/* Enlaces legales */}
         <ul className="sobre__legal-links">
           <li><a href="/legal/privacidad">Política de Privacidad</a></li>
           <li><a href="/legal/terminos">Términos y Condiciones</a></li>
           <li><a href="/legal/cookies">Política de Cookies</a></li>
         </ul>
 
-        {/* Para equipos IT */}
         <details className="tech-details">
           <summary>Detalles técnicos para equipos IT</summary>
           <div className="grid-2">
@@ -210,7 +210,10 @@ export default function Sobre() {
         <h2>¿Te gustaría probar EasyTrack?</h2>
         <p>Configura tus estantes en minutos. Si prefieres, te acompañamos en un onboarding guiado.</p>
         <div className="sobre__cta">
+          {/* 🔒 Botón a precios ocultado temporalmente */}
+          {/*
           <a href="/precios" className="sobre__btn sobre__btn--primary">Empezar ahora</a>
+          */}
           <a href="/soporte#contacto" className="sobre__btn">Solicitar onboarding</a>
         </div>
       </section>

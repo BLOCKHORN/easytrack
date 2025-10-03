@@ -42,7 +42,13 @@ export default function BillingCard({ className = "", onStarted }) {
           <button className="btn btn--primary" onClick={start} disabled={loading || busy}>
             <FiZap/> Desbloquear todo
           </button>
-          <a className="btn btn--ghost" href="/precios"><FiExternalLink/> Ver planes</a>
+
+          {/* 🔒 Link a precios/planes ocultado temporalmente */}
+          {/*
+          <a className="btn btn--ghost" href="/precios">
+            <FiExternalLink/> Ver planes
+          </a>
+          */}
         </div>
         {err && <div className="bc__error"><FiAlertCircle/> {err}</div>}
       </div>

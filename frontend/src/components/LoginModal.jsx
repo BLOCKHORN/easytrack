@@ -64,6 +64,24 @@ export default function LoginModal() {
     navigate('/dashboard', { replace: true })
   }
 
+  const setLocalCompat = (access_token, refresh_token, userEmail) => {
+    try {
+      if (access_token) localStorage.setItem('ep_access_token', access_token)
+      if (refresh_token) localStorage.setItem('ep_refresh_token', refresh_token)
+      if (userEmail) localStorage.setItem('ep_user_email', userEmail)
+    } catch {}
+  }
+
+  const bestEffortVerify = async (access_token) => {
+    try {
+      await fetch(`${API}/api/verificar-usuario`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token }),
+      })
+    } catch {}
+  }
+
   const handleLogin = async (e) => {
     e.preventDefault()
     setError(null); setInfo(null); setEmailNotConfirmed(false)
@@ -77,46 +95,37 @@ export default function LoginModal() {
 
     setLoading(true)
     try {
-      // 1) login en tu backend
+      // Login SOLO contra tu backend (fuente única)
       const res = await fetch(`${API}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, password: cleanPassword }),
       })
 
-      let data = null
-      try { data = await res.json() } catch {}
+      const data = await res.json().catch(() => ({}))
 
-      if (!res.ok) {
-        const msg = data?.error || `Error de login (HTTP ${res.status}).`
-        setError(msg)
-        if (data?.code === 'EMAIL_NOT_CONFIRMED') setEmailNotConfirmed(true)
+      if (!res.ok || data?.ok === false) {
+        const code = String(data?.code || '').toUpperCase()
+        if (code === 'EMAIL_NOT_CONFIRMED') {
+          setEmailNotConfirmed(true)
+          setError('Tu email no está confirmado. Reenvía el correo o revisa tu bandeja (incluye SPAM).')
+        } else if (code === 'BAD_CREDENTIALS') {
+          setError('Credenciales incorrectas.')
+        } else {
+          setError(data?.error || `Error de login (HTTP ${res.status}).`)
+        }
         return
       }
 
-      // 2) establecer sesión local de Supabase
+      // Establecer sesión local de Supabase con los tokens del backend
       const access_token = data?.session?.access_token
       const refresh_token = data?.session?.refresh_token
-      if (access_token && refresh_token) {
-        const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token })
-        if (setErr) { setError('No se pudo establecer la sesión local.'); return }
-      }
+      const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token })
+      if (setErr) { setError('No se pudo establecer la sesión local.'); return }
 
-      // 3) compat localStorage (si lo usas en la app)
-      localStorage.setItem('ep_access_token', access_token || '')
-      localStorage.setItem('ep_refresh_token', refresh_token || '')
-      localStorage.setItem('ep_user_email', (data?.user?.email || cleanEmail) )
+      setLocalCompat(access_token, refresh_token, data?.user?.email || cleanEmail)
+      await bestEffortVerify(access_token)
 
-      // 4) verificación “best-effort”
-      try {
-        await fetch(`${API}/api/verificar-usuario`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ access_token }),
-        })
-      } catch {}
-
-      // 5) feedback y navegación
       setInfo('Inicio de sesión correcto. Redirigiendo…')
       setTimeout(goToDashboard, 300)
     } catch (e2) {
@@ -152,7 +161,7 @@ export default function LoginModal() {
         body: JSON.stringify({ email: clean }),
       })
       const j = await r.json().catch(() => ({}))
-      if (!r.ok || !j?.ok) throw new Error(j?.error || `HTTP ${r.status}`)
+      if (!r.ok || j?.ok === false) throw new Error(j?.error || `HTTP ${r.status}`)
       setResetInfo('Te enviamos un correo con el enlace para restablecer tu contraseña.')
     } catch (e) {
       setResetError(e?.message || 'No se pudo iniciar el reseteo. Inténtalo en unos minutos.')
@@ -164,13 +173,14 @@ export default function LoginModal() {
   const handleResend = async () => {
     setError(null); setInfo(null)
     try {
-      const res = await fetch(`${API}/api/auth/resend-confirmation`, {
+      // ⚠️ Ruta correcta en tu backend: /api/auth/resend  (NO /resend-confirmation)
+      const res = await fetch(`${API}/api/auth/resend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), type: 'signup' }),
       })
-      const data = await res.json()
-      if (!res.ok) setError(data?.error || 'No se pudo reenviar el correo.')
+      const data = await res.json().catch(()=> ({}))
+      if (!res.ok || data?.ok === false) setError(data?.error || 'No se pudo reenviar el correo.')
       else setInfo(data?.message || 'Correo reenviado. Revisa tu bandeja.')
     } catch {
       setError('No se pudo reenviar el correo.')

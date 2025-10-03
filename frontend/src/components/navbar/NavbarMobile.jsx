@@ -55,6 +55,8 @@ export default function NavbarMobile({
         {/* Contenido scrollable */}
         <div className="navbar__mobile-content">
           <nav className="mobile-section" aria-label="Navegación">
+            {/* 🔒 Opción Precios oculta temporalmente */}
+            {/*
             <Link
               to="/#pricing"
               className="mobile-link"
@@ -62,6 +64,7 @@ export default function NavbarMobile({
             >
               Precios
             </Link>
+            */}
           </nav>
 
           {/* CTA y acciones de cuenta */}
@@ -78,7 +81,7 @@ export default function NavbarMobile({
                   className="navbar__cta block"
                   onClick={() => { onClose?.(); openRegister?.() }}
                 >
-                  Empezar prueba gratis
+                  Solicitar DEMO
                 </button>
               </>
             ) : (

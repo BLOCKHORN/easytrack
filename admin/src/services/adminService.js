@@ -164,3 +164,36 @@ export async function setSubscriptionDates(id, payload) {
   if (!res.ok) throw new Error('SUBSCRIPTION_SET_DATES_FAILED');
   return res.json();
 }
+// === DEMO REQUESTS ===
+export async function listDemoRequests({ q = '', status = '', page = 1, pageSize = 20 } = {}) {
+  const url = withParams(`${API}/admin/demo-requests`, { q, status, page, pageSize });
+  const r = await fetch(url, { headers: await getHeaders() });
+  if (!r.ok) throw new Error('DEMO_LIST_FAILED');
+  return r.json();
+}
+
+export async function getDemoRequest(id) {
+  const r = await fetch(`${API}/admin/demo-requests/${id}`, { headers: await getHeaders() });
+  if (!r.ok) throw new Error('DEMO_DETAIL_FAILED');
+  return r.json();
+}
+
+export async function acceptDemoRequest(id, { token_ttl = '7 days', frontend_url } = {}) {
+  const r = await fetch(`${API}/admin/demo-requests/${id}/accept`, {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify({ token_ttl, frontend_url }),
+  });
+  if (!r.ok) throw new Error('DEMO_ACCEPT_FAILED');
+  return r.json();
+}
+
+export async function declineDemoRequest(id, { reason = '', purge = false } = {}) {
+  const r = await fetch(`${API}/admin/demo-requests/${id}/decline`, {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify({ reason, purge }),
+  });
+  if (!r.ok) throw new Error('DEMO_DECLINE_FAILED');
+  return r.json();
+}

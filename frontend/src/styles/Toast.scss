@@ -1,51 +1,72 @@
-.toast {
+/* Compact Toast, anclado abajo-derecha, sin overlay gigante.
+   Z-index alto pero no bloquea la interfaz (pointer-events en la tarjeta). */
+
+/* Contenedor en <body> */
+#et-toasts {
   position: fixed;
-  top: 20px;
   right: 20px;
-  padding: 1rem 1.5rem;
-  border-radius: 8px;
-  color: #fff;
-  font-weight: 500;
-  font-size: 0.95rem;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  z-index: 9999;
-  animation: slideIn 0.35s ease forwards;
-
-  &.success {
-    background: linear-gradient(135deg, #2ecc71, #27ae60);
-  }
-
-  &.error {
-    background: linear-gradient(135deg, #e74c3c, #c0392b);
-  }
-
-  .toast-message {
-    flex: 1;
-  }
-
-  .toast-close {
-    background: transparent;
-    border: none;
-    color: white;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: opacity 0.2s;
-    &:hover {
-      opacity: 0.8;
-    }
-  }
+  bottom: 20px;
+  z-index: 10000; /* por encima de la UI normal */
+  display: grid;
+  gap: 10px;
+  pointer-events: none; /* solo las tarjetas reciben clicks */
 }
 
-@keyframes slideIn {
-  from {
-    transform: translateX(120%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0%);
-    opacity: 1;
-  }
+/* Pila local por si en el futuro renderizamos varias */
+.et-toast-stack {
+  display: contents;
+}
+
+/* Tarjeta */
+.et-toast {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+
+  max-width: min(420px, calc(100vw - 40px));
+  padding: 12px 14px;
+  border-radius: 12px;
+
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.35;
+
+  box-shadow: 0 12px 40px rgba(0,0,0,.22);
+}
+
+/* Variantes */
+.et-toast--success { background: #16a34a; } /* verde */
+.et-toast--error   { background: #dc2626; } /* rojo  */
+.et-toast--warn    { background: #f59e0b; } /* ámbar */
+.et-toast--info    { background: #3b82f6; } /* azul  */
+
+/* Mensaje */
+.et-toast__msg {
+  margin-right: 6px;
+  word-break: break-word;
+}
+
+/* Botón cerrar */
+.et-toast__close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform .08s ease;
+}
+.et-toast__close:hover { transform: scale(1.08); }
+
+/* Modo oscuro (si tu app usa .dark en <html> o <body>) */
+.dark #et-toasts .et-toast {
+  box-shadow: 0 12px 40px rgba(0,0,0,.5);
 }

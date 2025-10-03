@@ -1,0 +1,284 @@
+/* =========================================================
+   Ubicaciones – pastel azul/rosado (scope total)
+   ========================================================= */
+
+.ub-simple {
+  /* Crear stacking context propio para no interferir con overlays/modales externos */
+  position: relative;
+  isolation: isolate;
+
+  /* Paleta pastel con +contraste */
+  --brand-500: #66a2ff;
+  --brand-600: #4d90ff;
+  --brand-700: #397ef3;
+
+  --rose-100: #ffdbe8;
+  --rose-200: #ffc2da;
+
+  --sky-50:   #f3f8ff;
+  --sky-100:  #e8f1ff;
+  --sky-200:  #cfe2ff;
+
+  --slate-25:  #fbfcfd;
+  --slate-50:  #f7fafc;
+  --slate-100: #eef2f6;
+  --slate-200: #e5e7eb;
+  --slate-300: #d9dee7;
+  --slate-400: #94a3b8;
+  --slate-600: #475467;
+  --slate-800: #1f2937;
+  --slate-900: #0f172a;
+
+  --green-600: #16a34a;
+  --red-600:   #dc2626;
+
+  --ring: 0 0 0 4px rgba(77, 144, 255, .22);
+
+  color: var(--slate-900);
+
+  /* ======= Hard reset ultra específico (no tocar otros iconos) ======= */
+  /* Antes tenías `.ub-simple svg { ... }`. Eso podía afectar a cualquier SVG interno
+     (incluido si algún día el Toast quedara dentro). Lo acotamos a iconos puntuales. */
+  .ub-icn svg,
+  .seg-toggle .i,
+  .col-stepper .mini svg,
+  .btn-round svg {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+
+  /* ---------- Header ---------- */
+  &__header {
+    display: flex; align-items: center; gap: 16px; margin-bottom: 12px;
+
+    .ub-icn {
+      width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center;
+      color: var(--brand-700); font-size: 22px;
+      background: var(--sky-100);
+      border: 1px solid var(--sky-200);
+      transition: none !important;
+      transform: none !important;
+      animation: none !important;
+    }
+    .ub-txt { flex: 1 1 auto; }
+    h3 { margin: 0; font-size: 19px; line-height: 1.2; }
+    .ub-sub { margin: 4px 0 0 0; color: var(--slate-600); font-size: 14px; }
+
+    .ub-actions {
+      display: flex; gap: 8px;
+      .btn {
+        height: 38px; padding: 0 14px; border-radius: 12px; border: 0;
+        display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: #fff;
+        &.btn-primary { background: linear-gradient(135deg, var(--brand-500), var(--brand-600)); }
+        &:hover{ filter: brightness(1.05); }
+      }
+    }
+  }
+
+  /* ---------- Bloque central: Total ---------- */
+  .ub-controls {
+    .control {
+      background: linear-gradient(180deg, #ffffff, var(--slate-50));
+      border: 1px solid var(--slate-200);
+      border-radius: 18px;
+      padding: 18px;
+      display: grid; justify-items: center; text-align: center;
+
+      .label {
+        font-size: 15px; font-weight: 900; letter-spacing: .2px;
+        color: var(--slate-600); margin-bottom: 10px;
+      }
+
+      .stepper {
+        display: inline-grid; grid-auto-flow: column; align-items: center; gap: 14px;
+
+        .btn-round {
+          width: 64px; height: 64px; border-radius: 16px; border: 0; cursor: pointer;
+          display: grid; place-items: center; line-height: 1; font-size: 28px; color: #fff;
+          transition: none !important; transform: none !important; animation: none !important;
+          &.minus { background: var(--red-600); }
+          &.plus  { background: var(--green-600); }
+        }
+
+        .counter {
+          width: 210px; max-width: 46vw; height: 68px;
+          background: #fff;
+          border: 2px solid var(--sky-200);
+          border-radius: 16px;
+          display: grid; place-items: center;
+
+          input[type="number"] {
+            -moz-appearance: textfield; appearance: textfield;
+            width: 100%; height: 100%; background: transparent; border: 0; outline: none;
+            text-align: center; font-size: 34px; font-weight: 900; color: var(--slate-900);
+          }
+          input[type="number"]::-webkit-outer-spin-button,
+          input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+          &:focus-within { box-shadow: var(--ring); border-color: var(--brand-600); }
+        }
+      }
+    }
+  }
+
+  /* ---------- Grid ---------- */
+  .ub-grid {
+    margin-top: 14px;
+
+    .grid-head {
+      display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin-bottom: 14px;
+
+      .section-title {
+        display: inline-flex; align-items: center; gap: 10px;
+        background: linear-gradient(180deg, #fff, var(--slate-50));
+        border: 1px solid var(--slate-200);
+        border-radius: 14px; padding: 8px 12px;
+        font-weight: 900; color: var(--slate-800);
+        transition: none !important; transform: none !important; animation: none !important;
+
+        .bubble {
+          width: 28px; height: 28px; border-radius: 50%;
+          display: inline-flex; align-items: center; justify-content: center;
+          color: var(--brand-600); background: var(--sky-100);
+          border: 1px solid var(--sky-200);
+          transition: none !important; transform: none !important; animation: none !important;
+          svg { width: 18px; height: 18px; }
+        }
+      }
+
+      .toolbar {
+        display: inline-flex; flex-wrap: wrap; align-items: center; gap: 14px;
+        padding: 8px 10px;
+        background: linear-gradient(180deg, #fff, var(--slate-50));
+        border: 1px dashed var(--slate-200);
+        border-radius: 14px;
+
+        .group { display: inline-flex; align-items: center; gap: 10px; }
+        .lbl   { color: var(--slate-600); font-weight: 900; font-size: 12px; }
+
+        .seg-toggle {
+          background: #fff; border: 1px solid var(--slate-200); border-radius: 12px;
+          display: inline-flex; padding: 4px; gap: 6px;
+
+          .seg {
+            display: inline-flex; align-items: center; gap: 8px;
+            height: 36px; padding: 0 12px; border: 0; border-radius: 8px; cursor: pointer;
+            background: transparent; color: var(--slate-800); font-weight: 800;
+            transition: none !important; transform: none !important; animation: none !important;
+
+            .i { font-size: 18px; transition: none !important; transform: none !important; }
+            &.is-active {
+              color: #fff;
+              background: linear-gradient(135deg, var(--brand-500), var(--brand-600));
+            }
+          }
+        }
+
+        .col-stepper {
+          display: inline-grid; grid-auto-flow: column; align-items: center; gap: 8px;
+          .mini {
+            width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--slate-300);
+            background: #fff; display: grid; place-items: center; font-size: 18px; line-height: 1;
+            transition: none !important; transform: none !important; animation: none !important;
+          }
+          .val { width: 30px; text-align: center; font-weight: 900; color: var(--slate-800); }
+        }
+        .hint {
+          background: var(--rose-100);
+          border: 1px solid var(--rose-200);
+          color: #7d4f61;
+          font-size: 12px; font-weight: 900;
+          padding: 4px 8px; border-radius: 999px;
+        }
+      }
+    }
+
+    .grid {
+      display: grid; gap: 14px;
+
+      .cell {
+        height: 92px; border-radius: 16px;
+        background: #fff;
+        border: 1px solid var(--slate-200);
+        display: grid; place-items: center;
+        &:hover { border-color: var(--brand-600); }
+
+        .pill {
+          display: inline-flex; align-items: center; justify-content: center;
+          min-width: 58px; padding: 8px 14px; border-radius: 999px;
+          font-weight: 900; letter-spacing: .4px;
+          color: var(--brand-700);
+          background: var(--sky-100);
+          border: 2px solid var(--sky-200);
+          pointer-events: none;
+        }
+      }
+    }
+  }
+
+  /* ---------- Footer ---------- */
+  .ub-footer {
+    margin-top: 14px; padding-top: 6px;
+    color: var(--slate-600); font-size: 14px;
+  }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 980px) {
+    .ub-grid .grid-head { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 640px) {
+    &__header { align-items: flex-start; gap: 12px;
+      .ub-actions .btn { height: 36px; padding: 0 12px; }
+    }
+    .ub-controls .control .stepper {
+      gap: 10px;
+      .btn-round { width: 56px; height: 56px; font-size: 24px; }
+      .counter { height: 60px; }
+      .counter input[type="number"] { font-size: 28px; }
+    }
+    .ub-grid .toolbar { gap: 10px; }
+    .ub-grid .grid { gap: 10px; }
+    .ub-grid .grid .cell { height: 82px; }
+  }
+}
+
+/* --------- Dark (si tu app usa .dark) --------- */
+.dark .ub-simple {
+  color: #e5e7eb;
+
+  &__header .ub-icn {
+    background: #0f172a; color: var(--brand-500); border-color: #1f2a44;
+  }
+
+  .ub-controls .control {
+    background: linear-gradient(180deg, #0b1220, #0f172a);
+    border-color: #263044;
+    .counter { border-color: #2f4179; }
+    .counter input[type="number"] { color: #e5e7eb; }
+  }
+
+  .ub-grid .section-title {
+    background: linear-gradient(180deg, #0b1220, #0f172a);
+    border-color: #263044;
+    .bubble { background: #0f172a; color: var(--brand-500); border-color: #2a3562; }
+  }
+
+  .ub-grid .toolbar {
+    background: linear-gradient(180deg, #0b1220, #0f172a);
+    border-color: #2a3562;
+    .seg-toggle { border-color: #2a3562; background: #0f172a; }
+    .col-stepper .mini { background: #0f172a; border-color: #2a3562; color: #e5e7eb; }
+    .hint { background: #2a1530; border-color: #432b48; color: #e9cfe1; }
+  }
+
+  .ub-grid .grid .cell {
+    background: #0b1220; border-color: #2a3562;
+  }
+  .ub-grid .grid .cell .pill {
+    background: #0f172a; border-color: #2a3562; color: #cfe0ff;
+  }
+
+  .ub-footer { color: #cbd5e1; }
+}

@@ -1,391 +1,309 @@
-'use strict';
-const { supabase } = require("../utils/supabaseClient");
+// src/controllers/paquetes.controller.js  (CommonJS, SOLO packages + ubicaciones)
+const supa = require('../utils/supabaseClient');
+const supabase = supa.supabase || supa.default || supa;
 
-/* ---------- Utils ---------- */
-function canonCodigo(s) {
-  return String(s ?? "")
-    .trim()
-    .replace(/^CARRIL\s+/i, "")
-    .replace(/^ESTANTE\s+/i, "")
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "")
-    .replace(/-/g, "")
-    .toUpperCase();
-}
-function alphaToNum(str) {
-  const s = String(str || "").toUpperCase();
-  if (!/^[A-Z]+$/.test(s)) return NaN;
-  let n = 0;
-  for (const ch of s) n = n * 26 + (ch.charCodeAt(0) - 64);
-  return n;
-}
-function parseCodigoGenerico(raw) {
-  const code = canonCodigo(raw);
-  if (/^\d+$/.test(code)) return { estante: parseInt(code, 10), balda: 1 };
-  if (/^[A-Z]+$/.test(code)) return { estante: alphaToNum(code), balda: 1 };
-  let m = code.match(/^([A-Z]+)(\d+)$/);
-  if (m) return { estante: alphaToNum(m[1]), balda: parseInt(m[2], 10) };
-  m = String(raw).trim().match(/^(\d+)\s*-\s*(\d+)$/);
-  if (m) return { estante: parseInt(m[1], 10), balda: parseInt(m[2], 10) };
-  return null;
-}
-function normHex(s = "") {
-  const x = String(s).trim().replace(/^#/, "").toUpperCase();
-  return /^[0-9A-F]{6}$/.test(x) ? x : null;
-}
-function afterKeyword(raw = "", keyword = /^(CARRIL|ESTANTE)\s+/i) {
-  return String(raw).replace(keyword, "").trim();
-}
-const normName = (x = "") =>
-  String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+const up = (s = '') => String(s || '').trim().toUpperCase();
 
+/* ---------- helpers ---------- */
+
+// tenant por query o a partir del JWT (si lo necesitas)
 async function resolveTenantId(req) {
-  const direct = req.tenant_id || req.tenant?.id;
-  if (direct) return direct;
-  const email = String(req.user?.email || "").toLowerCase().trim();
-  if (!email) return null;
+  if (req.query?.tenantId) return String(req.query.tenantId);
+  if (req.query?.tenant_id) return String(req.query.tenant_id);
+
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (!token) return null;
+
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) return null;
+
+    const userId = data.user.id;
+
+    // memberships
+    try {
+      const { data: map } = await supabase
+        .from('memberships')
+        .select('tenant_id')
+        .eq('user_id', userId)
+        .limit(1);
+      if (map && map[0]?.tenant_id) return String(map[0].tenant_id);
+    } catch (_) {}
+
+    // fallback
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function getEmpresaId(tenantId, nombre) {
   const { data, error } = await supabase
-    .from("tenants").select("id").ilike("email", email).maybeSingle();
+    .from('empresas_transporte_tenant')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('nombre', nombre)
+    .maybeSingle();
   if (error) throw error;
   return data?.id || null;
 }
 
-/* Asegura que exista la empresa y devuelve su UUID (NOT NULL en paquetes) */
-async function ensureEmpresaId(tenantId, nombre) {
-  const limpio = (nombre || '').trim();
-  if (!limpio) return null;
-
+async function resolveUbiIdByLabel(tenantId, label) {
+  const lbl = up(label);
   const { data, error } = await supabase
-    .from('empresas_transporte_tenant')
-    .upsert([{ tenant_id: tenantId, nombre: limpio }], { onConflict: 'tenant_id,nombre' })
-    .select('id')
+    .from('ubicaciones')
+    .select('id,label')
+    .eq('tenant_id', tenantId)
+    .eq('label', lbl)
     .maybeSingle();
-
-  if (error) { console.warn('[ensureEmpresaId] error:', error); return null; }
+  if (error) throw error;
   return data?.id || null;
 }
 
-async function getLayoutMeta(tenantId) {
-  const { data } = await supabase
-    .from("layouts_meta").select("mode, rows, cols")
-    .eq("org_id", tenantId).maybeSingle();
-  return { mode: data?.mode || null, rows: data?.rows || 0, cols: data?.cols || 0 };
+async function ensureUbiBelongsToTenant(tenantId, ubiId) {
+  const { data, error } = await supabase
+    .from('ubicaciones')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('id', ubiId)
+    .maybeSingle();
+  if (error) throw error;
+  return !!data?.id;
 }
 
-/** LEE carriles con esquema unificado. */
-async function getLanes(tenantId) {
+/* ========== Listar (packages) ========== */
+async function listarPaquetes(req, res) {
   try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) return res.json({ paquetes: [] });
+
     const { data, error } = await supabase
-      .from("lanes")
-      .select("lane_id, id, name, color")
-      .eq("tenant_id", tenantId)
-      .order("lane_id", { ascending: true })
-      .order("id", { ascending: true });
-    if (!error && Array.isArray(data) && data.length) {
-      return data.map(l => ({
-        lane_id: Number(l.lane_id ?? l.id),
-        name: (l.name || String(l.lane_id ?? l.id)).trim(),
-        colorHex: normHex(l.color || "")
-      }));
-    }
-  } catch {/* ignore */}
-  try {
-    const { data } = await supabase
-      .from("carriles")
-      .select("id, codigo, color")
-      .eq("tenant_id", tenantId)
-      .order("id", { ascending: true });
-    return (data || []).map(r => ({
-      lane_id: Number(r.id),
-      name: (r.codigo || String(r.id)).trim(),
-      colorHex: normHex(r.color || "")
-    }));
-  } catch {
-    return [];
+      .from('packages')
+      .select(`
+        id, tenant_id, nombre_cliente, empresa_transporte, empresa_id,
+        fecha_llegada, entregado, fecha_entregado, ingreso_generado,
+        ubicacion_id, ubicacion_label
+      `)
+      .eq('tenant_id', tenantId)
+      .order('fecha_llegada', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ paquetes: data || [] });
+  } catch (err) {
+    console.error('[packages.listar] err:', err);
+    return res.status(500).json({ error: 'Error al listar paquetes' });
   }
 }
 
-/** Crea/recupera “balda puente” para un carril (balda=1). */
-async function upsertBaldaPuente(tenantId, laneId, codigoMostrado) {
-  const { data: found, error: fErr } = await supabase
-    .from("baldas")
-    .select("id, estante, balda, codigo")
-    .eq("id_negocio", tenantId)
-    .eq("estante", laneId)
-    .eq("balda", 1)
-    .maybeSingle();
-  if (fErr) console.warn("[upsertBaldaPuente] fetch error:", fErr);
-  if (found?.id) return found;
-
-  const codigo = String(codigoMostrado || laneId);
-  const { data: ins, error: iErr } = await supabase
-    .from("baldas")
-    .upsert([{
-      id_negocio: tenantId, estante: laneId, balda: 1, codigo
-    }], { onConflict: "id_negocio,estante,balda" })
-    .select("id, estante, balda, codigo")
-    .maybeSingle();
-
-  if (iErr) { console.error("[upsertBaldaPuente] insert error:", iErr); return null; }
-  return ins || null;
-}
-
-/* ──────────────────────────────────────────────────────────────────── */
-/* Handlers                                                            */
-/* ──────────────────────────────────────────────────────────────────── */
-
-/** ✅ Crear paquete con control de trial (trigger de BD aplica el límite 20) */
-const crearPaquete = async (req, res) => {
+/* ========== Crear (packages) ========== */
+async function crearPaquete(req, res) {
   try {
-    const tenantId = await resolveTenantId(req);
-    if (!tenantId) return res.status(403).json({ error: "Tenant no resuelto" });
+    const {
+      tenant_id,
+      nombre_cliente,
+      empresa_transporte,
+      ubicacion_id,
+      ubicacion_label,   // "B6", "B25", ...
+      // compat vieja: por si el front aun manda estos
+      balda_id,
+      compartimento
+    } = req.body || {};
 
-    const { nombre_cliente, empresa_transporte, balda_id, lane_id, compartimento } = req.body || {};
-    if (!nombre_cliente?.trim() || !empresa_transporte?.trim()) {
-      return res.status(400).json({ error: "Faltan campos obligatorios." });
+    const tenantId = tenant_id || (await resolveTenantId(req));
+    if (!tenantId) return res.status(400).json({ error: 'Falta tenant_id' });
+    if (!empresa_transporte) return res.status(400).json({ error: 'Falta empresa_transporte' });
+
+    const empresaId = await getEmpresaId(tenantId, empresa_transporte);
+    if (!empresaId) return res.status(400).json({ error: 'Empresa de transporte no encontrada para este tenant.' });
+
+    // normalizamos inputs nuevos y legacy
+    let finalUbiId = null;
+    let finalUbiLabel = null;
+
+    if (ubicacion_id) {
+      const ok = await ensureUbiBelongsToTenant(tenantId, ubicacion_id);
+      if (!ok) return res.status(400).json({ error: 'ubicacion_id no pertenece a este tenant' });
+      finalUbiId = ubicacion_id;
     }
-
-    // empresa_id es NOT NULL → asegúrala
-    const empresaId = await ensureEmpresaId(tenantId, empresa_transporte);
-    if (!empresaId) return res.status(400).json({ error: "Empresa de transporte inválida." });
-
-    // 1) Determinar balda_id sin heurísticas
-    let finalBaldaId = null;
-
-    if (Number.isFinite(Number(balda_id))) {
-      // modo racks (balda concreta seleccionada en UI)
-      const bid = Number(balda_id);
-      const { data: b, error: e } = await supabase
-        .from("baldas").select("id")
-        .eq("id", bid).eq("id_negocio", tenantId).maybeSingle();
-      if (e) return res.status(500).json({ error: e.message });
-      if (!b) return res.status(400).json({ error: "Balda inválida para este negocio." });
-      finalBaldaId = bid;
-    } else if (Number.isFinite(Number(lane_id))) {
-      // modo lanes (crea/usa balda puente del carril)
-      const lid = Number(lane_id);
-      // (opcional) valida que el carril exista
-      const lanes = await getLanes(tenantId);
-      if (!lanes.some(l => l.lane_id === lid)) {
-        return res.status(400).json({ error: "Carril inválido para este negocio." });
+    if (ubicacion_label) {
+      finalUbiLabel = up(ubicacion_label);
+      if (!finalUbiId) {
+        const id = await resolveUbiIdByLabel(tenantId, finalUbiLabel);
+        if (!id) return res.status(400).json({ error: `No existe la ubicación ${finalUbiLabel}` });
+        finalUbiId = id;
       }
-      const puente = await upsertBaldaPuente(tenantId, lid, compartimento);
-      if (!puente) return res.status(500).json({ error: "No se pudo preparar la balda del carril." });
-      finalBaldaId = puente.id;
-    } else {
-      // Nada de adivinar por “compartimento”
-      return res.status(400).json({ error: "Debes indicar balda_id (racks) o lane_id (carril)." });
     }
 
-    // 2) Insert (trigger de BD controla el límite del trial)
-    const payload = {
+    // compat (viejito)
+    if (!finalUbiId && (balda_id != null || compartimento)) {
+      const lbl = compartimento ? up(compartimento) : null;
+      if (balda_id != null) {
+        const ok = await ensureUbiBelongsToTenant(tenantId, balda_id);
+        if (!ok) return res.status(400).json({ error: 'ubicacion_id (balda_id) no pertenece a este tenant' });
+        finalUbiId = balda_id;
+      } else if (lbl) {
+        const id = await resolveUbiIdByLabel(tenantId, lbl);
+        if (!id) return res.status(400).json({ error: `No existe la ubicación ${lbl}` });
+        finalUbiId = id;
+        finalUbiLabel = lbl;
+      }
+    }
+
+    if (!finalUbiId) return res.status(400).json({ error: 'Falta ubicacion_id o ubicacion_label.' });
+
+    // si no vino el label, lo rellenamos desde tabla (trigger también lo hace)
+    if (!finalUbiLabel) {
+      const { data: u } = await supabase
+        .from('ubicaciones')
+        .select('label')
+        .eq('id', finalUbiId)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+      finalUbiLabel = up(u?.label || '');
+    }
+
+    const insertRow = {
       tenant_id: tenantId,
       empresa_id: empresaId,
-      nombre_cliente: nombre_cliente.trim(),
-      empresa_transporte: empresa_transporte.trim(),
-      balda_id: finalBaldaId,
-      ...(compartimento ? { compartimento: String(compartimento) } : {})
+      nombre_cliente: up(nombre_cliente || ''),
+      empresa_transporte,
+      ubicacion_id: finalUbiId,
+      ubicacion_label: finalUbiLabel || null,
+      entregado: false,
     };
 
-    const { data: inserted, error: errorInsert } = await supabase
-      .from("paquetes")
-      .insert([payload])
-      .select("id, nombre_cliente, fecha_llegada, fecha_entregado, entregado, empresa_transporte, balda_id, baldas (estante, balda, id)");
-
-    if (errorInsert) {
-      const msg = String(errorInsert?.message || '').toUpperCase();
-      if (msg.includes('TRIAL_LIMIT_REACHED')) {
-        return res.status(402).json({
-          ok: false,
-          error: 'TRIAL_LIMIT_REACHED',
-          message: 'Has alcanzado el límite de 20 paquetes de la versión de prueba. Actualiza tu plan para seguir.'
-        });
-      }
-      console.error("[crearPaquete] insert:", errorInsert);
-      return res.status(500).json({ error: "Error al guardar el paquete." });
-    }
-
-    const p = inserted?.[0];
-    if (!p) return res.status(500).json({ error: "No se pudo insertar el paquete." });
-
-    /* 2.5) Incremento de trial (CAS) — SOLO si tu trigger NO incrementa ya trial_used
-       - Lee trial_* del tenant.
-       - Si sigue activo y queda cupo, intenta CAS: trial_used pasa de X a X+1.
-       - Si alguien se te adelanta, el eq('trial_used', X) hará que este update no afecte filas (OK).
-       - ⚠️ Si tu TRIGGER YA incrementa trial_used, borra este bloque para no duplicar. */
-    try {
-      const { data: t, error: tErr } = await supabase
-        .from('tenants')
-        .select('trial_active, trial_quota, trial_used')
-        .eq('id', tenantId)
-        .maybeSingle();
-
-      if (!tErr && t?.trial_active) {
-        const quota = Number(t.trial_quota ?? 0);
-        const used  = Number(t.trial_used ?? 0);
-
-        if (used < quota) {
-          const { error: incErr } = await supabase
-            .from('tenants')
-            .update({ trial_used: used + 1 })
-            .eq('id', tenantId)
-            .eq('trial_active', true)
-            .eq('trial_used', used)       // CAS: solo si nadie lo cambió entre lectura y escritura
-            .lt('trial_used', quota);     // seguridad adicional
-          if (incErr) {
-            // No bloquear por contador — solo log si te interesa
-            // console.warn('[crearPaquete] trial_used++ fallo CAS:', incErr);
-          }
-        }
-      }
-    } catch (incEx) {
-      // No bloquear al usuario por el contador
-      // console.warn('[crearPaquete] trial_used++ excepcion:', incEx);
-    }
-
-    return res.status(200).json({
-      paquete: {
-        ...p,
-        compania: p.empresa_transporte,
-        estante: p.baldas?.estante,
-        balda: p.baldas?.balda,
-        balda_id: p.baldas?.id || p.balda_id,
-      },
-    });
-  } catch (error) {
-    const msg = String(error?.message || '').toUpperCase();
-    if (msg.includes('TRIAL_LIMIT_REACHED')) {
-      return res.status(402).json({
-        ok: false,
-        error: 'TRIAL_LIMIT_REACHED',
-        message: 'Has alcanzado el límite de 20 paquetes de la versión de prueba. Actualiza tu plan para seguir.'
-      });
-    }
-    console.error("[crearPaquete] inesperado:", error);
-    return res.status(500).json({ error: "Error interno del servidor." });
-  }
-};
-
-const listarPaquetes = async (req, res) => {
-  try {
-    const tenantId = await resolveTenantId(req);
-    if (!tenantId) return res.status(403).json({ error: "Tenant no resuelto" });
-
     const { data, error } = await supabase
-      .from("paquetes")
-      .select("id, nombre_cliente, fecha_llegada, fecha_entregado, entregado, empresa_transporte, balda_id, baldas (estante, balda, id)")
-      .eq("tenant_id", tenantId)
-      .order("fecha_llegada", { ascending: false });
+      .from('packages')
+      .insert(insertRow)
+      .select(`
+        id, tenant_id, nombre_cliente, empresa_transporte, empresa_id,
+        fecha_llegada, entregado, fecha_entregado, ingreso_generado,
+        ubicacion_id, ubicacion_label
+      `)
+      .single();
 
     if (error) return res.status(500).json({ error: error.message });
-
-    const formateados = (data || []).map((p) => ({
-      ...p,
-      compania: p.empresa_transporte,
-      estante: p.baldas?.estante,
-      balda: p.baldas?.balda,
-      balda_id: p.baldas?.id || p.balda_id,
-    }));
-
-    res.json(formateados);
+    return res.json({ paquete: data });
   } catch (err) {
-    console.error("[listarPaquetes] Error:", err);
-    res.status(500).json({ error: "Error al listar paquetes" });
+    console.error('[packages.crear] err:', err);
+    return res.status(500).json({ error: 'Error al crear paquete' });
   }
-};
+}
 
-const eliminarPaquete = async (req, res) => {
+/* ========== Entregar ========== */
+async function entregarPaquete(req, res) {
   try {
+    const id = req.params.id;
     const tenantId = await resolveTenantId(req);
-    if (!tenantId) return res.status(403).json({ error: "Tenant no resuelto" });
+    if (!id) return res.status(400).json({ error: 'Falta id' });
+    if (!tenantId) return res.status(400).json({ error: 'Falta tenantId' });
 
-    const { id } = req.params;
-    const { error } = await supabase
-      .from("paquetes").delete()
-      .eq("id", id).eq("tenant_id", tenantId);
-
-    if (error) return res.status(500).json({ error: error.message });
-    res.sendStatus(204);
-  } catch (err) {
-    console.error("[eliminarPaquete] Error:", err);
-    res.status(500).json({ error: "Error al eliminar paquete" });
-  }
-};
-
-const entregarPaquete = async (req, res) => {
-  try {
-    const tenantId = await resolveTenantId(req);
-    if (!tenantId) return res.status(403).json({ error: "Tenant no resuelto" });
-
-    const { id } = req.params;
     const { data, error } = await supabase
-      .from("paquetes")
+      .from('packages')
       .update({ entregado: true, fecha_entregado: new Date().toISOString() })
-      .eq("id", id).eq("tenant_id", tenantId).eq("entregado", false)
-      .select("id").maybeSingle();
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+      .select('id,entregado,fecha_entregado')
+      .single();
 
     if (error) return res.status(500).json({ error: error.message });
-    if (!data) return res.status(404).json({ error: "Paquete no encontrado o ya entregado" });
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("[entregarPaquete] Error:", err);
-    res.status(500).json({ error: "Error al marcar entrega" });
-  }
-};
+    if (!data) return res.status(404).json({ error: 'No encontrado para este tenant' });
 
-const editarPaquete = async (req, res) => {
+    return res.json({ paquete: data });
+  } catch (err) {
+    console.error('[packages.entregar] err:', err);
+    return res.status(500).json({ error: 'Error al entregar paquete' });
+  }
+}
+
+/* ========== Editar (mover de ubicación, etc.) ========== */
+async function editarPaquete(req, res) {
   try {
+    const id = req.params.id || req.body?.id;
     const tenantId = await resolveTenantId(req);
-    if (!tenantId) return res.status(403).json({ error: "Tenant no resuelto" });
+    if (!id) return res.status(400).json({ error: 'Falta id' });
+    if (!tenantId) return res.status(400).json({ error: 'Falta tenantId' });
 
-    const { id } = req.params;
-    const { nombre_cliente, empresa_transporte, balda_id } = req.body;
+    const patch = {};
+    if (req.body?.nombre_cliente != null) patch.nombre_cliente = up(req.body.nombre_cliente);
+    if (req.body?.empresa_transporte != null) patch.empresa_transporte = req.body.empresa_transporte;
 
-    if (balda_id) {
-      const { data: b, error: e } = await supabase
-        .from("baldas").select("id")
-        .eq("id", balda_id).eq("id_negocio", tenantId).maybeSingle();
-      if (e) return res.status(500).json({ error: e.message });
-      if (!b) return res.status(400).json({ error: "Balda inválida para este negocio." });
+    // mover de ubicación
+    let nextUbiId = null;
+    let nextUbiLabel = null;
+
+    if (req.body?.ubicacion_id != null) {
+      const ok = await ensureUbiBelongsToTenant(tenantId, req.body.ubicacion_id);
+      if (!ok) return res.status(400).json({ error: 'ubicacion_id no pertenece a este tenant' });
+      nextUbiId = req.body.ubicacion_id;
+    }
+    if (req.body?.ubicacion_label) {
+      nextUbiLabel = up(req.body.ubicacion_label);
+      if (!nextUbiId) {
+        const id2 = await resolveUbiIdByLabel(tenantId, nextUbiLabel);
+        if (!id2) return res.status(400).json({ error: `No existe la ubicación ${nextUbiLabel}` });
+        nextUbiId = id2;
+      }
     }
 
-    const upd = {};
-    if (typeof nombre_cliente === "string") upd.nombre_cliente = nombre_cliente.trim();
-    if (typeof empresa_transporte === "string") {
-      upd.empresa_transporte = empresa_transporte.trim();
-      const empresaId = await ensureEmpresaId(tenantId, empresa_transporte);
-      if (!empresaId) return res.status(400).json({ error: "Empresa de transporte inválida." });
-      upd.empresa_id = empresaId;
+    if (nextUbiId) {
+      patch.ubicacion_id = nextUbiId;
+      patch.ubicacion_label = nextUbiLabel || null;
     }
-    if (balda_id) upd.balda_id = balda_id;
 
-    const { error } = await supabase
-      .from("paquetes").update(upd)
-      .eq("id", id).eq("tenant_id", tenantId);
+    const { data, error } = await supabase
+      .from('packages')
+      .update(patch)
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+      .select(`
+        id, tenant_id, nombre_cliente, empresa_transporte, empresa_id,
+        fecha_llegada, entregado, fecha_entregado, ingreso_generado,
+        ubicacion_id, ubicacion_label
+      `)
+      .single();
 
     if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: 'No encontrado para este tenant' });
 
-    const { data: actualizado, error: fetchError } = await supabase
-      .from("paquetes")
-      .select("id, nombre_cliente, fecha_llegada, fecha_entregado, entregado, empresa_transporte, balda_id, baldas (estante, balda, id)")
-      .eq("id", id).eq("tenant_id", tenantId).maybeSingle();
-
-    if (fetchError) return res.status(500).json({ error: fetchError.message });
-    if (!actualizado) return res.status(404).json({ error: "Paquete no encontrado" });
-
-    const paquete = {
-      ...actualizado,
-      compania: actualizado.empresa_transporte,
-      estante: actualizado.baldas?.estante,
-      balda: actualizado.baldas?.balda,
-      balda_id: actualizado.baldas?.id || actualizado.balda_id,
-    };
-
-    res.json(paquete);
+    return res.json({ paquete: data });
   } catch (err) {
-    console.error("[editarPaquete] Error:", err);
-    res.status(500).json({ error: "Error al editar paquete" });
+    console.error('[packages.editar] err:', err);
+    return res.status(500).json({ error: 'Error al editar paquete' });
   }
-};
+}
 
-module.exports = { crearPaquete, listarPaquetes, eliminarPaquete, entregarPaquete, editarPaquete };
+/* ========== Eliminar ========== */
+async function eliminarPaquete(req, res) {
+  try {
+    const id = req.params.id;
+    const tenantId = await resolveTenantId(req);
+    if (!id) return res.status(400).json({ error: 'Falta id' });
+    if (!tenantId) return res.status(400).json({ error: 'Falta tenantId' });
+
+    const { data, error } = await supabase
+      .from('packages')
+      .delete()
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+      .select('id')
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: 'No encontrado para este tenant' });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[packages.eliminar] err:', err);
+    return res.status(500).json({ error: 'Error al eliminar paquete' });
+  }
+}
+
+module.exports = {
+  listarPaquetes,
+  crearPaquete,
+  entregarPaquete,
+  editarPaquete,
+  eliminarPaquete,
+};

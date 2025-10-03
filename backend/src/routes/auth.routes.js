@@ -262,7 +262,7 @@ router.post('/bootstrap', requireAuth, async (req, res) => {
         nombre_empresa: hinted || base,
         slug,
         trial_active: true,
-        trial_quota: Number(process.env.TRIAL_QUOTA || 20),
+        trial_quota: Number(process.env.TRIAL_QUOTA_DEFAULT || process.env.TRIAL_QUOTA || 1000000),
         trial_used: 0,
         soft_blocked: false,
       };

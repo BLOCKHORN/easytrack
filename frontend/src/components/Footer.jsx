@@ -10,7 +10,7 @@ export default function Footer() {
   const links = useMemo(() => ({
     producto: [
       { to: '/caracteristicas', label: 'Características' },
-      { to: '/precios', label: 'Precios' },
+      /*{ to: '/precios', label: 'Precios' },*/
       { to: '/como-funciona', label: 'Cómo funciona' },
     ],
     ayuda: [

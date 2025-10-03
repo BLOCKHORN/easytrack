@@ -12,8 +12,9 @@ app.set('trust proxy', 1);
 const requireAuth = require('./middlewares/requireAuth');
 const subscriptionFirewall = require('./middlewares/subscriptionFirewall');
 
-/* ===== Rutas ===== */
+/* ===== Rutas existentes ===== */
 const paquetesRoutes = require('./routes/paquetes.routes');
+const ubicacionesRoutes = require('./routes/ubicaciones.routes');
 const estantesRoutes = require('./routes/estantes.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const areaPersonalRoutes = require('./routes/areaPersonal.routes');
@@ -22,14 +23,16 @@ const authRoutes = require('./routes/auth.routes');
 const verificarUsuarioRoutes = require('./routes/verificar.usuario');
 const tenantsRoutes = require('./routes/tenants.routes');
 const metricsRouter = require('./routes/metrics.routes');
-
 const billingRoutes = require('./routes/billing.routes');
-const { stripeWebhook } = require('./routes/stripe.webhook'); // mantiene tu ruta actual
-
-// NUEVO: límites/estado (trial remaining, sub activa)
+const { stripeWebhook } = require('./routes/stripe.webhook');
 const limitsRoutes = require('./routes/limits.routes');
-
 const adminRoutes = require('./routes/admin.routes');
+
+/* ===== NUEVAS rutas DEMO/Activación ===== */
+const demoRequestsPublic = require('./routes/public.demo.requests.routes'); // ← ESTE
+const adminDemoRequests  = require('./routes/admin.demo.requests.routes');
+const activationRoutes   = require('./routes/auth.activation.routes');
+const geoRoutes = require('./routes/geo.routes');
 
 /* ============== CORS ROBUSTO ============== */
 const envOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
@@ -99,9 +102,14 @@ app.use('/api/auth', authRoutes);
 app.use('/api/verificar-usuario', verificarUsuarioRoutes);
 app.use('/api/metrics', metricsRouter);
 
+/* NUEVO: crear solicitud de demo y activar cuenta (públicas) */
+app.use('/api', demoRequestsPublic);  // POST /api/demo/requests
+app.use('/api', activationRoutes);    // POST /api/auth/activate
+
 /* ============== Admin (Superadmin) ============== */
 app.use('/admin', adminRoutes);
-
+app.use('/admin', adminDemoRequests);
+app.use('/api/geo', geoRoutes);
 /* =========================================================
    Billing (Stripe) — accesible sin firewall
    ========================================================= */
@@ -129,23 +137,21 @@ authOnly('/:tenantSlug/api/estantes', estantesRoutes);
 
 /* =========================================================
    Trial-friendly: SIN subscriptionFirewall
-   - Paquetes y Área personal quedan disponibles en modo prueba.
-   - El límite de 20 paquetes lo hace tu trigger en BD.
    ========================================================= */
 authOnly('/api/paquetes', paquetesRoutes);
+app.use('/api/ubicaciones', ubicacionesRoutes);
 authOnly('/api/area-personal', areaPersonalRoutes);
 
 authOnly('/:tenantSlug/api/paquetes', paquetesRoutes);
 authOnly('/:tenantSlug/api/area-personal', areaPersonalRoutes);
 
 /* =========================================================
-   Tenants: si quieres mantener firewall aquí, lo dejamos
-   (puedes pasar a authOnly si quieres abrirlo en trial)
+   Tenants: protegido con firewall
    ========================================================= */
 gate('/api/tenants', tenantsRoutes);
 
 /* =========================================================
-   Límites/Estado (trial remaining, sub activa) — solo login
+   Límites/Estado — solo login
    ========================================================= */
 authOnly('/api/limits', limitsRoutes);
 

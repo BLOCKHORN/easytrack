@@ -1,16 +1,21 @@
 // src/pages/Registro.jsx
-import { useEffect, useMemo, useState } from 'react';
+// Requiere: npm i @doncicuto/es-provinces @doncicuto/es-municipalities i18n-iso-countries
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useModal } from '../context/ModalContext';
+import countriesISO from 'i18n-iso-countries';
+import esLocale from 'i18n-iso-countries/langs/es.json';
 import '../styles/registro.scss';
 
-// Países (todos) con nombres en español
-import countries from 'i18n-iso-countries';
-import esLocale from 'i18n-iso-countries/langs/es.json';
-countries.registerLocale(esLocale);
-
-// 👉 nuevo: servicio de auth robusto
-import { register as apiRegister, resend as apiResend } from '../services/authService';
+countriesISO.registerLocale(esLocale);
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/,'');
+
+const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const phoneRe = /^[0-9+()\-\s]{7,}$/;
+const cifRe   = /^[A-Za-z0-9\-]{8,15}$/;
+const zipRe   = /^[A-Za-z0-9\- ]{3,10}$/;
+
+const norm = (s='') => s.normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase();
 
 function guessInboxUrl(email='') {
   const d = email.split('@')[1]?.toLowerCase() || '';
@@ -22,351 +27,687 @@ function guessInboxUrl(email='') {
   return null;
 }
 
-export default function Registro() {
-  // Requeridos
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPwd, setConfirmPwd] = useState('');
-  const [nombreEmpresa, setNombreEmpresa] = useState('');
-  const [termsAccepted, setTermsAccepted] = useState(false);
+/* ---------- Fallback ciudades (Nominatim, ES) ---------- */
+async function searchCitiesFallback({ q, country = 'España', province = '' }) {
+  const query = [q, province, country].filter(Boolean).join(', ');
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=20&accept-language=es&q=${encodeURIComponent(query)}`;
+  try {
+    const r = await fetch(url, { headers: { 'Accept':'application/json' } });
+    const arr = await r.json();
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map(x => x?.address?.city || x?.address?.town || x?.address?.village || x?.address?.municipality || '')
+      .filter(Boolean)
+      .filter((v, i, a) => a.indexOf(v) === i);
+  } catch {
+    return [];
+  }
+}
 
-  // Opcional
-  const [pais, setPais] = useState('ES');
+/* ---------- Carga dinámica de provincias y municipios (INE) ---------- */
+async function loadESProvinces() {
+  const mod = await import('@doncicuto/es-provinces');
+  const arr = mod.default || mod || [];
+  const mapES = {
+    'Alicante/Alacant':'Alicante', 'Castellón/Castelló':'Castellón', 'València/Valencia':'Valencia',
+    'Gipuzkoa':'Guipúzcoa', 'Bizkaia':'Vizcaya', 'Araba/Álava':'Álava', 'Illes Balears':'Islas Baleares',
+    'Girona':'Gerona', 'Lleida':'Lérida', 'Ourense':'Orense'
+  };
+  return arr.map(p => ({ ...p, name: mapES[p.name] || p.name }));
+}
 
-  const [showPwd, setShowPwd] = useState(false);
-  const [loading, setLoading] = useState(false);
+async function makeESCityProvider() {
+  try {
+    const [provMod, muniMod] = await Promise.all([
+      import('@doncicuto/es-provinces'),
+      import('@doncicuto/es-municipalities')
+    ]);
+    const provinces = (provMod.default || provMod || []).map(p => ({ ...p, _norm: norm(p.name) }));
+    const munis = muniMod.default || muniMod || [];
 
-  // UX mensajes
-  const [okMsg,   setOkMsg]   = useState('');
-  const [errMsg,  setErrMsg]  = useState('');
-  const [kind,    setKind]    = useState(''); // signup_sent | resend_signup | reset_sent
-  const [dbgLink, setDbgLink] = useState('');
+    const byProv = new Map();
+    for (const m of munis) {
+      const provCode = String(m.code || '').slice(0,2);
+      const list = byProv.get(provCode) || [];
+      const display = String(m.name || '').split('/')[0].trim();
+      if (display) list.push(display);
+      byProv.set(provCode, list);
+    }
+    for (const [k, list] of byProv.entries()) {
+      const uniq = Array.from(new Set(list)).sort((a,b) => a.localeCompare(b, 'es'));
+      byProv.set(k, uniq);
+    }
 
-  // Reenvío
-  const [cooldown, setCooldown] = useState(0);
+    const nameToCode = new Map();
+    for (const p of provinces) nameToCode.set(p.name, p.code);
+
+    return async function listCities({ q, province }) {
+      const code = nameToCode.get(province);
+      if (!code) return [];
+      const list = byProv.get(code) || [];
+      if (!q || q.trim().length < 2) return list.slice(0, 20);
+      const qn = norm(q);
+      return list.filter(n => norm(n).includes(qn)).slice(0, 20);
+    };
+  } catch {
+    return null; // fallback a Nominatim
+  }
+}
+
+/* ---------- Envío de solicitud ---------- */
+async function submitDemoRequest(payload) {
+  const res = await fetch(`${API}/api/demo/requests`, {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.error || `HTTP ${res.status}`);
+    err.code = data?.code;
+    err.issues = data?.issues || null;
+    throw err;
+  }
+  return data;
+}
+
+/* ---------- Autocomplete de ciudad ---------- */
+function CityAutocomplete({ value, onChange, required, disabled, provider, countryName, province }) {
+  const [q, setQ] = useState(value || '');
+  const [list, setList] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(-1);
+  const [busy, setBusy] = useState(false);
+  const tRef = useRef(null);
+
+  useEffect(() => { setQ(value || ''); }, [value]);
+
+  async function refresh(query) {
+    if (disabled || !province || !query || query.trim().length < 2) {
+      setList([]); setOpen(false); return;
+    }
+    setBusy(true);
+    let cities = [];
+    if (provider) cities = await provider({ q: query, province });
+    else cities = await searchCitiesFallback({ q: query, province, country: countryName || 'España' });
+    setList(cities);
+    setOpen(true);
+    setBusy(false);
+  }
+
+  function handleChange(val) {
+    setQ(val);
+    onChange?.(val);
+    setHi(-1);
+    if (tRef.current) clearTimeout(tRef.current);
+    tRef.current = setTimeout(() => refresh(val), 160);
+  }
+
+  function selectItem(name) {
+    onChange?.(name);
+    setQ(name); setList([]); setOpen(false);
+  }
+
+  function onKeyDown(e) {
+    if (!open || !list.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHi(h => Math.min(list.length - 1, h + 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHi(h => Math.max(0, h - 1)); }
+    else if (e.key === 'Enter' && hi >= 0) { e.preventDefault(); selectItem(list[hi]); }
+    else if (e.key === 'Escape') setOpen(false);
+  }
+
+  return (
+    <div className="city-ac">
+      <input
+        type="text"
+        required={required}
+        placeholder={disabled ? "Selecciona país y provincia primero" : "Ciudad / Localidad"}
+        disabled={disabled}
+        value={q}
+        onChange={e => handleChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        onFocus={() => { if (list.length) setOpen(true); }}
+        onBlur={() => { setTimeout(() => setOpen(false), 120); onChange?.(q.trim()); }}
+        autoComplete="off"
+      />
+      {busy && <div className="ac-spinner" aria-hidden="true" />}
+      {open && (
+        <ul className="ac-list" role="listbox">
+          {list.length ? list.map((name, idx) => (
+            <li
+              key={`${name}-${idx}`}
+              role="option"
+              aria-selected={idx===hi}
+              className={idx===hi ? 'hi' : ''}
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setHi(idx)}
+              onClick={() => selectItem(name)}
+            >
+              <span className="t">{name}</span>
+              <span className="s">{province}</span>
+            </li>
+          )) : <li className="empty">Empieza a escribir (mín. 2 letras)</li>}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Selector volumen ---------- */
+function VolumeSelect({ value, onChange }) {
+  const OPTIONS = [
+    { value: 'lt_200',   label: 'Menos de 200' },
+    { value: '200_400',  label: '200 – 400' },
+    { value: '400_600',  label: '400 – 600' },
+    { value: '600_800',  label: '600 – 800' },
+    { value: '800_1000', label: '800 – 1000' },
+    { value: 'gt_1000',  label: 'Más de 1000' },
+  ];
+
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(-1);
+  const rootRef = useRef(null);
+  const btnRef = useRef(null);
+
+  const selected = OPTIONS.find(o => o.value === value) || null;
 
   useEffect(() => {
-    try {
-      const se = localStorage.getItem('signup_email');
-      if (se && !email) setEmail(se);
-    } catch {}
+    const onDoc = (e) => {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  useEffect(() => {
-    if (!cooldown) return;
-    const t = setInterval(() => setCooldown(c => Math.max(0, c - 1)), 1000);
-    return () => clearInterval(t);
-  }, [cooldown]);
+  function toggleOpen() {
+    setOpen(o => {
+      const next = !o;
+      if (next) {
+        const idx = Math.max(0, OPTIONS.findIndex(o => o.value === value));
+        setHi(idx);
+      }
+      return next;
+    });
+  }
+
+  function selectIdx(i) {
+    const opt = OPTIONS[i];
+    if (!opt) return;
+    onChange?.(opt.value);
+    setOpen(false);
+    btnRef.current?.focus({ preventScroll: true });
+  }
+
+  function onKeyDown(e) {
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleOpen();
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHi(h => Math.min(OPTIONS.length - 1, h + 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHi(h => Math.max(0, h - 1)); }
+    else if (e.key === 'Home') { e.preventDefault(); setHi(0); }
+    else if (e.key === 'End') { e.preventDefault(); setHi(OPTIONS.length - 1); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectIdx(hi >= 0 ? hi : 0); }
+    else if (e.key === 'Escape') { e.preventDefault(); setOpen(false); btnRef.current?.focus({ preventScroll: true }); }
+  }
+
+  function clearSelection(e) {
+    e.stopPropagation();
+    onChange?.('');
+    btnRef.current?.focus({ preventScroll: true });
+  }
+
+  return (
+    <div className={`nice-select ${open ? 'is-open' : ''}`} ref={rootRef}>
+      <button
+        type="button"
+        ref={btnRef}
+        className="ns-control"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls="ns-pop"
+        onClick={toggleOpen}
+        onKeyDown={onKeyDown}
+      >
+        <span className={`ns-value ${selected ? '' : 'is-placeholder'}`}>
+          {selected ? selected.label : 'Selecciona un rango (opcional)'}
+        </span>
+        {selected ? (
+          <span className="ns-clear" onClick={clearSelection} aria-label="Limpiar selección" title="Limpiar">×</span>
+        ) : null}
+        <span className="ns-caret" aria-hidden>▾</span>
+      </button>
+
+      {open && (
+        <div id="ns-pop" role="listbox" className="ns-pop" tabIndex={-1}>
+          <ul className="ns-list">
+            {OPTIONS.map((opt, i) => {
+              const sel = opt.value === value;
+              const hit = i === hi;
+              return (
+                <li
+                  key={opt.value}
+                  role="option"
+                  aria-selected={sel}
+                  className={`ns-item ${sel ? 'is-selected' : ''} ${hit ? 'is-hi' : ''}`}
+                  onMouseEnter={() => setHi(i)}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => selectIdx(i)}
+                >
+                  <span className="ns-text">{opt.label}</span>
+                  {sel ? <span className="ns-check">✓</span> : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* --------------------------------- Página --------------------------------- */
+export default function Registro() {
+  const { openLogin } = useModal(); // modal de login
+
+  // Obligatorios
+  const [fullName,   setFullName]   = useState('');
+  const [email,      setEmail]      = useState('');
+  const [phone,      setPhone]      = useState('');
+  const [company,    setCompany]    = useState('');
+  const [cif,        setCif]        = useState('');
+  const [address,    setAddress]    = useState('');
+  const [postalCode, setPostalCode] = useState('');
+
+  const [countryCode, setCountryCode] = useState('ES');
+  const [province,    setProvince]    = useState('');
+  const [city,        setCity]        = useState('');
+
+  const [volumeBand, setVolumeBand] = useState(''); // opcional
+
+  const [terms,   setTerms]   = useState(true);
+  const [website, setWebsite] = useState(''); // honeypot
+
+  const [loading, setLoading] = useState(false);
+  const [tried,   setTried]   = useState(false);
+
+  // errores por campo (devueltos por backend)
+  const [fieldErrs, setFieldErrs] = useState({}); // { email:'...' , province:'...' ... }
+
+  // Toast
+  const [toast, setToast] = useState({ show:false, kind:'ok', text:'' });
+  const showToast = (text, kind='ok', ms=2800) => {
+    setToast({ show:true, kind, text });
+    if (showToast._t) window.clearTimeout(showToast._t);
+    showToast._t = window.setTimeout(() => setToast({ show:false, kind, text:'' }), ms);
+  };
 
   const inboxUrl = useMemo(() => guessInboxUrl(email), [email]);
 
-  const countryOptions = useMemo(() => {
-    const names = countries.getNames('es', { select: 'official' }) || {};
+  // Países (español)
+  const countriesOptions = useMemo(() => {
+    const names = countriesISO.getNames('es', { select: 'official' }) || {};
     return Object.entries(names)
-      .map(([code, name]) => ({ code, name }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      .map(([iso2, label]) => ({ value: iso2, label }))
+      .sort((a,b) => a.label.localeCompare(b.label, 'es'));
   }, []);
 
-  const pwdTooShort = (password || '').length < 8;
-  const pwdMismatch = password && confirmPwd && password !== confirmPwd;
+  // Provincias y proveedor de ciudades para ES
+  const [esProvinces, setEsProvinces] = useState([]);
+  const [esCityProvider, setEsCityProvider] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      if (countryCode === 'ES') {
+        try {
+          const provs = await loadESProvinces();
+          setEsProvinces(provs);
+          const provider = await makeESCityProvider();
+          setEsCityProvider(() => provider);
+        } catch {
+          setEsProvinces([]);
+          setEsCityProvider(null);
+        }
+      } else {
+        setEsProvinces([]);
+        setEsCityProvider(null);
+      }
+    })();
+  }, [countryCode]);
+
+  useEffect(() => { setProvince(''); setCity(''); }, [countryCode]);
+  useEffect(() => { setCity(''); }, [province]);
+
+  const v = {
+    fullName:   fullName.trim().length >= 3,
+    email:      emailRe.test(email),
+    phone:      phoneRe.test(phone),
+    company:    company.trim().length >= 2,
+    cif:        cifRe.test(cif),
+    address:    address.trim().length >= 5,
+    country:    !!countryCode,
+    province:   countryCode !== 'ES' ? true : !!province,
+    city:       countryCode !== 'ES' ? true : !!city,
+    postalCode: zipRe.test(postalCode),
+    terms:      !!terms,
+  };
+  const allValid = Object.values(v).every(Boolean);
+
+  function firstInvalidSelector() {
+    return (
+      '.reg-card .is-invalid,' +
+      '.reg-card [aria-invalid="true"],' +
+      '.reg-card input[required]:invalid,' +
+      '.reg-card select[required]:invalid'
+    );
+  }
 
   async function onSubmit(e) {
     e.preventDefault();
-    setOkMsg(''); setErrMsg(''); setKind(''); setDbgLink('');
-
-    if (!termsAccepted) return setErrMsg('Debes aceptar los términos para continuar.');
-    if (!email || !password || !nombreEmpresa) {
-      return setErrMsg('Completa email, contraseña y nombre de empresa.');
+    setFieldErrs({});
+    if (website) { setTried(true); showToast('Error de validación', 'err'); return; }
+    if (!allValid) {
+      setTried(true);
+      showToast('Revisa los campos obligatorios.', 'err');
+      setTimeout(() => {
+        document.querySelector(firstInvalidSelector())?.scrollIntoView({ behavior:'smooth', block:'center' });
+      }, 30);
+      return;
     }
-    if (pwdTooShort) return setErrMsg('La contraseña debe tener al menos 8 caracteres.');
-    if (pwdMismatch) return setErrMsg('Las contraseñas no coinciden.');
 
     setLoading(true);
     try {
-      // 👉 Llamada robusta
-      const res = await apiRegister({
-        email,
-        password,
-        nombre_empresa: nombreEmpresa,
-        termsAccepted,
-        // Si quieres recoger este opt-in aquí añade un checkbox y pásalo:
-        marketingOptIn: false
-      });
+      const payload = {
+        full_name: fullName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        company_name: company.trim(),
+        cif: cif.trim(),
+        address: address.trim(),
+        country_code: countryCode,
+        country_name: countriesISO.getName(countryCode, 'es') || countryCode,
+        province: countryCode === 'ES' ? province : '',
+        city: countryCode === 'ES' ? city : '',
+        postal_code: postalCode.trim(),
+        declared_monthly_volume_band: volumeBand || null,
+        source: 'landing_registro_demo',
+        tos_accepted: !!terms,
+        website, // honeypot
+      };
 
+      const res = await submitDemoRequest(payload);
+
+      // éxito -> dejar email para que vaya a su bandeja; reseteamos el resto “ligero”
       try { localStorage.setItem('signup_email', email); } catch {}
-      setKind(res.kind || 'signup_sent');
-      setDbgLink(res.debug_link || '');
-      // Mensajes claros por tipo
-      const msg =
-        res.kind === 'reset_sent'
-          ? 'Tu cuenta ya existía y estaba confirmada. Te enviamos un correo para restablecer la contraseña.'
-          : res.kind === 'resend_signup'
-            ? 'Tu cuenta ya existía pero no estaba confirmada. Reenviamos el correo de confirmación.'
-            : (res.message || 'Registro correcto. Revisa tu correo para confirmar la cuenta.');
-      setOkMsg(msg);
-      // Ponemos un cooldown inicial para el botón “Reenviar”
-      setCooldown(20);
-    } catch (e) {
-      setErrMsg(e.message || 'No se pudo registrar.');
+      showToast(res?.message || 'Solicitud enviada. La revisaremos en breve.', 'ok', 4200);
+
+      setTried(false);
+      setFieldErrs({});
+      setCompany('');
+      setCif('');
+      setAddress('');
+      setPostalCode('');
+      // province/city se quedan por si quiere corregir algo
+    } catch (e2) {
+      if (e2.code === 'VALIDATION_ERROR' && Array.isArray(e2.issues)) {
+        const map = {};
+        for (const it of e2.issues) {
+          if (it.path) map[it.path] = it.message || 'Campo inválido';
+        }
+        setFieldErrs(map);
+        showToast('Revisa los campos marcados.', 'err');
+        setTimeout(() => {
+          document.querySelector(firstInvalidSelector())?.scrollIntoView({ behavior:'smooth', block:'center' });
+        }, 30);
+      } else if (e2.code === 'ALREADY_EXISTS') {
+        showToast('Ya hay una solicitud pendiente para este email.', 'warn');
+      } else {
+        showToast(e2.message || 'No se pudo enviar la solicitud.', 'err');
+      }
     } finally {
       setLoading(false);
     }
   }
 
-  async function onResend() {
-    if (cooldown) return;
-    setErrMsg(''); setOkMsg('');
-    try {
-      const r = await apiResend({ email, type: 'signup' });
-      setKind(r.kind || 'resend_signup');
-      setDbgLink(r.debug_link || '');
-      setOkMsg('Hemos reenviado el correo de confirmación. Revisa tu bandeja (y SPAM).');
-      setCooldown(20);
-    } catch (e) {
-      setErrMsg(e.message || 'No se pudo reenviar.');
-      setCooldown(8);
-    }
-  }
+  const countryName = useMemo(() => countriesISO.getName(countryCode, 'es') || countryCode, [countryCode]);
 
   return (
     <div className="reg-shell">
-      {/* HERO (izquierda) */}
+      {/* TOAST */}
+      {toast.show && (
+        <div className={`toast toast--${toast.kind}`} role="status" aria-live="polite">
+          {toast.text}
+        </div>
+      )}
+
+      {/* HERO */}
       <aside className="reg-hero">
-        <header className="hero-head">
-          <div className="logo-dot" />
-          <span className="brand">EasyTrack</span>
-        </header>
+        <div className="hero-center">
+          <header className="hero-head">
+            <div className="logo-dot" />
+            <span className="brand">EASYTRACK</span>
+          </header>
 
-        <h1 className="hero-title">
-          Empieza tu <span className="grad">prueba gratuita</span>
-        </h1>
-        <p className="hero-sub">
-          Crea tu cuenta y prueba EasyTrack con <strong>hasta 20 paquetes</strong>.
-          Sin tarjeta hasta que decidas actualizar.
-        </p>
+        <h1 className="hero-title">Solicitar <span className="grad">DEMO</span></h1>
+          <p className="hero-sub">
+            Rellena el formulario para solicitar tu DEMO. Verificaremos que el negocio es real y te enviaremos
+            por email el acceso al aprobarla.
+          </p>
 
-        <div className="hero-points">
-          <div className="point">Onboarding rápido y seguro</div>
-          <div className="point">Explora estantes, búsquedas y entregas</div>
-          <div className="point">Actualiza a plan completo cuando quieras</div>
+          <div className="hero-points">
+            <div className="point">Verificación manual de negocio</div>
+            <div className="point">Método selecto · Sin bots</div>
+            <div className="point">Soporte humano cercano</div>
+          </div>
+
+          <div className="hero-anim">
+            <div className="blob blob-a" />
+            <div className="blob blob-b" />
+            <div className="ribbon ribbon-1" />
+            <div className="ribbon ribbon-2" />
+          </div>
         </div>
-
-        {/* degradados animados */}
-        <div className="hero-anim">
-          <div className="blob blob-a" />
-          <div className="blob blob-b" />
-          <div className="ribbon ribbon-1" />
-          <div className="ribbon ribbon-2" />
-        </div>
-
-        <footer className="hero-foot">
-          ¿Ya tienes cuenta? <a href="/login">Inicia sesión</a> ·
-          <a href="/recuperar" className="muted-link"> Recuperar contraseña</a>
-        </footer>
       </aside>
 
-      {/* CARD (derecha) */}
+      {/* CARD */}
       <main className="reg-card">
         <form onSubmit={onSubmit} noValidate>
           <div className="card-head">
-            <h2>Crea tu cuenta</h2>
-            <p>Solo lo esencial. Podrás completar tu perfil después.</p>
+            <h2>Solicitar DEMO</h2>
+            <p>Rellena los datos de tu empresa. Te avisaremos por email.</p>
           </div>
 
-          <div className="field">
-            <label>Email</label>
-            <input
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="tu@email.com"
-            />
+          <div className="honeypot" aria-hidden="true">
+            <label>Website
+              <input type="text" value={website} onChange={e=>setWebsite(e.target.value)} tabIndex={-1} autoComplete="off"/>
+            </label>
           </div>
 
-          <div className="field">
-            <label>Contraseña</label>
-            <div className="pwd-box">
+          {/* Grid 2 col */}
+          <div className="grid grid-2">
+            <div className="field">
+              <label>Nombre y Apellidos <span className="req">*</span></label>
               <input
-                type={showPwd ? 'text' : 'password'}
-                autoComplete="new-password"
-                minLength={8}
+                type="text"
                 required
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Mínimo 8 caracteres"
+                value={fullName}
+                onChange={e=>setFullName(e.target.value)}
+                placeholder="Nombre Apellido"
+                className={( (!fullName && tried) || fieldErrs.full_name ) ? 'is-invalid' : ''}
+                aria-invalid={!!((!fullName && tried) || fieldErrs.full_name)}
               />
-              <button
-                type="button"
-                className="icon-btn"
-                aria-label="Mostrar u ocultar contraseña"
-                onClick={() => setShowPwd(s => !s)}
-                title={showPwd ? 'Ocultar' : 'Mostrar'}
-              >
-                {showPwd ? (
-                  <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M2.1 3.51L.69 4.93l3.03 3.03C2.42 9 1.36 10.26.6 11.4a1 1 0 0 0 0 1.2C3.27 16.23 7.37 19 12 19c2.06 0 3.96-.48 5.66-1.33l3.43 3.43 1.41-1.41L2.1 3.51Zm9.9 12.49a4 4 0 0 1-4-4c0-.45.08-.87.22-1.26l5.04 5.04c-.39.14-.81.22-1.26.22Zm-8.4-4.49c.8-1.1 2.04-2.42 3.74-3.32l1.57 1.57A6.02 6.02 0 0 0 6 12c0 .69.12 1.36.35 1.98a12.62 12.62 0 0 1-2.75-2.47ZM12 5c-1.12 0-2.2.16-3.22.46l1.7 1.7c.49-.1 1-.16 1.52-.16 4.63 0 8.73 2.77 11.4 6.39a1 1 0 0 1 0 1.2c-.9 1.26-2.11 2.6-3.64 3.66l-1.43-1.43A10.6 10.6 0 0 0 21.4 12C18.73 8.38 14.63 5 12 5Z"/></svg>
-                ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M12 5c-4.63 0-8.73 2.77-11.4 6.39a1 1 0 0 0 0 1.2C3.27 16.23 7.37 19 12 19s8.73-2.77 11.4-6.41a1 1 0 0 0 0-1.2C20.73 7.77 16.63 5 12 5Zm0 12a6 6 0 1 1 0-12a6 6 0 0 1 0 12Zm0-4a2 2 0 1 0 0-4a2 2 0 0 0 0 4Z"/></svg>
-                )}
-              </button>
+              {fieldErrs.full_name && <small className="err">{fieldErrs.full_name}</small>}
             </div>
-            {password && pwdTooShort && (
-              <small className="muted" style={{ color: '#b45309' }}>
-                La contraseña debe tener al menos 8 caracteres.
-              </small>
-            )}
-          </div>
 
-          <div className="field">
-            <label>Repite la contraseña</label>
-            <div className="pwd-box">
+            <div className="field">
+              <label>Email <span className="req">*</span></label>
               <input
-                type={showPwd ? 'text' : 'password'}
-                autoComplete="new-password"
-                minLength={8}
+                type="email"
+                autoComplete="email"
                 required
-                value={confirmPwd}
-                onChange={e => setConfirmPwd(e.target.value)}
-                placeholder="Vuelve a escribirla"
+                value={email}
+                onChange={e=>setEmail(e.target.value)}
+                placeholder="tu@email.com"
+                className={( (!emailRe.test(email) && tried) || fieldErrs.email ) ? 'is-invalid' : ''}
+                aria-invalid={!!((!emailRe.test(email) && tried) || fieldErrs.email)}
               />
-              <button
-                type="button"
-                className="icon-btn"
-                aria-label="Mostrar u ocultar contraseña"
-                onClick={() => setShowPwd(s => !s)}
-                title={showPwd ? 'Ocultar' : 'Mostrar'}
-              >
-                {showPwd ? (
-                  <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M2.1 3.51L.69 4.93l3.03 3.03C2.42 9 1.36 10.26.6 11.4a1 1 0 0 0 0 1.2C3.27 16.23 7.37 19 12 19c2.06 0 3.96-.48 5.66-1.33l3.43 3.43 1.41-1.41L2.1 3.51Zm9.9 12.49a4 4 0 0 1-4-4c0-.45.08-.87.22-1.26l5.04 5.04c-.39.14-.81.22-1.26.22Zm-8.4-4.49c.8-1.1 2.04-2.42 3.74-3.32l1.57 1.57A6.02 6.02 0 0 0 6 12c0 .69.12 1.36.35 1.98a12.62 12.62 0 0 1-2.75-2.47ZM12 5c-1.12 0-2.2.16-3.22.46l1.7 1.7c.49-.1 1-.16 1.52-.16 4.63 0 8.73 2.77 11.4 6.39a1 1 0 0 1 0 1.2c-.9 1.26-2.11 2.6-3.64 3.66l-1.43-1.43A10.6 10.6 0 0 0 21.4 12C18.73 8.38 14.63 5 12 5Z"/></svg>
-                ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M12 5c-4.63 0-8.73 2.77-11.4 6.39a1 1 0 0 0 0 1.2C3.27 16.23 7.37 19 12 19s8.73-2.77 11.4-6.41a1 1 0 0 0 0-1.2C20.73 7.77 16.63 5 12 5Zm0 12a6 6 0 1 1 0-12a6 6 0 0 1 0 12Zm0-4a2 2 0 1 0 0-4a2 2 0 0 0 0 4Z"/></svg>
-                )}
-              </button>
+              {fieldErrs.email && <small className="err">{fieldErrs.email}</small>}
+              {inboxUrl && <a className="inbox-link" href={inboxUrl} target="_blank" rel="noreferrer">Abrir mi bandeja</a>}
             </div>
-            {confirmPwd && pwdMismatch && (
-              <small className="muted" style={{ color: '#b91c1c' }}>
-                Las contraseñas no coinciden.
-              </small>
-            )}
-          </div>
 
-          <div className="field">
-            <label>Nombre de tu empresa</label>
-            <input
-              type="text"
-              required
-              value={nombreEmpresa}
-              onChange={e => setNombreEmpresa(e.target.value)}
-              placeholder="Mi Negocio S.L."
-            />
-          </div>
+            <div className="field">
+              <label>Teléfono <span className="req">*</span></label>
+              <input
+                type="tel"
+                autoComplete="tel"
+                required
+                value={phone}
+                onChange={e=>setPhone(e.target.value)}
+                placeholder="+34 600 000 000"
+                className={( (!phoneRe.test(phone) && tried) || fieldErrs.phone ) ? 'is-invalid' : ''}
+                aria-invalid={!!((!phoneRe.test(phone) && tried) || fieldErrs.phone)}
+              />
+              {fieldErrs.phone && <small className="err">{fieldErrs.phone}</small>}
+            </div>
 
-          <div className="field">
-            <label>País <span className="muted">(opcional)</span></label>
-            <select value={pais} onChange={e => setPais(e.target.value)}>
-              {countryOptions.map(({ code, name }) => (
-                <option key={code} value={code}>{name}</option>
-              ))}
-            </select>
+            <div className="field">
+              <label>Nombre de la empresa <span className="req">*</span></label>
+              <input
+                type="text"
+                required
+                value={company}
+                onChange={e=>setCompany(e.target.value)}
+                placeholder="Mi Negocio S.L."
+                className={( (!company && tried) || fieldErrs.company_name ) ? 'is-invalid' : ''}
+                aria-invalid={!!((!company && tried) || fieldErrs.company_name)}
+              />
+              {fieldErrs.company_name && <small className="err">{fieldErrs.company_name}</small>}
+            </div>
+
+            <div className="field">
+              <label>CIF <span className="req">*</span></label>
+              <input
+                type="text"
+                required
+                value={cif}
+                onChange={e=>setCif(e.target.value.toUpperCase())}
+                placeholder="B12345678"
+                className={( (!cifRe.test(cif) && tried) || fieldErrs.cif ) ? 'is-invalid' : ''}
+                aria-invalid={!!((!cifRe.test(cif) && tried) || fieldErrs.cif)}
+              />
+              {fieldErrs.cif && <small className="err">{fieldErrs.cif}</small>}
+            </div>
+
+            <div className="field">
+              <label>Dirección <span className="req">*</span></label>
+              <input
+                type="text"
+                required
+                value={address}
+                onChange={e=>setAddress(e.target.value)}
+                placeholder="Calle, número, planta…"
+                className={( (!address && tried) || fieldErrs.address ) ? 'is-invalid' : ''}
+                aria-invalid={!!((!address && tried) || fieldErrs.address)}
+              />
+              {fieldErrs.address && <small className="err">{fieldErrs.address}</small>}
+            </div>
+
+            <div className="field">
+              <label>País <span className="req">*</span></label>
+              <select
+                required
+                value={countryCode}
+                onChange={e => setCountryCode(e.target.value)}
+                className={(!countryCode && tried) ? 'is-invalid' : ''}
+                aria-invalid={!countryCode && tried}
+              >
+                {countriesOptions.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Provincia / Estado <span className="req">*</span></label>
+              <select
+                required={countryCode==='ES'}
+                value={province}
+                onChange={e => setProvince(e.target.value)}
+                disabled={countryCode!=='ES'}
+                className={( (countryCode==='ES' && !province && tried) || fieldErrs.province ) ? 'is-invalid' : ''}
+                aria-invalid={!!((countryCode==='ES' && !province && tried) || fieldErrs.province)}
+              >
+                <option value="">{countryCode==='ES' ? 'Selecciona provincia' : 'Disponible para España'}</option>
+                {countryCode === 'ES' && esProvinces.map(p => <option key={p.code} value={p.name}>{p.name}</option>)}
+              </select>
+              {fieldErrs.province && <small className="err">{fieldErrs.province}</small>}
+            </div>
+
+            <div className="field">
+              <label>Ciudad / Localidad <span className="req">*</span></label>
+              <CityAutocomplete
+                required={countryCode==='ES'}
+                disabled={countryCode!=='ES' || !province}
+                provider={countryCode==='ES' ? esCityProvider : null}
+                countryName={countriesISO.getName(countryCode, 'es') || countryCode}
+                province={province}
+                value={city}
+                onChange={setCity}
+              />
+              {( (countryCode==='ES' && !city && tried) || fieldErrs.city ) && (
+                <small className="err">{fieldErrs.city || 'Indica tu ciudad.'}</small>
+              )}
+            </div>
+
+            <div className="field">
+              <label>Código Postal <span className="req">*</span></label>
+              <input
+                type="text"
+                required
+                value={postalCode}
+                onChange={e=>setPostalCode(e.target.value)}
+                placeholder="28001"
+                className={( (!zipRe.test(postalCode) && tried) || fieldErrs.postal_code ) ? 'is-invalid' : ''}
+                aria-invalid={!!((!zipRe.test(postalCode) && tried) || fieldErrs.postal_code)}
+              />
+              {fieldErrs.postal_code && <small className="err">{fieldErrs.postal_code}</small>}
+            </div>
+
+            <div className="field" style={{ gridColumn: '1 / -1' }}>
+              <label>¿Qué media de paquetes entregas al mes? <span className="muted">(opcional)</span></label>
+              <VolumeSelect value={volumeBand} onChange={setVolumeBand} />
+            </div>
           </div>
 
           <label className="checkline">
-            <input
-              type="checkbox"
-              checked={termsAccepted}
-              onChange={e => setTermsAccepted(e.target.checked)}
-              required
-            />
+            <input type="checkbox" checked={terms} onChange={e=>setTerms(e.target.checked)} />
             <span>
               Acepto los <a href="/legal/terminos" target="_blank" rel="noreferrer">Términos y Condiciones</a> y la{' '}
               <a href="/legal/privacidad" target="_blank" rel="noreferrer">Política de Privacidad</a>.
             </span>
           </label>
 
-          <button
-            type="submit"
-            className="cta"
-            disabled={loading || !termsAccepted || pwdTooShort || pwdMismatch || !email || !nombreEmpresa}
-          >
-            {loading ? 'Registrando…' : 'Crear cuenta'}
-          </button>
+          {/* Acciones */}
+          <div className="form-actions-sticky">
+            <button type="submit" className="cta" disabled={loading} aria-disabled={loading || !allValid}>
+              {loading ? 'Enviando solicitud…' : 'Enviar solicitud'}
+            </button>
 
-          {/* Mensajes */}
-          {okMsg && (
-            <div className="alert ok" style={{ display:'grid', gap:10 }}>
-              {okMsg}
-
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                {inboxUrl ? (
-                  <a className="btn btn--primary" href={inboxUrl} target="_blank" rel="noreferrer">
-                    Abrir bandeja de entrada
-                  </a>
-                ) : (
-                  <span className="muted">Abre tu proveedor de correo y busca nuestro mensaje.</span>
-                )}
-
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={onResend}
-                  disabled={!!cooldown}
-                  title="Reenviar correo de confirmación"
-                >
-                  {cooldown ? `Reenviar en ${cooldown}s` : 'Reenviar'}
-                </button>
-              </div>
-
-              {/* Modo DEV: el backend puede devolver debug_link si EXPOSE_DEBUG_LINKS=true */}
-              {dbgLink && (
-                <div className="muted" style={{ fontSize:13 }}>
-                  Enlace directo (solo desarrollo):{' '}
-                  <a href={dbgLink}>Abrir ahora</a>
-                </div>
-              )}
-            </div>
-          )}
-
-          {errMsg && <div className="alert err">{errMsg}</div>}
-
-          {/* CTA de sesión más "pro" */}
-          <div
-            style={{
-              marginTop: 16,
-              padding: 12,
-              border: '1px solid #e5e7eb',
-              borderRadius: 12,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 8
-            }}
-          >
-            <div style={{ color: '#6b7280' }}>¿Ya tienes cuenta?</div>
-            <a
-              href="/login"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '8px 12px',
-                borderRadius: 10,
-                textDecoration: 'none',
-                background: '#111827',
-                color: '#fff',
-                fontWeight: 600
-              }}
+            <button
+              type="button"
+              className="cta cta--dark"
+              onClick={() => (typeof openLogin === 'function' ? openLogin() : window.__openLoginModal?.())}
             >
-              Inicia sesión
-              <svg width="18" height="18" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M13 5l7 7l-7 7v-4H4v-6h9V5z"/>
-              </svg>
-            </a>
-          </div>
+              ¿Ya tienes cuenta? Inicia sesión
+            </button>
 
-          <p className="tiny">
-            Tras confirmar tu email, te llevaremos al panel y activaremos la versión de prueba (límite 20 paquetes).
-          </p>
+            <p className="tiny italic-note">
+              Tras revisar la solicitud, recibirás un email con el enlace para acceder. Si no cumple los criterios,
+              también te lo comunicaremos por correo.
+            </p>
+          </div>
         </form>
       </main>
     </div>

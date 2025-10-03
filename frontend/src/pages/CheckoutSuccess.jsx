@@ -174,7 +174,10 @@ function InlineCreatePassword({ userEmail }) {
           <button className="et-btn et-btn--primary" disabled={!allValid || saving}>
             {saving ? 'Guardando…' : 'Guardar y entrar'}
           </button>
+          {/* 🔒 Enlace a precios ocultado temporalmente */}
+          {/*
           <a className="et-btn et-btn--ghost" href="/precios">Cancelar</a>
+          */}
         </div>
       </form>
 
@@ -192,7 +195,7 @@ export default function CheckoutSuccess() {
   const [sessionId] = useState(sessionIdFromUrl || localStorage.getItem('last_session_id') || '');
 
   const [email, setEmail] = useState(localStorage.getItem('signup_email') || '');
-  const [status, setStatus] = useState('idle'); // idle | sending | sent | error
+  const [status, setStatus] = useState('idle'); 
   const [msg, setMsg] = useState('');
   const [cooldown, setCooldown] = useState(0);
 

@@ -1,32 +1,19 @@
-// backend/src/routes/paquetes.routes.js
-'use strict';
-
-const express = require('express');
-// mergeParams:true => recoge params del path padre (/:tenantSlug/...)
-const router = express.Router({ mergeParams: true });
-
-const requireAuth = require('../middlewares/requireAuth');
-const requireActiveSubscription = require('../middlewares/requireActiveSubscription');
-
+// src/routes/paquetes.routes.js
+const { Router } = require('express');
 const {
-  crearPaquete,
   listarPaquetes,
-  eliminarPaquete,
+  crearPaquete,
   entregarPaquete,
-  editarPaquete
+  editarPaquete,
+  eliminarPaquete,
 } = require('../controllers/paquetes.controller');
 
-/**
- * Lectura -> solo requiere login
- */
-router.get('/listar', requireAuth, listarPaquetes);
+const router = Router();
 
-/**
- * Escritura -> requiere login + suscripción activa o trial vigente
- */
-router.post('/crear', requireAuth, requireActiveSubscription(), crearPaquete);
-router.patch('/entregar/:id', requireAuth, requireActiveSubscription(), entregarPaquete);
-router.put('/:id', requireAuth, requireActiveSubscription(), editarPaquete);
-router.delete('/:id', requireAuth, requireActiveSubscription(), eliminarPaquete);
+router.get('/listar', listarPaquetes);
+router.post('/crear', crearPaquete);
+router.patch('/entregar/:id', entregarPaquete);
+router.put('/:id', editarPaquete);
+router.delete('/:id', eliminarPaquete);
 
 module.exports = router;
