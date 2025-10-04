@@ -6,6 +6,9 @@ import '../../styles/auth.scss';
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// ⬇️ Nuevo: base fija para el admin (configúrala en .env)
+const ADMIN_BASE = (import.meta.env.VITE_ADMIN_BASE_URL || 'https://admin.easytrack.pro').replace(/\/$/, '');
+
 export default function AuthView() {
   const bgRef = useRef(null);
   const [email, setEmail] = useState('blockhornstudios@gmail.com'); // opcional: pre-rellenado
@@ -50,8 +53,7 @@ export default function AuthView() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      // Si tu router no redirige automáticamente al detectar sesión,
-      // aquí podrías hacer: window.location.replace('/admin');
+      // window.location.replace('/admin'); // si necesitas forzar redirección aquí
     } catch (ex) {
       setErr(ex.message || 'Error de autenticación');
     } finally {
@@ -68,10 +70,9 @@ export default function AuthView() {
     }
     setResetting(true);
     try {
-      // Guardamos el email por comodidad para la pantalla de crear-password
       try { localStorage.setItem('signup_email', String(email).trim()); } catch {}
-      const base = window.location.origin;
-      const redirectTo = `${base}/crear-password?next=${encodeURIComponent('/admin')}`;
+      // ⬇️ Importante: usar ADMIN_BASE (y no window.location.origin)
+      const redirectTo = `${ADMIN_BASE}/crear-password?next=${encodeURIComponent('/admin')}`;
 
       const { error } = await supabase.auth.resetPasswordForEmail(String(email).trim(), {
         redirectTo
