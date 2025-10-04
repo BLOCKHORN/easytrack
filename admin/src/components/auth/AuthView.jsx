@@ -1,14 +1,19 @@
+// src/pages/admin/AuthView.jsx
 import { useEffect, useRef, useState } from 'react';
 import anime from 'animejs/lib/anime.es.js'; // requiere animejs@3.2.1
 import { supabase } from '../../utils/supabaseClient';
 import '../../styles/auth.scss';
 
+const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function AuthView() {
   const bgRef = useRef(null);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('blockhornstudios@gmail.com'); // opcional: pre-rellenado
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [err, setErr] = useState('');
+  const [info, setInfo] = useState('');
 
   useEffect(() => {
     if (!bgRef.current) return;
@@ -40,14 +45,44 @@ export default function AuthView() {
   async function submit(e) {
     e?.preventDefault();
     setErr('');
+    setInfo('');
     setBusy(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      // Si tu router no redirige automáticamente al detectar sesión,
+      // aquí podrías hacer: window.location.replace('/admin');
     } catch (ex) {
       setErr(ex.message || 'Error de autenticación');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function sendResetLink() {
+    setErr('');
+    setInfo('');
+    if (!emailRe.test(String(email || '').trim())) {
+      setErr('Introduce un email válido para enviar el enlace de restablecimiento.');
+      return;
+    }
+    setResetting(true);
+    try {
+      // Guardamos el email por comodidad para la pantalla de crear-password
+      try { localStorage.setItem('signup_email', String(email).trim()); } catch {}
+      const base = window.location.origin;
+      const redirectTo = `${base}/crear-password?next=${encodeURIComponent('/admin')}`;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(String(email).trim(), {
+        redirectTo
+      });
+      if (error) throw error;
+
+      setInfo('Te hemos enviado un email con el enlace para restablecer la contraseña. Revisa tu bandeja de entrada y SPAM.');
+    } catch (ex) {
+      setErr(ex.message || 'No se pudo enviar el enlace de restablecimiento.');
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -104,10 +139,29 @@ export default function AuthView() {
                   autoComplete="current-password"
                 />
               </label>
-              {err && <div className="error">{err}</div>}
+
+              {err && <div className="error" role="alert">{err}</div>}
+              {info && <div className="info" role="status">{info}</div>}
+
               <button type="submit" className="btn btn--primary" disabled={busy}>
                 {busy ? 'Procesando…' : 'Entrar'}
               </button>
+
+              <div className="switch" style={{marginTop:12, display:'flex', alignItems:'center', gap:12}}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={sendResetLink}
+                  disabled={resetting}
+                  aria-label="Enviar enlace de restablecimiento"
+                  title="Enviar enlace de restablecimiento"
+                >
+                  {resetting ? 'Enviando enlace…' : '¿Olvidaste tu contraseña?'}
+                </button>
+                <small className="muted">
+                  Recibirás un enlace. Te llevaremos a <code>/crear-password</code> y luego al panel.
+                </small>
+              </div>
             </form>
 
             <div className="switch" style={{marginTop:12}}>

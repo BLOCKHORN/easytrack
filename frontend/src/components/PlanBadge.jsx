@@ -1,3 +1,4 @@
+// src/components/PlanBadge.jsx
 import { useSubscription } from '../hooks/useSubscription';
 import '../styles/PlanBadge.scss';
 
@@ -16,7 +17,6 @@ export default function PlanBadge() {
 
   const paid  = !!entitlements?.subscriptionActive;
   const trial = !!entitlements?.trial?.active;
-  const left  = entitlements?.trial?.remaining ?? null;
 
   if (paid) {
     const p   = entitlements.plan || {};
@@ -72,16 +72,16 @@ export default function PlanBadge() {
     return (
       <span
         className="plan-badge plan-badge--trial"
-        title={`Versión de prueba · ${left ?? '—'} restantes`}
+        title="Versión de prueba activa"
+        aria-label="Versión de prueba activa"
       >
         VERSIÓN DE PRUEBA
-        {Number.isFinite(left) ? <span className="plan-badge__meta">· quedan {left}</span> : null}
       </span>
     );
   }
 
   return (
-    <span className="plan-badge plan-badge--free" title="Sin plan activo">
+    <span className="plan-badge plan-badge--free" title="Sin plan activo" aria-label="Sin plan activo">
       SIN PLAN ACTIVO
     </span>
   );

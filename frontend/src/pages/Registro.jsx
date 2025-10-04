@@ -17,16 +17,6 @@ const zipRe   = /^[A-Za-z0-9\- ]{3,10}$/;
 
 const norm = (s='') => s.normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase();
 
-function guessInboxUrl(email='') {
-  const d = email.split('@')[1]?.toLowerCase() || '';
-  if (d.includes('gmail')) return 'https://mail.google.com/mail/u/0/#inbox';
-  if (d.includes('outlook') || d.includes('hotmail') || d.includes('live')) return 'https://outlook.live.com/mail/0/inbox';
-  if (d.includes('office') || d.includes('microsoft')) return 'https://outlook.office.com/mail/';
-  if (d.includes('yahoo')) return 'https://mail.yahoo.com/';
-  if (d.includes('icloud') || d.includes('me.com')) return 'https://www.icloud.com/mail';
-  return null;
-}
-
 /* ---------- Fallback ciudades (Nominatim, ES) ---------- */
 async function searchCitiesFallback({ q, country = 'España', province = '' }) {
   const query = [q, province, country].filter(Boolean).join(', ');
@@ -53,7 +43,10 @@ async function loadESProvinces() {
     'Gipuzkoa':'Guipúzcoa', 'Bizkaia':'Vizcaya', 'Araba/Álava':'Álava', 'Illes Balears':'Islas Baleares',
     'Girona':'Gerona', 'Lleida':'Lérida', 'Ourense':'Orense'
   };
-  return arr.map(p => ({ ...p, name: mapES[p.name] || p.name }));
+  // ↙️ Devolvemos ya ordenadas alfabéticamente en español (sensibilidad base para tildes)
+  return arr
+    .map(p => ({ ...p, name: mapES[p.name] || p.name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
 }
 
 async function makeESCityProvider() {
@@ -346,8 +339,6 @@ export default function Registro() {
     showToast._t = window.setTimeout(() => setToast({ show:false, kind, text:'' }), ms);
   };
 
-  const inboxUrl = useMemo(() => guessInboxUrl(email), [email]);
-
   // Países (español)
   const countriesOptions = useMemo(() => {
     const names = countriesISO.getNames('es', { select: 'official' }) || {};
@@ -364,7 +355,7 @@ export default function Registro() {
     (async () => {
       if (countryCode === 'ES') {
         try {
-          const provs = await loadESProvinces();
+          const provs = await loadESProvinces(); // ya vienen ordenadas
           setEsProvinces(provs);
           const provider = await makeESCityProvider();
           setEsCityProvider(() => provider);
@@ -441,7 +432,7 @@ export default function Registro() {
 
       const res = await submitDemoRequest(payload);
 
-      // éxito -> dejar email para que vaya a su bandeja; reseteamos el resto “ligero”
+      // éxito -> guardamos email; reseteamos parte del formulario
       try { localStorage.setItem('signup_email', email); } catch {}
       showToast(res?.message || 'Solicitud enviada. La revisaremos en breve.', 'ok', 4200);
 
@@ -492,7 +483,7 @@ export default function Registro() {
             <span className="brand">EASYTRACK</span>
           </header>
 
-        <h1 className="hero-title">Solicitar <span className="grad">DEMO</span></h1>
+          <h1 className="hero-title">Solicitar <span className="grad">DEMO</span></h1>
           <p className="hero-sub">
             Rellena el formulario para solicitar tu DEMO. Verificaremos que el negocio es real y te enviaremos
             por email el acceso al aprobarla.
@@ -556,7 +547,6 @@ export default function Registro() {
                 aria-invalid={!!((!emailRe.test(email) && tried) || fieldErrs.email)}
               />
               {fieldErrs.email && <small className="err">{fieldErrs.email}</small>}
-              {inboxUrl && <a className="inbox-link" href={inboxUrl} target="_blank" rel="noreferrer">Abrir mi bandeja</a>}
             </div>
 
             <div className="field">
