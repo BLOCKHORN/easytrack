@@ -54,71 +54,47 @@ module.exports = {
     pk: 'user_id',
     modifiable: [],
   },
-  finance_user_settings: {
-    pk: 'id',
-    modifiable: ['goal_annual_eur', 'currency'],
-  },
 
   /* ===== Config del tenant ===== */
   area_personal_settings: {
     pk: 'tenant_id',
     modifiable: ['goal_annual_eur', 'currency'],
   },
-  tenant_nomenclatura: {
-    pk: 'tenant_id',
-    modifiable: [
-      'estante_singular', 'estante_plural',
-      'balda_singular', 'balda_plural',
-      'codigo_col_prefix', 'codigo_row_prefix',
-      'col_scheme', 'col_fixed', 'col_case',
-      'row_scheme', 'row_fixed', 'row_case',
-      'separador_codigo', 'modo_almacen', 'row_scope',
-    ],
-  },
+
+  // Layout de almacén (si lo sigues usando para meta visual)
   layouts_meta: {
     pk: 'org_id',
     modifiable: ['mode', 'rows', 'cols', 'payload'],
   },
 
-  /* ===== Estructura física ===== */
-  baldas: {
+  /* ===== Nueva estructura de ubicaciones ===== */
+  ubicaciones: {
     pk: 'id',
-    modifiable: ['estante', 'balda', 'codigo', 'disponible', 'capacidad'],
+    modifiable: ['label', 'orden', 'activo'], // tenant_id NO editable desde admin
   },
-  lanes: {
-    pk: 'id',
-    modifiable: ['row', 'col', 'name', 'color', 'org_id', 'lane_id', 'tenant_id'],
-  },
-  racks: {
-    // PK compuesta (rack_id, org_id) → solo lectura
-    pk: 'rack_id',
-    modifiable: [],
-  },
-  racks_shelves: {
-    // PK compuesta → solo lectura
-    pk: 'rack_id',
-    modifiable: [],
+  ubicaciones_meta: {
+    pk: 'tenant_id',
+    modifiable: ['cols', 'orden'],
   },
 
-  /* ===== Operativa paquetes ===== */
-  paquetes: {
+  /* ===== Operativa de paquetes (NUEVO) ===== */
+  packages: {
     pk: 'id',
+    // OJO: no expongo tenant_id ni ubicacion_id como editables para evitar “des-tenantizar” o romper FKs.
+    // Si alguna vez necesitas moverlos manualmente, hazlo por SQL controlado.
     modifiable: [
       'nombre_cliente',
-      'entregado',
       'empresa_transporte',
-      'ingreso_generado',
+      'empresa_id',
       'fecha_llegada',
+      'entregado',
       'fecha_entregado',
-      'balda_id',
-      'lane_id',
-      'compartimento',
-      'estante',
-      'balda',
-      'ubicacion_hist',
+      'ingreso_generado',
+      'ubicacion_label', // etiqueta visible (la FK se valida por trigger)
     ],
   },
 
+  /* ===== Empresas de transporte ===== */
   empresas_transporte: {
     pk: 'id',
     modifiable: ['nombre'],
@@ -128,26 +104,18 @@ module.exports = {
     modifiable: ['nombre', 'ingreso_por_entrega', 'activo', 'color', 'notas', 'tenant_id'],
   },
 
-  /* ===== Facturación ===== */
-  invoices: {
-    pk: 'id',
-    modifiable: [
-      'status',
-      'pdf_url',
-      'amount_due_cents',
-      'amount_paid_cents',
-      'tax_rate_pct',
-      'tax_amount_cents',
-      'amount_total_cents',
-    ],
-  },
-  invoice_items: {
-    pk: 'id',
-    modifiable: ['item_type', 'quantity', 'unit_price_cents', 'amount_cents', 'meta'],
-  },
-  payment_events: {
+  /* ===== Legacy / compatibilidad ===== */
+  // Deja baldas como SOLO LECTURA mientras exista el fallback/sync desde ubicaciones.
+  baldas: {
     pk: 'id',
     modifiable: [],
+  },
+
+  // Si mantienes la tabla vieja "paquetes" por auditoría, mejor SOLO LECTURA:
+  // (quítala si ya la retiraste del DB)
+  paquetes: {
+    pk: 'id',
+    modifiable: [], // evitar tocar datos antiguos accidentalmente
   },
 
   /* ===== Operador & Auditoría ===== */
@@ -157,10 +125,10 @@ module.exports = {
   },
   audit_log: {
     pk: 'id',
-    modifiable: [], // SIEMPRE solo lectura
+    modifiable: [], // solo lectura
   },
   audit_config: {
     pk: 'id',
-    modifiable: [], // solo lectura (si lo usas como raw log)
+    modifiable: [], // solo lectura
   },
 };

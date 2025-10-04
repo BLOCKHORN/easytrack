@@ -1,3 +1,4 @@
+// src/layouts/DashboardLayout.jsx (o donde lo tengas)
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import '../styles/DashboardLayout.scss';
@@ -5,7 +6,13 @@ import {
   FaPlus, FaSearch, FaBoxes, FaChartBar, FaUser, FaBars, FaTimes
 } from 'react-icons/fa';
 
+// ⬅️ Importa el guard
+import { usePasswordFirstGuard } from '../hooks/usePasswordFirstGuard';
+
 export default function DashboardLayout() {
+  // ⬅️ Activa el guard al montar el layout
+  usePasswordFirstGuard();
+
   const location = useLocation();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -38,7 +45,7 @@ export default function DashboardLayout() {
   const bottomNavItems = useMemo(() => ([
     { key: 'home',    label: 'Inicio',   path: '.',        icon: <FaChartBar />, end: true },
     { key: 'buscar',  label: 'Buscar',   path: 'buscar',   icon: <FaSearch /> },
-    { key: 'anadir',  label: '',   path: 'anadir',   icon: <FaPlus />,     primary: true },
+    { key: 'anadir',  label: '',         path: 'anadir',   icon: <FaPlus />,     primary: true },
     { key: 'almacen', label: 'Estantes', path: 'almacen',  icon: <FaBoxes /> },
     { key: 'perfil',  label: 'Perfil',   path: 'personal', icon: <FaUser /> },
   ]), []);

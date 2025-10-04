@@ -1,11 +1,16 @@
+// src/pages/CrearPassword.jsx
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { FiEye, FiEyeOff, FiAlertCircle, FiCheck, FiRefreshCw } from 'react-icons/fi';
 import '../styles/CrearPassword.scss';
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/,'');
 
-export default function CreatePassword() {
+export default function CrearPassword() {
+  const nav = useNavigate();
+  const loc = useLocation();
+
   const [loadingUser, setLoadingUser]   = useState(true);
   const [user, setUser]                 = useState(null);
 
@@ -19,57 +24,12 @@ export default function CreatePassword() {
   const [hashErr, setHashErr]           = useState('');
   const [resending, setResending]       = useState(false);
   const [resentMsg, setResentMsg]       = useState('');
+  const [bootMsg, setBootMsg]           = useState('');
 
   const signupEmail = useMemo(() => (localStorage.getItem('signup_email') || ''), []);
+  const lastKnownSlug = useMemo(() => (localStorage.getItem('et:last_slug') || ''), []);
+  const nextParam = useMemo(() => new URLSearchParams(loc.search).get('next') || '', [loc.search]);
 
-  // 1) Procesar hash y también ?error=... de Supabase
-  useEffect(() => {
-    (async () => {
-      try {
-        // Hash params (cuando viene con tokens)
-        const hash = window.location.hash.startsWith('#')
-          ? new URLSearchParams(window.location.hash.slice(1))
-          : new URLSearchParams();
-
-        const qp = new URLSearchParams(window.location.search);
-
-        const access_token  = hash.get('access_token');
-        const refresh_token = hash.get('refresh_token');
-        const error_code    = hash.get('error_code') || qp.get('error_code') || qp.get('error');
-        const error_desc    = hash.get('error_description') || qp.get('error_description');
-
-        if (access_token && refresh_token) {
-          try {
-            await supabase.auth.setSession({ access_token, refresh_token });
-            history.replaceState({}, document.title, window.location.pathname + window.location.search);
-          } catch {}
-        } else if (error_code) {
-          setHashErr(`${error_desc || error_code}`);
-        }
-      } finally {
-        const { data, error } = await supabase.auth.getUser();
-        if (!error) {
-          const u = data?.user || null;
-          setUser(u);
-
-          if (u?.email) {
-            try {
-              localStorage.setItem('et:email_confirmed', '1');
-              setTimeout(() => { try { localStorage.removeItem('et:email_confirmed'); } catch {} }, 1500);
-              if ('BroadcastChannel' in window) {
-                const bc = new BroadcastChannel('et-auth');
-                bc.postMessage({ type: 'EMAIL_CONFIRMED', email: u.email });
-                bc.close();
-              }
-            } catch {}
-          }
-        }
-        setLoadingUser(false);
-      }
-    })();
-  }, []);
-
-  // Reglas
   const rules = useMemo(() => {
     const L = pwd.length >= 8;
     const U = /[A-Z]/.test(pwd);
@@ -93,6 +53,90 @@ export default function CreatePassword() {
 
   const allValid = rules.L && rules.U && rules.l && rules.n && rules.w && pwd === pwd2;
 
+  function computeNext(slugMaybe) {
+    const slug = slugMaybe || lastKnownSlug || '';
+    if (nextParam) return nextParam;
+    return slug ? `/${slug}/dashboard` : '/dashboard';
+  }
+
+  async function runBootstrap() {
+    try {
+      setBootMsg('Preparando tu espacio…');
+      const { data: fresh } = await supabase.auth.getSession();
+      const token = fresh?.session?.access_token;
+      if (!token) return;
+
+      const resp = await fetch(`${API}/api/auth/bootstrap`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      const j = await resp.json().catch(() => ({}));
+      if (!resp.ok || j?.ok === false) throw new Error(j?.error || `HTTP ${resp.status}`);
+
+      const slug = j?.tenant?.slug || '';
+      if (slug) {
+        try { localStorage.setItem('et:last_slug', slug); } catch {}
+      }
+      setBootMsg('');
+    } catch {
+      // Silencioso: si falla bootstrap no bloqueamos la creación de password
+      setBootMsg('');
+    }
+  }
+
+  // Hash/session bootstrap
+  useEffect(() => {
+    (async () => {
+      try {
+        const hash = window.location.hash?.startsWith('#')
+          ? new URLSearchParams(window.location.hash.slice(1))
+          : new URLSearchParams();
+
+        const qp = new URLSearchParams(window.location.search);
+        const access_token  = hash.get('access_token');
+        const refresh_token = hash.get('refresh_token');
+        const error_code    = hash.get('error_code') || qp.get('error_code') || qp.get('error');
+        const error_desc    = hash.get('error_description') || qp.get('error_description');
+
+        if (access_token && refresh_token) {
+          try {
+            await supabase.auth.setSession({ access_token, refresh_token });
+            history.replaceState({}, document.title, window.location.pathname + window.location.search);
+          } catch {}
+        } else if (error_code) {
+          setHashErr(`${error_desc || error_code}`);
+        }
+
+        // Obtener usuario si hay sesión
+        const { data, error } = await supabase.auth.getUser();
+        if (!error) {
+          const u = data?.user || null;
+          setUser(u);
+
+          if (u?.email) {
+            try {
+              localStorage.setItem('et:email_confirmed', '1');
+              localStorage.setItem('signup_email', u.email);
+              setTimeout(() => { try { localStorage.removeItem('et:email_confirmed'); } catch {} }, 1500);
+              if ('BroadcastChannel' in window) {
+                const bc = new BroadcastChannel('et-auth');
+                bc.postMessage({ type: 'EMAIL_CONFIRMED', email: u.email });
+                bc.close();
+              }
+            } catch {}
+          }
+        }
+
+        // Hacemos bootstrap (crea/asegura tenant+membership) para poder calcular redirección por slug
+        await runBootstrap();
+      } finally {
+        setLoadingUser(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function save(e) {
     e?.preventDefault?.();
     setErr('');
@@ -101,14 +145,18 @@ export default function CreatePassword() {
       return;
     }
     setSaving(true);
-    const { error } = await supabase.auth.updateUser({ password: pwd });
-    setSaving(false);
-    if (error) {
-      setErr(error.message || 'No se pudo actualizar la contraseña.');
-      return;
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pwd, data: { needs_password: false } });
+      if (error) throw error;
+      setOk(true);
+      const slug = localStorage.getItem('et:last_slug') || '';
+      const dest = computeNext(slug);
+      setTimeout(() => { nav(dest, { replace: true }); }, 700);
+    } catch (e2) {
+      setErr(e2?.message || 'No se pudo actualizar la contraseña.');
+    } finally {
+      setSaving(false);
     }
-    setOk(true);
-    setTimeout(() => { window.location.href = '/dashboard'; }, 900);
   }
 
   async function resendInvite() {
@@ -119,6 +167,7 @@ export default function CreatePassword() {
     setResending(true);
     setResentMsg('');
     try {
+      // Mantengo tus endpoints de fallback para tu stack actual
       const body = JSON.stringify({ email: signupEmail });
       const endpoints = [
         `${API}/billing/checkout/resend-invite`,
@@ -196,6 +245,7 @@ export default function CreatePassword() {
           <div className="badge">Paso final</div>
           <h1>Crea tu contraseña</h1>
           <p className="muted">Usuario: <strong>{user.email}</strong></p>
+          {bootMsg ? <p className="muted small">{bootMsg}</p> : null}
         </header>
 
         <form className="form" onSubmit={save}>

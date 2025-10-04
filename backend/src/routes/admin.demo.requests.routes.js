@@ -38,9 +38,15 @@ async function getUserByEmail(email) {
 }
 
 function has(method) {
+  try { return !!method; } catch { return false; }
+}
+
+async function setNeedsPasswordTrue(userId, metadata = {}) {
   try {
-    return !!method;
-  } catch { return false; }
+    if (!userId) return;
+    const meta = { ...metadata, needs_password: true };
+    await supabaseAdmin.auth.admin.updateUserById(userId, { user_metadata: meta });
+  } catch { /* noop */ }
 }
 
 // ========== LISTADO ==========
@@ -94,6 +100,7 @@ router.post('/demo-requests/:id/accept', async (req, res) => {
 
     const email = String(dr.email || '').trim().toLowerCase();
     if (!email) return bad(res, 'INVALID', 'Email vacío en la solicitud.');
+    const full_name = dr.full_name || dr.name || null;
 
     let user = await getUserByEmail(email);
     let action_link = null;
@@ -108,11 +115,13 @@ router.post('/demo-requests/:id/accept', async (req, res) => {
         if (error) return bad(res, 'INVITE_ERROR', error.message, 400, { base_used: BASE });
         user = data?.user || null;
         method = 'invite';
+        await setNeedsPasswordTrue(user?.id, full_name ? { full_name } : {});
       } else {
         // Fallback: crear usuario + reenviar signup
         const { data: created, error: cErr } = await supabaseAdmin.auth.admin.createUser({
           email,
           email_confirm: false,
+          user_metadata: { needs_password: true, ...(full_name ? { full_name } : {}) }
         });
         if (cErr) return bad(res, 'CREATE_USER_ERROR', cErr.message, 400, { base_used: BASE });
         user = created?.user || created || null;
@@ -134,6 +143,7 @@ router.post('/demo-requests/:id/accept', async (req, res) => {
       });
       if (error) return bad(res, 'RESEND_SIGNUP_ERROR', error.message, 400, { base_used: BASE });
       method = 'resend_signup';
+      await setNeedsPasswordTrue(user.id, full_name ? { full_name } : {});
     } else {
       // Usuario confirmado → generar enlace de recovery a /crear-password
       if (!has(supabaseAdmin?.auth?.admin?.generateLink)) {
@@ -147,6 +157,7 @@ router.post('/demo-requests/:id/accept', async (req, res) => {
       if (error) return bad(res, 'RECOVERY_LINK_ERROR', error.message, 400, { base_used: BASE });
       action_link = data?.properties?.action_link || null;
       method = 'recovery';
+      await setNeedsPasswordTrue(user.id, full_name ? { full_name } : {});
     }
 
     const { error: e2 } = await db
@@ -178,6 +189,7 @@ router.post('/demo-requests/:id/resend', async (req, res) => {
     if (!dr) return bad(res, 'NOT_FOUND', 'NOT_FOUND', 404);
 
     const email = String(dr.email || '').trim().toLowerCase();
+    const full_name = dr.full_name || dr.name || null;
     const user = await getUserByEmail(email);
 
     if (!user || !user.email_confirmed_at) {
@@ -187,6 +199,7 @@ router.post('/demo-requests/:id/resend', async (req, res) => {
         options: { emailRedirectTo: CREATE_PWD_URL },
       });
       if (error) return bad(res, 'RESEND_SIGNUP_ERROR', error.message, 400, { base_used: BASE });
+      if (user?.id) await setNeedsPasswordTrue(user.id, full_name ? { full_name } : {});
       return ok(res, { method: 'resend_signup', base_used: BASE });
     } else {
       if (!has(supabaseAdmin?.auth?.admin?.generateLink)) {
@@ -198,6 +211,7 @@ router.post('/demo-requests/:id/resend', async (req, res) => {
         options: { redirectTo: CREATE_PWD_URL },
       });
       if (error) return bad(res, 'RECOVERY_LINK_ERROR', error.message, 400, { base_used: BASE });
+      await setNeedsPasswordTrue(user.id, full_name ? { full_name } : {});
       return ok(res, { method:'recovery', action_link: data?.properties?.action_link || null, base_used: BASE });
     }
   } catch (e) {
@@ -218,6 +232,7 @@ router.get('/demo-requests/:id/activation-link', async (req, res) => {
     if (!dr) return bad(res, 'NOT_FOUND', 'NOT_FOUND', 404);
 
     const email = String(dr.email || '').trim().toLowerCase();
+    const full_name = dr.full_name || dr.name || null;
     let user = await getUserByEmail(email);
 
     if (!has(supabaseAdmin?.auth?.admin?.generateLink)) {
@@ -229,6 +244,7 @@ router.get('/demo-requests/:id/activation-link', async (req, res) => {
       const { data: created, error: cErr } = await supabaseAdmin.auth.admin.createUser({
         email,
         email_confirm: false,
+        user_metadata: { needs_password: true, ...(full_name ? { full_name } : {}) }
       });
       if (cErr) return bad(res, 'CREATE_USER_ERROR', cErr.message, 400, { base_used: BASE });
       user = created?.user || created || null;
@@ -243,6 +259,7 @@ router.get('/demo-requests/:id/activation-link', async (req, res) => {
           options: { redirectTo: CREATE_PWD_URL },
         });
         if (error) throw error;
+        await setNeedsPasswordTrue(user.id, full_name ? { full_name } : {});
         return ok(res, { method:'invite', action_link: data?.properties?.action_link || null, base_used: BASE });
       } catch (e) {
         // Fallback: recovery (sirve para poner contraseña)
@@ -252,6 +269,7 @@ router.get('/demo-requests/:id/activation-link', async (req, res) => {
           options: { redirectTo: CREATE_PWD_URL },
         });
         if (error) return bad(res, 'RECOVERY_LINK_ERROR', error.message, 400, { base_used: BASE });
+        await setNeedsPasswordTrue(user.id, full_name ? { full_name } : {});
         return ok(res, { method:'recovery', action_link: data?.properties?.action_link || null, base_used: BASE });
       }
     } else {
@@ -261,6 +279,7 @@ router.get('/demo-requests/:id/activation-link', async (req, res) => {
         options: { redirectTo: CREATE_PWD_URL },
       });
       if (error) return bad(res, 'RECOVERY_LINK_ERROR', error.message, 400, { base_used: BASE });
+      await setNeedsPasswordTrue(user.id, full_name ? { full_name } : {});
       return ok(res, { method:'recovery', action_link: data?.properties?.action_link || null, base_used: BASE });
     }
   } catch (e) {
