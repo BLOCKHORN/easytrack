@@ -6,7 +6,6 @@ import { crearPaqueteBackend, obtenerPaquetesBackend } from '../services/paquete
 import { cargarUbicaciones } from '../services/ubicacionesService';
 import { FaBoxOpen, FaLightbulb, FaCheckCircle, FaCube, FaLayerGroup, FaPlus, FaTimes } from 'react-icons/fa';
 import '../styles/AnadirPaquete.scss';
-import { useSubscription } from '../hooks/useSubscription';
 
 /* ===== utils ===== */
 const toUpperVis = (s='') => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
@@ -102,11 +101,7 @@ function levenshtein(a, b) {
     for (let j = 1; j <= n; j++) {
       const tmp = dp[j];
       const cost = a[i-1] === b[j-1] ? 0 : 1;
-      dp[j] = Math.min(
-        dp[j] + 1,       // deletion
-        dp[j-1] + 1,     // insertion
-        prev + cost      // substitution
-      );
+      dp[j] = Math.min(dp[j] + 1, dp[j-1] + 1, prev + cost);
       prev = tmp;
     }
   }
@@ -132,7 +127,6 @@ function bestClientSuggestion(input, paquetesPendientes, threshold = 0.55) {
   // evaluar similitud
   let best = null;
   for (const [name, cnt] of counts.entries()) {
-    // si el nombre ya contiene claramente la query o viceversa, prioriza
     const containBoost = (name.includes(q) || q.includes(name)) ? 0.15 : 0;
     const score = similarity(q, name) + containBoost + Math.min(0.25, Math.log10(cnt + 1) * 0.1);
     if (score >= threshold && (!best || score > best.score)) {
@@ -145,25 +139,21 @@ function bestClientSuggestion(input, paquetesPendientes, threshold = 0.55) {
 export default function AnadirPaquete({ modoRapido = false }) {
   const [tenant, setTenant] = useState(null);
 
-  // Suscripción / límites
-  const { entitlements, loading: subLoading } = useSubscription();
-  const canCreate = !!(
-    entitlements?.canCreatePackage ??
-    (
-      (entitlements?.status === 'active' ||
-       (entitlements?.status === 'trialing' &&
-        (!entitlements?.until_at || Date.parse(entitlements.until_at) > Date.now())
-       )) &&
-      (Number.isFinite(Number(entitlements?.limits?.packages_left))
-        ? Number(entitlements.limits.packages_left) > 0
-        : true)
-    )
-  );
-
   // Empresas
   const [companias, setCompanias] = useState([]);
   const [compania, setCompania]   = useState('');
   const [cliente, setCliente]     = useState('');
+
+  // Tabs (solo cambian la parte superior)
+  const [activeTab, setActiveTab] = useState('single'); // 'single' | 'multi'
+
+  // Batch (pestaña múltiple)
+  const [multiCount, setMultiCount] = useState(5);
+  const [multiNames, setMultiNames] = useState(() => Array.from({length:5}, ()=>'')); // se adapta dinámicamente
+  const [batchSameCompany, setBatchSameCompany] = useState(true);
+  const [batchCompany, setBatchCompany] = useState('');
+  const [multiCompanies, setMultiCompanies] = useState(() => Array.from({length:5}, ()=>'')); // por fila cuando no es “misma empresa”
+  const [multiSaving, setMultiSaving] = useState(false);
 
   // Sugerencia fuzzy
   const [sugCliente, setSugCliente] = useState(null); // {name, count}
@@ -191,17 +181,36 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const [exito, setExito] = useState(false);
   const [ultimoGuardado, setUltimoGuardado] = useState(null);
 
-  // UI múltiple
-  const [multiOpen, setMultiOpen] = useState(false);
-  const [multiCount, setMultiCount] = useState(5);
-  const [multiSameShelf, setMultiSameShelf] = useState(true);
-  const [multiSameCompany, setMultiSameCompany] = useState(true);
-  const [multiNames, setMultiNames] = useState(() => Array.from({length:5}, ()=>'')); // se adapta dinámicamente
-  const [multiSaving, setMultiSaving] = useState(false);
-
   // refs
   const inputClienteRef = useRef(null);
   const flyLayerRef = useRef(null);
+
+  // ===== CSS inline adicional (tabs, chips XL y resaltados) =====
+  const extraStyles = `
+  @keyframes pulseGlowX { 
+    0%, 100% { box-shadow: 0 0 0.25rem rgba(99,91,255,0.25), 0 0 0 rgba(0,0,0,0); }
+    50% { box-shadow: 0 0 1rem rgba(99,91,255,0.55), 0 0 0.25rem rgba(0,0,0,0.06); }
+  }
+  .pulse-constant { animation: pulseGlowX 1.4s ease-in-out infinite; }
+  .glow-strong  { outline: 2px solid rgba(99,91,255,0.35); border-color: rgba(99,91,255,0.55) !important; }
+  .top-tabs{ display:flex; gap:8px; align-items:center; padding:8px; background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 4px 16px rgba(13,34,79,.06); }
+  .top-tabs .tab{
+    appearance:none; border:none; background:#f3f6fb; color:var(--text); font-weight:900; letter-spacing:.01em;
+    padding:10px 14px; border-radius:10px; cursor:pointer; transition:filter .18s ease, transform .06s ease, background .18s ease;
+  }
+  .top-tabs .tab:hover{ filter:brightness(1.02); transform:translateY(-1px); }
+  .top-tabs .tab.active{ background:var(--brand); color:#fff; box-shadow:0 6px 18px rgba(37,99,235,.25); }
+  /* chips grandes, cuadrados y simétricos */
+  .chips.xl { gap:16px; }
+  .chip.square { min-width:280px; min-height:110px; border-radius:16px; display:grid; grid-auto-flow:row; align-content:center; justify-items:center; text-align:center; }
+  .chip.square .lbl{ font-size:13px; }
+  .chip.square .pill{ font-size:26px; padding:10px 16px; }
+  /* rejilla: resaltado de sugerida/relacionada/activa */
+  .balda.is-suggested::after, .balda.is-related::after, .balda.is-activePulse::after{
+    content:''; position:absolute; inset:-4px; border-radius:12px; box-shadow:0 0 .75rem rgba(99,91,255,.6);
+    animation:pulseGlowX 1.4s ease-in-out infinite; pointer-events:none;
+  }
+  `;
 
   // ===== CARGA =====
   useEffect(() => {
@@ -221,7 +230,10 @@ export default function AnadirPaquete({ modoRapido = false }) {
           const lista = (data || []).map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b));
           setCompanias(lista);
           const lastCompany = localStorage.getItem('ap_last_company');
-          setCompania(lastCompany && lista.includes(lastCompany) ? lastCompany : (lista[0] || ''));
+          const defaultCompany = (lastCompany && lista.includes(lastCompany)) ? lastCompany : (lista[0] || '');
+          setCompania(defaultCompany);
+          setBatchCompany(defaultCompany);
+          setMultiCompanies(prev => prev.map(v => v || defaultCompany));
         } catch {}
 
         // Ubicaciones + meta
@@ -270,23 +282,46 @@ export default function AnadirPaquete({ modoRapido = false }) {
     return best ? { id: best.id, label: best.label } : null;
   }, [ubicaciones, occupancy]);
 
+  // 🔎 selección por cliente (mejorada: más usada; empate → la más reciente)
   const pickForClient = useCallback((clienteNombre) => {
     const up = toUpperVis(clienteNombre || '');
     if (!up) return getMostEmptySlot();
 
-    const match = paquetes.find(p => !p.entregado && toUpperVis(p?.nombre_cliente || '') === up);
-    if (match) {
-      const id = match.ubicacion_id ?? match.balda_id ?? null;
-      const label = String(match.ubicacion_label ?? match.compartimento ?? '').toUpperCase() || null;
+    const pendientes = paquetes.filter(p => !p.entregado);
+    const matches = pendientes.filter(p => toUpperVis(p?.nombre_cliente || '') === up);
 
-      if (id != null) {
-        const u = ubicaciones.find(x => String(x.id) === String(id));
-        if (u) return { id: u.id, label: u.label };
+    if (matches.length) {
+      // contabilizar por label y quedarnos con la más usada; si hay empate, la más reciente
+      const counter = new Map(); // label -> {count, latestISO, idGuess}
+      for (const p of matches) {
+        const label = String(p.ubicacion_label ?? p.compartimento ?? '').toUpperCase() || null;
+        if (!label) continue;
+        const prev = counter.get(label) || { count:0, latestISO:'', idGuess: p.ubicacion_id ?? p.balda_id ?? null };
+        prev.count += 1;
+        const ts = String(p.fecha_llegada || p.created_at || '');
+        if (!prev.latestISO || (ts && ts > prev.latestISO)) prev.latestISO = ts;
+        // si vemos un id válido lo conservamos como referencia
+        if (p.ubicacion_id || p.balda_id) prev.idGuess = p.ubicacion_id ?? p.balda_id;
+        counter.set(label, prev);
       }
-      if (label) {
-        const u = ubicaciones.find(x => x.label === label);
+      if (counter.size) {
+        const bestLabel = [...counter.entries()].sort((a,b)=>{
+          const ca=a[1].count, cb=b[1].count;
+          if (cb!==ca) return cb-ca;
+          // empate → más reciente
+          return (b[1].latestISO || '').localeCompare(a[1].latestISO || '');
+        })[0][0];
+
+        // Intentar devolver con id si lo tenemos mapeado a ubicaciones reales
+        const guessId = counter.get(bestLabel)?.idGuess ?? null;
+        if (guessId != null) {
+          const u = ubicaciones.find(x => String(x.id) === String(guessId));
+          if (u) return { id: u.id, label: u.label };
+        }
+        // o por label
+        const u = ubicaciones.find(x => x.label === bestLabel);
         if (u) return { id: u.id, label: u.label };
-        return { id: null, label };
+        return { id: null, label: bestLabel };
       }
     }
     return getMostEmptySlot();
@@ -294,19 +329,17 @@ export default function AnadirPaquete({ modoRapido = false }) {
 
   // autoselección mientras se escribe + sugerencia fuzzy
   useEffect(() => {
-    // sugerencia fuzzy basada en paquetes pendientes
     const pendientes = paquetes.filter(p => !p.entregado);
     const sug = bestClientSuggestion(cliente, pendientes);
     setSugCliente(sug);
 
-    if (seleccionManual) return;
-    // si el texto coincide EXACTO con un cliente pendiente, autoselecciona su balda
-    const slot = pickForClient(cliente) || getMostEmptySlot();
-    if (slot) setSlotSel(slot);
+    if (!seleccionManual) {
+      const slot = pickForClient(cliente) || getMostEmptySlot();
+      if (slot) setSlotSel(slot);
+    }
 
-    // info de coincidencia para mensajito en cursiva (solo si hay sugerencia y AÚN no es igual)
+    // “match hint”
     if (sug && toUpperVis(cliente) !== toUpperVis(sug.name)) {
-      // ¿en qué balda tiene paquetes pendientes?
       let bestLabel = null;
       let cnt = 0;
       for (const p of pendientes) {
@@ -321,10 +354,20 @@ export default function AnadirPaquete({ modoRapido = false }) {
     }
   }, [cliente, paquetes, seleccionManual, pickForClient, getMostEmptySlot]);
 
+  // sugerida (para brillo constante)
+  const suggestedLabel = useMemo(() => {
+    const s = pickForClient(cliente) || getMostEmptySlot();
+    return s?.label || '';
+  }, [cliente, pickForClient, getMostEmptySlot]);
+
   const puedeGuardar = useMemo(
-    () => canCreate && cliente.trim() && compania && slotSel && (slotSel.id || slotSel.label),
-    [canCreate, cliente, compania, slotSel]
+    () => cliente.trim() && compania && slotSel && (slotSel.id || slotSel.label),
+    [cliente, compania, slotSel]
   );
+
+  // ¿cuándo pulsan los chips?
+  const suggestionPulse = !!(sugCliente || matchInfo?.label);
+  const selectedPulse   = !!(seleccionManual || sugCliente || matchInfo?.label);
 
   // ✈️ animación
   const flyFromInputToSlot = useCallback(() => {
@@ -360,11 +403,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const guardar = useCallback(async (e) => {
     e?.preventDefault();
     if (loading) return;
-
-    if (!canCreate) {
-      alert('Tu prueba está agotada. Elige un plan para seguir creando paquetes.');
-      return;
-    }
 
     try {
       setLoading(true);
@@ -441,11 +479,9 @@ export default function AnadirPaquete({ modoRapido = false }) {
     } finally {
       setLoading(false);
     }
-  }, [loading, canCreate, tenant, cliente, compania, slotSel, flyFromInputToSlot]);
+  }, [loading, tenant, cliente, compania, slotSel, flyFromInputToSlot]);
 
-  const sugerenciaPrimaria = useMemo(() => slotSel?.label || '', [slotSel]);
-
-  // ===== Guardar múltiple =====
+  // ===== Guardar múltiple (pestaña) =====
   const guardarMultiple = useCallback(async () => {
     if (multiSaving) return;
 
@@ -458,19 +494,8 @@ export default function AnadirPaquete({ modoRapido = false }) {
       alert('Introduce al menos un nombre de cliente.');
       return;
     }
-    if (!canCreate) {
-      alert('Tu prueba está agotada. Elige un plan para seguir creando paquetes.');
-      return;
-    }
-    if (!compania) {
-      alert('Selecciona una empresa de transporte.');
-      return;
-    }
-
-    // comprobar límite de plan si existe
-    const left = Number(entitlements?.limits?.packages_left);
-    if (Number.isFinite(left) && left < names.length) {
-      alert(`Tu plan solo permite crear ${left} paquete(s) más ahora mismo.`);
+    if (batchSameCompany && !batchCompany) {
+      alert('Elige una empresa para todos.');
       return;
     }
 
@@ -480,39 +505,41 @@ export default function AnadirPaquete({ modoRapido = false }) {
       const token = session?.access_token;
       if (!token || !tenant?.id) throw new Error('Faltan datos para registrar los paquetes.');
 
-      // Determinar balda de referencia si "misma balda"
+      // Determinar balda común (siempre misma balda)
       let commonSlot = null;
-      if (multiSameShelf) {
-        if (slotSel?.label || slotSel?.id) {
-          commonSlot = { ...slotSel };
-        } else if (names[0]) {
-          commonSlot = pickForClient(names[0]) || getMostEmptySlot();
-        } else {
-          commonSlot = getMostEmptySlot();
-        }
+      if (slotSel?.label || slotSel?.id) {
+        commonSlot = { ...slotSel };
+      } else if (names[0]) {
+        commonSlot = pickForClient(names[0]) || getMostEmptySlot();
+      } else {
+        commonSlot = getMostEmptySlot();
       }
 
-      // Optimista: insertar todos
       const ahora = new Date().toISOString();
-      const temps = names.map((n, i) => {
-        const slot = multiSameShelf ? (commonSlot || getMostEmptySlot()) : (pickForClient(n) || getMostEmptySlot());
-        return {
-          id: `temp_${Date.now()}_${i}_${Math.random().toString(36).slice(2)}`,
-          nombre_cliente: n,
-          empresa_transporte: multiSameCompany ? (compania || '') : (compania || ''), // (si quisieras por-paquete: cámbialo aquí)
-          entregado: false,
-          fecha_llegada: ahora,
-          created_at: ahora,
-          compartimento: slot?.label || null,
-          balda_id: slot?.id ?? null,
-          ubicacion_label: slot?.label || null,
-          ubicacion_id: slot?.id ?? null
-        };
-      });
+
+      // Empresas por fila
+      const companiesForRows = names.map((_, i) =>
+        batchSameCompany ? (batchCompany || compania) : (multiCompanies[i] || compania)
+      );
+
+      // Optimista
+      const temps = names.map((n, i) => ({
+        id: `temp_${Date.now()}_${i}_${Math.random().toString(36).slice(2)}`,
+        nombre_cliente: n,
+        empresa_transporte: companiesForRows[i],
+        entregado: false,
+        fecha_llegada: ahora,
+        created_at: ahora,
+        compartimento: commonSlot?.label || null,
+        balda_id: commonSlot?.id ?? null,
+        ubicacion_label: commonSlot?.label || null,
+        ubicacion_id: commonSlot?.id ?? null
+      }));
       setPaquetes(prev => [...temps, ...prev]);
 
-      // Backend: de uno en uno para poder mapear IDs
-      for (const temp of temps) {
+      // Backend
+      for (let i = 0; i < temps.length; i++) {
+        const temp = temps[i];
         const payload = {
           tenant_id: tenant.id,
           nombre_cliente: temp.nombre_cliente,
@@ -532,7 +559,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
         }
       }
 
-      localStorage.setItem('ap_last_company', compania);
+      localStorage.setItem('ap_last_company', batchSameCompany ? batchCompany : compania);
       playChime(260);
       setExito(true);
       setUltimoGuardado(commonSlot || null);
@@ -547,9 +574,8 @@ export default function AnadirPaquete({ modoRapido = false }) {
       setMultiSaving(false);
     }
   }, [
-    multiSaving, multiNames, multiCount, multiSameShelf, multiSameCompany,
-    canCreate, compania, entitlements?.limits?.packages_left, tenant,
-    pickForClient, getMostEmptySlot
+    multiSaving, multiNames, multiCount, batchSameCompany, batchCompany,
+    multiCompanies, compania, tenant, pickForClient, getMostEmptySlot, slotSel
   ]);
 
   // ===== UI helpers =====
@@ -566,7 +592,10 @@ export default function AnadirPaquete({ modoRapido = false }) {
   // ===== Render =====
   return (
     <div className="anadir-paquete">
+      {/* estilos extra (tabs/chips XL/pulsos) */}
+      <style dangerouslySetInnerHTML={{ __html: extraStyles }} />
       <div id="fly-layer" ref={flyLayerRef} aria-hidden="true" />
+
       <header className="cabecera">
         <div className="titulo">
           <FaBoxOpen aria-hidden="true" />
@@ -575,159 +604,118 @@ export default function AnadirPaquete({ modoRapido = false }) {
             <p>Registra el paquete y elige la ubicación.</p>
           </div>
         </div>
-
-        {/* Botón modo múltiple */}
-        <div className="acciones-cabecera">
+        {/* Tabs superiores */}
+        <div className="top-tabs" role="tablist" aria-label="Modo de alta">
           <button
             type="button"
-            className="btn-secondary"
-            onClick={() => setMultiOpen(true)}
-            aria-haspopup="dialog"
-            aria-expanded={multiOpen}
-            title="Añadir varios paquetes de golpe"
+            role="tab"
+            aria-selected={activeTab==='single'}
+            className={`tab ${activeTab==='single' ? 'active' : ''}`}
+            onClick={()=> setActiveTab('single')}
           >
-            <FaLayerGroup aria-hidden="true" style={{ marginRight: 8 }} />
-            Añadir varios a la vez
+            Datos del paquete
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab==='multi'}
+            className={`tab ${activeTab==='multi' ? 'active' : ''}`}
+            onClick={()=> setActiveTab('multi')}
+          >
+            Modo múltiple
           </button>
         </div>
       </header>
 
-      <form className="form" onSubmit={guardar}>
-        {!subLoading && !canCreate && (
-          <div className="alert warn" role="status" style={{ marginBottom: 12 }}>
-            Tu prueba está agotada. No puedes añadir más paquetes. Elige un plan para continuar.
-          </div>
-        )}
+      <form className="form" onSubmit={activeTab==='single' ? guardar : (e)=>{ e.preventDefault(); guardarMultiple(); }}>
+        {/* ========== PANEL SUPERIOR (cambia con tabs) ========== */}
+        {activeTab === 'single' ? (
+          <section className="panel datos" aria-labelledby="panel-single">
+            <h2 id="panel-single">Datos del paquete</h2>
+            <p className="hint">Completa el cliente, la empresa y confirma la ubicación.</p>
 
-        <section className="panel datos">
-          <h2>Datos del paquete</h2>
-          <p className="hint">Completa el cliente, la empresa y confirma la ubicación.</p>
+            <div className="fila">
+              <div className="campo">
+                <label>Nombre del cliente</label>
+                <input
+                  ref={inputClienteRef}
+                  type="text"
+                  placeholder="Añadir cliente…"
+                  value={cliente}
+                  onChange={e => { setCliente(toUpperVis(e.target.value)); setSeleccionManual(false); }}
+                  autoComplete="off"
+                  maxLength={80}
+                  aria-describedby="cliente-hint cliente-suggestion"
+                />
 
-          <div className="fila">
-            <div className="campo">
-              <label>Nombre del cliente</label>
-              <input
-                ref={inputClienteRef}
-                type="text"
-                placeholder="Añadir cliente…"
-                value={cliente}
-                onChange={e => { setCliente(toUpperVis(e.target.value)); setSeleccionManual(false); }}
-                autoComplete="off"
-                maxLength={80}
-                aria-describedby="cliente-hint cliente-suggestion"
-              />
+                {/* Sugerencia fuzzy bajo el input */}
+                {sugCliente && toUpperVis(cliente) !== toUpperVis(sugCliente.name) && (
+                  <div id="cliente-suggestion" className="sugerencia-cliente">
+                    <button
+                      type="button"
+                      className={`suggestion-pill ${suggestionPulse ? 'pulse-constant glow-strong' : ''}`}
+                      onClick={aceptarSugerenciaCliente}
+                      title="Usar este cliente y autoseleccionar su balda"
+                    >
+                      ¿Querías decir <strong>{sugCliente.name}</strong>? Pulsa para usarlo.
+                    </button>
+                  </div>
+                )}
 
-              {/* Sugerencia fuzzy bajo el input */}
-              {sugCliente && toUpperVis(cliente) !== toUpperVis(sugCliente.name) && (
-                <div id="cliente-suggestion" className="sugerencia-cliente">
-                  <button
-                    type="button"
-                    className="suggestion-pill"
-                    onClick={aceptarSugerenciaCliente}
-                    title="Usar este cliente y autoseleccionar su balda"
-                  >
-                    ¿Querías decir <strong>{sugCliente.name}</strong>? Pulsa para usarlo.
-                  </button>
-                </div>
-              )}
+                {/* Mensajito en cursiva si hay coincidencia con paquetes pendientes */}
+                {matchInfo?.label && (
+                  <em id="cliente-hint" className="match-hint">
+                    Hay otro paquete pendiente de este cliente en <strong className="pulse-constant glow-strong">{matchInfo.label}</strong>.
+                  </em>
+                )}
+              </div>
 
-              {/* Mensajito en cursiva si hay coincidencia con paquetes pendientes */}
-              {matchInfo?.label && (
-                <em id="cliente-hint" className="match-hint">
-                  Hay otro paquete pendiente de este cliente en <strong>{matchInfo.label}</strong>.
-                </em>
-              )}
-            </div>
-
-            <div className="campo">
-              <label>Empresa de transporte</label>
-              <select
-                value={compania}
-                onChange={(e) => setCompania(e.target.value)}
-                aria-label="Empresa de transporte"
-              >
-                {companias.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-
-            <div className="campo" aria-hidden="true" />
-          </div>
-
-          <div className="bloque-central">
-            <div className="chips">
-              <span className="chip chip--hint">
-                <FaLightbulb aria-hidden="true" />
-                <span className="lbl">Sugerencia</span>
-                <code className="pill">{sugerenciaPrimaria || '—'}</code>
-              </span>
-
-              <span className="chip chip--selected">
-                <FaCheckCircle aria-hidden="true" />
-                <span className="lbl">Seleccionado</span>
-                <code className="pill">{slotSel?.label || '—'}</code>
-              </span>
-            </div>
-
-            <div className="acciones-centro">
-              <button type="submit" className="btn-primary btn-xl" disabled={!puedeGuardar || loading || !canCreate}>
-                {!canCreate ? 'Desbloquear plan' : (loading ? 'Guardando…' : 'Guardar paquete')}
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="panel rejilla">
-          <h2>Ubicaciones</h2>
-          <p className="hint">Selecciona una ubicación. Verás la ocupación actual.</p>
-
-          <div
-            className="estantes-grid"
-            style={{ gridTemplateColumns: `repeat(${cols || 5}, minmax(220px, 1fr))` }}
-            role="group"
-            aria-label="Selección de ubicación"
-          >
-            {ubicaciones.map(u => {
-              const count = occupancy.get(u.id) || occupancy.get(u.label) || 0;
-              const activa = slotSel?.id === u.id || slotSel?.label === u.label;
-              return (
-                <button
-                  type="button"
-                  key={u.id}
-                  data-ubi-id={u.id}
-                  data-ubi-label={u.label}
-                  className={`balda ${count <= 4 ? 'verde' : count < 10 ? 'naranja' : 'rojo'} ${activa ? 'activa pulse' : ''}`}
-                  onClick={() => { setSlotSel({ id: u.id, label: u.label }); setSeleccionManual(true); }}
-                  aria-pressed={activa}
+              <div className="campo">
+                <label>Empresa de transporte</label>
+                <select
+                  value={compania}
+                  onChange={(e) => setCompania(e.target.value)}
+                  aria-label="Empresa de transporte"
                 >
-                  <div className="balda-header">{u.label}</div>
-                  <div className="balda-badge"><FaCube aria-hidden="true" />{count} paquete{count!==1?'s':''}</div>
-                </button>
-              );
-            })}
-          </div>
+                  {companias.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
 
-          <div className="leyenda">
-            <span><i className="dot verde" /> Baja ocupación</span>
-            <span><i className="dot naranja" /> Media</span>
-            <span><i className="dot rojo" /> Alta</span>
-          </div>
-        </section>
-      </form>
-
-      {/* ===== Panel / Modal MODO MÚLTIPLE ===== */}
-      {multiOpen && (
-        <div className="multi-overlay" role="dialog" aria-modal="true" aria-label="Añadir varios paquetes">
-          <div className="multi-panel">
-            <div className="multi-head">
-              <h3><FaLayerGroup aria-hidden="true" style={{ marginRight: 8 }} /> Añadir varios paquetes</h3>
-              <button className="icon-btn" onClick={() => setMultiOpen(false)} aria-label="Cerrar">
-                <FaTimes />
-              </button>
+              <div className="campo" aria-hidden="true" />
             </div>
 
-            <div className="multi-body">
-              <div className="multi-row">
-                <label className="multi-label">¿Cuántos paquetes vas a añadir de golpe?</label>
+            <div className="bloque-central">
+              <div className="chips xl">
+                <span className={`chip chip--hint square ${suggestionPulse ? 'pulse-constant glow-strong' : ''}`}>
+                  <FaLightbulb aria-hidden="true" />
+                  <span className="lbl">Sugerencia</span>
+                  <code className="pill">{suggestedLabel || '—'}</code>
+                </span>
+
+                <span className={`chip chip--selected square ${selectedPulse ? 'pulse-constant glow-strong' : ''}`}>
+                  <FaCheckCircle aria-hidden="true" />
+                  <span className="lbl">Seleccionado</span>
+                  <code className="pill">{slotSel?.label || '—'}</code>
+                </span>
+              </div>
+
+              <div className="acciones-centro">
+                <button type="submit" className="btn-primary btn-xl" disabled={!puedeGuardar || loading}>
+                  {loading ? 'Guardando…' : 'Guardar paquete'}
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : (
+          <section className="panel multiple open" aria-labelledby="panel-multi">
+            <div className="multiple-head">
+              <h2 id="panel-multi"><FaLayerGroup style={{ marginRight: 8 }} /> Añadir varios paquetes</h2>
+              <p className="hint">Introduce varios nombres. Usarán la <strong>misma ubicación</strong> seleccionada/sugerida.</p>
+            </div>
+
+            <div className="multiple-config">
+              <div className="row">
+                <label className="multi-label">¿Cuántos paquetes vas a añadir?</label>
                 <div className="multi-controls">
                   <input
                     type="number"
@@ -746,85 +734,163 @@ export default function AnadirPaquete({ modoRapido = false }) {
                         }
                         return next;
                       });
+                      setMultiCompanies(prev => {
+                        const next = [...prev];
+                        if (next.length < v) {
+                          while (next.length < v) next.push(batchSameCompany ? batchCompany || compania : (companias[0] || ''));
+                        } else if (next.length > v) {
+                          next.length = v;
+                        }
+                        return next;
+                      });
                     }}
                     className="multi-number"
                   />
                 </div>
               </div>
 
-              <div className="multi-row">
+              <div className="row">
                 <label className="multi-check">
                   <input
                     type="checkbox"
-                    checked={multiSameShelf}
-                    onChange={(e)=>setMultiSameShelf(e.target.checked)}
+                    checked={batchSameCompany}
+                    onChange={(e)=> setBatchSameCompany(e.target.checked)}
                   />
-                  <span>Usar la misma balda para todos</span>
+                  <span>Misma empresa para todos</span>
                 </label>
-                <small className="muted">
-                  Si está activo, se usará la balda seleccionada arriba o la sugerida del primer nombre.
-                </small>
-              </div>
 
-              <div className="multi-row">
-                <label className="multi-check">
-                  <input
-                    type="checkbox"
-                    checked={multiSameCompany}
-                    onChange={(e)=>setMultiSameCompany(e.target.checked)}
-                  />
-                  <span>Misma empresa de transporte para todos</span>
-                </label>
-                <small className="muted">
-                  Se usará la empresa seleccionada en “Datos del paquete”.
-                </small>
-              </div>
-
-              <div className="multi-grid">
-                {Array.from({length: multiCount}).map((_,i)=>(
-                  <div key={i} className="multi-item">
-                    <label>Cliente #{i+1}</label>
-                    <input
-                      type="text"
-                      placeholder="Nombre cliente…"
-                      value={multiNames[i] || ''}
-                      onChange={(e)=>{
-                        const val = toUpperVis(e.target.value);
-                        setMultiNames(prev => {
-                          const next = [...prev];
-                          next[i] = val;
-                          return next;
-                        });
-                      }}
-                      maxLength={80}
-                    />
+                {batchSameCompany ? (
+                  <div className="row" style={{ marginTop: 8 }}>
+                    <label className="multi-label">Empresa para todos</label>
+                    <select
+                      value={batchCompany}
+                      onChange={(e)=> setBatchCompany(e.target.value)}
+                      className="multi-select"
+                    >
+                      {companias.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
                   </div>
-                ))}
+                ) : (
+                  <small className="muted" style={{ marginTop: 6 }}>
+                    Si no marcas “misma empresa”, podrás elegir la empresa <strong>por cada fila</strong>.
+                  </small>
+                )}
               </div>
             </div>
 
-            <div className="multi-foot">
+            <div className="multi-grid">
+              {Array.from({length: multiCount}).map((_,i)=>(
+                <div key={i} className="multi-item">
+                  <label>Cliente #{i+1}</label>
+                  <input
+                    type="text"
+                    placeholder="Nombre cliente…"
+                    value={multiNames[i] || ''}
+                    onChange={(e)=>{
+                      const val = toUpperVis(e.target.value);
+                      setMultiNames(prev => {
+                        const next = [...prev];
+                        next[i] = val;
+                        return next;
+                      });
+                    }}
+                    maxLength={80}
+                  />
+
+                  {!batchSameCompany && (
+                    <select
+                      className="multi-select"
+                      value={multiCompanies[i] || (companias[0] || '')}
+                      onChange={(e)=>{
+                        const v = e.target.value;
+                        setMultiCompanies(prev => {
+                          const next = [...prev];
+                          next[i] = v;
+                          return next;
+                        });
+                      }}
+                      title="Empresa de transporte para esta fila"
+                      style={{ marginTop: 6 }}
+                    >
+                      {companias.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="multiple-foot">
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={()=> setMultiOpen(false)}
+                onClick={()=> setActiveTab('single')}
               >
-                Cancelar
+                <FaTimes style={{ marginRight: 6 }} />
+                Cerrar
               </button>
               <button
                 type="button"
                 className="btn-primary"
                 onClick={guardarMultiple}
-                disabled={multiSaving || !canCreate || !compania}
-                title={!canCreate ? 'Desbloquea tu plan' : ''}
+                disabled={multiSaving || (batchSameCompany && !batchCompany)}
+                title={(batchSameCompany && !batchCompany) ? 'Elige una empresa' : ''}
               >
                 <FaPlus aria-hidden="true" style={{ marginRight: 8 }} />
                 {multiSaving ? 'Guardando…' : `Guardar ${multiCount} paquete${multiCount!==1?'s':''}`}
               </button>
             </div>
+          </section>
+        )}
+
+        {/* ========== REJILLA (siempre visible bajo el panel superior) ========== */}
+        <section className="panel rejilla">
+          <h2>Ubicaciones</h2>
+          <p className="hint">Selecciona una ubicación. Verás la ocupación actual.</p>
+
+          <div
+            className="estantes-grid"
+            style={{ gridTemplateColumns: `repeat(${cols || 5}, minmax(220px, 1fr))` }}
+            role="group"
+            aria-label="Selección de ubicación"
+          >
+            {ubicaciones.map(u => {
+              const count = occupancy.get(u.id) || occupancy.get(u.label) || 0;
+              const activa = slotSel?.id === u.id || slotSel?.label === u.label;
+              const isSuggested = suggestedLabel && u.label === suggestedLabel;
+              const isRelated = matchInfo?.label && u.label === matchInfo.label;
+              const activePulse = activa && (seleccionManual || isSuggested || isRelated);
+              return (
+                <button
+                  type="button"
+                  key={u.id}
+                  data-ubi-id={u.id}
+                  data-ubi-label={u.label}
+                  className={[
+                    'balda',
+                    count <= 4 ? 'verde' : count < 10 ? 'naranja' : 'rojo',
+                    activa ? 'activa' : '',
+                    isSuggested ? 'is-suggested' : '',
+                    isRelated ? 'is-related' : '',
+                    activePulse ? 'is-activePulse' : ''
+                  ].join(' ').trim()}
+                  onClick={() => { setSlotSel({ id: u.id, label: u.label }); setSeleccionManual(true); }}
+                  aria-pressed={activa}
+                  aria-label={`Ubicación ${u.label}, ${count} paquete${count!==1?'s':''}`}
+                >
+                  <div className="balda-header">{u.label}</div>
+                  <div className="balda-badge"><FaCube aria-hidden="true" />{count} paquete{count!==1?'s':''}</div>
+                </button>
+              );
+            })}
           </div>
-        </div>
-      )}
+
+          <div className="leyenda">
+            <span><i className="dot verde" /> Baja ocupación</span>
+            <span><i className="dot naranja" /> Media</span>
+            <span><i className="dot rojo" /> Alta</span>
+          </div>
+        </section>
+      </form>
 
       {exito && (
         <div className="modal-exito modal-exito--giant" role="status" aria-live="polite">

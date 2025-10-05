@@ -1,3 +1,4 @@
+// src/pages/Dashboard.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -247,7 +248,8 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
               <FaUserCircle aria-hidden="true" /> Bienvenido de nuevo <span>{negocio?.nombre_empresa}</span>
             </h2>
             <div className="chips">
-              <span className={`chip`}>Estructura: {estructuraAlmacen}</span> <PlanBadge />
+              {/* eliminado el chip de Estructura */}
+              <PlanBadge />
             </div>
           </div>
 
