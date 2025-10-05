@@ -6,25 +6,31 @@ const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\
    ============================== */
 function ensureOk(res, text) {
   if (res.ok) return;
-  let msg = 'No se pudieron guardar las ubicaciones';
+  let msg = 'Error de red al guardar/cargar ubicaciones';
   try {
     const j = JSON.parse(text || '{}');
     msg = j?.message || j?.error || msg;
   } catch {}
   const e = new Error(msg);
   e.status = res.status;
+  e.raw = text;
   throw e;
 }
 
-/** Normaliza el payload, soporta firma nueva y antigua.
+function asJson(text) {
+  try { return JSON.parse(text); } catch { return null; }
+}
+
+/**
+ * Firma admitida:
  *  - NUEVA: guardarUbicaciones({ tenantId, ubicaciones, meta }, token)
  *  - ANTIGUA: guardarUbicaciones(token, tenantId, ubicaciones, meta)
  */
 function normalizePayloadAndToken(a, b, c, d) {
-  // Firma antigua detectada cuando el primer argumento es el token (string largo con puntos)
   const looksLikeToken = (v) => typeof v === 'string' && v.split('.').length >= 2 && v.length > 20;
 
   if (looksLikeToken(a)) {
+    // Firma antigua
     const token = a;
     const tenantId = b;
     const ubicaciones = Array.isArray(c) ? c : [];
@@ -41,20 +47,9 @@ function normalizePayloadAndToken(a, b, c, d) {
   const token = b;
   const meta = {
     cols: Number.isFinite(Number(payload?.meta?.cols)) ? Number(payload.meta.cols) : 5,
-    order:
-      (payload?.meta?.order ||
-        payload?.meta?.orden) === 'vertical'
-        ? 'vertical'
-        : 'horizontal',
+    order: (payload?.meta?.order || payload?.meta?.orden) === 'vertical' ? 'vertical' : 'horizontal',
   };
-  return [
-    {
-      tenantId: payload?.tenantId,
-      ubicaciones: Array.isArray(payload?.ubicaciones) ? payload.ubicaciones : [],
-      meta,
-    },
-    token,
-  ];
+  return [{ tenantId: payload?.tenantId, ubicaciones: payload?.ubicaciones || [], meta }, token];
 }
 
 /* ==============================
@@ -63,46 +58,42 @@ function normalizePayloadAndToken(a, b, c, d) {
 
 // GET ubicaciones + meta
 export async function cargarUbicaciones(token, tenantId) {
-  try {
-    const url = new URL(`${API}/api/ubicaciones`);
-    if (tenantId) url.searchParams.set('tenant_id', tenantId);
+  const url = new URL(`${API}/api/ubicaciones`);
+  if (tenantId) url.searchParams.set('tenant_id', tenantId);
+  url.searchParams.set('debug', '1'); // queremos ver el debug en respuesta
 
-    const r = await fetch(url.toString(), {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+  console.log('[ubicacionesService.cargarUbicaciones] GET', url.toString());
 
-    if (!r.ok) {
-      // Fallback silencioso (no romper la UI ni spamear la consola)
-      return { ubicaciones: [], meta: { cols: 5, order: 'horizontal' } };
-    }
+  const r = await fetch(url.toString(), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 
-    const body = await r.json().catch(() => ({}));
-    const ubicaciones = Array.isArray(body?.ubicaciones)
-      ? body.ubicaciones
-      : (Array.isArray(body?.rows) ? body.rows : []);
+  const text = await r.text();
+  if (!r.ok) ensureOk(r, text);
 
-    const metaRaw = body?.meta || {};
-    const meta = {
-      cols: Number.isFinite(Number(metaRaw.cols)) ? Number(metaRaw.cols) : (Number(body?.cols) || 5),
-      order: (metaRaw.order || metaRaw.orden || body?.order || body?.orden || 'horizontal'),
-    };
+  const body = asJson(text) || {};
+  console.log('[ubicacionesService.cargarUbicaciones] RES', body);
 
-    return { ubicaciones, meta };
-  } catch {
-    return { ubicaciones: [], meta: { cols: 5, order: 'horizontal' } };
-  }
+  const ubicaciones = Array.isArray(body?.ubicaciones)
+    ? body.ubicaciones
+    : (Array.isArray(body?.rows) ? body.rows : []);
+
+  const metaRaw = body?.meta || {};
+  const meta = {
+    cols: Number.isFinite(Number(metaRaw.cols)) ? Number(metaRaw.cols) : (Number(body?.cols) || 5),
+    order: (metaRaw.order || metaRaw.orden || body?.order || body?.orden || 'horizontal'),
+  };
+
+  return { ubicaciones, meta, debug: body?.debug || null };
 }
 
 // POST full (estructura + meta)
-// NUEVA firma preferida: guardarUbicaciones({ tenantId, ubicaciones, meta }, token)
-// Compatibilidad: guardarUbicaciones(token, tenantId, ubicaciones, meta)
 export async function guardarUbicaciones(a, b, c, d) {
   const [payload, token] = normalizePayloadAndToken(a, b, c, d);
 
   const body = {
     tenant_id: payload?.tenantId || undefined,
     meta: payload?.meta || {},
-    // Forzamos 'codigo' y orden numérico (ayuda al legacy 'baldas')
     ubicaciones: (payload?.ubicaciones || []).map((u, i) => ({
       ...u,
       label : u?.label || u?.codigo || `B${i + 1}`,
@@ -112,7 +103,10 @@ export async function guardarUbicaciones(a, b, c, d) {
     })),
   };
 
-  const r = await fetch(`${API}/api/ubicaciones`, {
+  const url = `${API}/api/ubicaciones?debug=1`; // pedimos debug
+  console.log('[ubicacionesService.guardarUbicaciones] POST', url, body);
+
+  const r = await fetch(url, {
     method: 'POST',
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -122,14 +116,27 @@ export async function guardarUbicaciones(a, b, c, d) {
   });
 
   const text = await r.text();
-  ensureOk(r, text);
+  if (!r.ok) ensureOk(r, text);
 
-  try { return JSON.parse(text); } catch { return { ok: true }; }
+  const json = asJson(text) || {};
+  console.log('[ubicacionesService.guardarUbicaciones] RES', json);
+
+  if (json?.ok !== true) {
+    const msg = json?.message || 'No se pudieron guardar las ubicaciones.';
+    const e = new Error(msg);
+    e.response = json;
+    throw e;
+  }
+
+  return json; // { ok: true, debug: {...} }
 }
 
-// PATCH solo meta (si tu backend lo soporta)
-export async function guardarSoloMeta({ tenantId, meta }, token) {
-  const r = await fetch(`${API}/api/ubicaciones/meta`, {
+// PATCH meta (solo presentación)
+export async function patchUbicacionesMeta(token, tenantId, meta) {
+  const url = `${API}/api/ubicaciones/meta?debug=1`;
+  console.log('[ubicacionesService.patchMeta] PATCH', url, { tenant_id: tenantId, meta });
+
+  const r = await fetch(url, {
     method: 'PATCH',
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -138,10 +145,17 @@ export async function guardarSoloMeta({ tenantId, meta }, token) {
     body: JSON.stringify({ tenant_id: tenantId, meta }),
   });
 
-  if (!r.ok) {
-    const err = new Error('No se pudo guardar la configuración visual');
-    err.status = r.status;
-    throw err;
+  const text = await r.text();
+  if (!r.ok) ensureOk(r, text);
+
+  const json = asJson(text) || {};
+  console.log('[ubicacionesService.patchMeta] RES', json);
+
+  if (json?.ok !== true) {
+    const msg = json?.message || 'No se pudo guardar la configuración visual';
+    const e = new Error(msg);
+    e.response = json;
+    throw e;
   }
-  return { ok: true };
+  return json;
 }

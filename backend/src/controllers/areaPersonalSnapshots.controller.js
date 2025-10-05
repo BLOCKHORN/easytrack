@@ -1,6 +1,18 @@
 // backend/src/controllers/areaPersonalSnapshots.controller.js
 const { supabase } = require('../utils/supabaseClient');
 
+async function resolveTenantId(req) {
+  if (req.tenant_id) return req.tenant_id;
+  if (req.tenant?.id) return req.tenant.id;
+  const slug = req.params?.tenantSlug || req.params?.slug || null;
+  if (slug) {
+    const { data, error } = await supabase.from('tenants').select('id').eq('slug', slug).maybeSingle();
+    if (error) throw error;
+    return data?.id || null;
+  }
+  return null;
+}
+
 function ymd(d) {
   const dt = new Date(d);
   return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
@@ -9,7 +21,7 @@ function ymd(d) {
 // GET /snapshots?from=YYYY-MM-DD&to=YYYY-MM-DD
 async function getSnapshots(req, res) {
   try {
-    const tenantId = req.tenant_id || req.tenant?.id || req.params?.tenantSlug || null;
+    const tenantId = await resolveTenantId(req);
     if (!tenantId) return res.status(403).json({ error: 'Tenant no resuelto' });
 
     let q = supabase
@@ -25,7 +37,6 @@ async function getSnapshots(req, res) {
     const { data, error } = await q;
 
     if (error && error.code === '42P01') {
-      // tabla no existe aún → respuesta vacía
       return res.json({ snapshots: [] });
     }
     if (error) throw error;
@@ -37,17 +48,16 @@ async function getSnapshots(req, res) {
   }
 }
 
-// POST /snapshots  → guarda un corte con métricas actuales
+// POST /snapshots  → guarda un corte con métricas actuales (packages)
 async function createSnapshot(req, res) {
   try {
-    const tenantId = req.tenant_id || req.tenant?.id || req.params?.tenantSlug || null;
+    const tenantId = await resolveTenantId(req);
     const userId = req.user?.id || null;
     if (!tenantId || !userId) return res.status(403).json({ error: 'Tenant/usuario no resuelto' });
 
-    // leemos todos los paquetes del tenant
     const { data: rows, error } = await supabase
-      .from('paquetes')
-      .select('fecha_llegada, ingreso_generado, empresa_transporte')
+      .from('packages')
+      .select('fecha_llegada, ingreso_generado, empresa_transporte, entregado, fecha_entregado')
       .eq('tenant_id', tenantId);
 
     if (error) throw error;
@@ -55,7 +65,7 @@ async function createSnapshot(req, res) {
     const total_ingresos = rows.reduce((a, p) => a + (Number(p.ingreso_generado) || 0), 0);
     const total_entregas = rows.length;
 
-    // últimos 30 días
+    // últimos 30 días (por fecha_llegada)
     const end = new Date(); end.setHours(23,59,59,999);
     const start = new Date(); start.setHours(0,0,0,0); start.setDate(start.getDate() - 29);
 
@@ -67,7 +77,7 @@ async function createSnapshot(req, res) {
     const entregas_30d  = last30.length;
     const ticket_medio  = total_entregas ? total_ingresos / total_entregas : 0;
 
-    // empresa top + share
+    // empresa top (por ingresos en los últimos 30d) + share
     const map = last30.reduce((acc, p) => {
       const k = p.empresa_transporte || '—';
       acc[k] = (acc[k] || 0) + (Number(p.ingreso_generado) || 0);
@@ -98,7 +108,6 @@ async function createSnapshot(req, res) {
       .maybeSingle();
 
     if (insErr && insErr.code === '42P01') {
-      // si no hay tabla, devolvemos el payload como si fuese "guardado"
       return res.json({ snapshot: payload, created: false });
     }
     if (insErr) throw insErr;

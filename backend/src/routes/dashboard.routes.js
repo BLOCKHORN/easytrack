@@ -10,13 +10,13 @@ const {
 
 const requireAuth = require('../middlewares/requireAuth');
 
-// 📊 Resumen general del dashboard
+// 📊 Resumen general (usa 'packages')
 router.get('/resumen', requireAuth, obtenerResumenDashboard);
 
-// 📈 Volumen de paquetes (gráfico)
+// 📈 Volumen de paquetes (agregado desde 'packages'; ya NO usa RPC legacy)
 router.post('/volumen-paquetes', requireAuth, obtenerVolumenPaquetes);
 
-// 🏢 Datos del negocio (sin columnas/baldas_por_columna)
+// 🏢 Datos del negocio (marca 'ubicaciones' si hay)
 router.get('/negocio', requireAuth, obtenerNegocio);
 
 module.exports = router;

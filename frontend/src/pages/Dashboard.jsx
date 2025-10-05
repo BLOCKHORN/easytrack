@@ -37,6 +37,11 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
     return `${API_URL}/api/dashboard`;
   }, [location.pathname]);
 
+  // Raíz para endpoints globales (no namespaced por slug)
+  const apiRoot = useMemo(() => {
+    return (import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001");
+  }, []);
+
   const [mostrarModal, setMostrarModal] = useState(false);
   const [mostrarModalImagen, setMostrarModalImagen] = useState(false);
   const [negocio, setNegocio] = useState(null);
@@ -76,6 +81,7 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
     if (s.includes("estante")) return "estantes";
     if (s.includes("carril") || s.includes("suelo") || s.includes("cintas")) return "carriles";
     if (s.includes("mixto")) return "mixto";
+    // Permitimos "ubicaciones" como valor válido
     return s;
   }, [negocio]);
 
@@ -96,7 +102,7 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [mostrarModal]);
 
-  // Cargar negocio
+  // Cargar negocio (y, si falta estructura legacy, validar con ubicaciones nuevas)
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -115,10 +121,43 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
 
         setNegocio(data);
         setSlug(data?.slug || null);
+
+        // Chequeo legacy
         const estructuraInferida =
           data?.estructura_almacen || data?.tipo_almacen || data?.tipoEstructura || data?.estructura;
-        const faltaEstructura = !estructuraInferida && !(data?.baldas_total > 0);
-        setConfigPendiente(faltaEstructura);
+        const faltaEstructuraLegacy = !estructuraInferida && !(data?.baldas_total > 0);
+
+        if (!faltaEstructuraLegacy) {
+          setConfigPendiente(false);
+          return;
+        }
+
+        // 🆕 Fallback al sistema NUEVO de ubicaciones:
+        // Si hay ubicaciones activas, consideramos configurado y marcamos "ubicaciones" para el chip.
+        try {
+          const ures = await fetch(`${apiRoot}/api/ubicaciones?debug=1`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const ujson = await ures.json().catch(() => ({}));
+          const ucount = Array.isArray(ujson?.ubicaciones)
+            ? ujson.ubicaciones.length
+            : (Array.isArray(ujson?.rows) ? ujson.rows.length : 0);
+
+          console.log("[Dashboard] ubicaciones detectadas para el tenant:", ucount);
+
+          if (!cancel) {
+            if (ucount > 0) {
+              setConfigPendiente(false);
+              // reflejar en UI la estructura "ubicaciones" para evitar el chip "sin definir"
+              setNegocio(prev => ({ ...prev, estructura_almacen: 'ubicaciones' }));
+            } else {
+              setConfigPendiente(true);
+            }
+          }
+        } catch (e) {
+          console.warn("[Dashboard] No se pudo comprobar ubicaciones, asumiendo config pendiente:", e);
+          if (!cancel) setConfigPendiente(true);
+        }
       } catch (e) {
         if (!cancel) {
           console.error("❌ Error cargando negocio:", e);
@@ -129,7 +168,7 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
       }
     })();
     return () => { cancel = true; };
-  }, [apiBase]);
+  }, [apiBase, apiRoot]);
 
   // Cargar resumen
   useEffect(() => {
@@ -204,14 +243,12 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
           </button>
 
           <div className="banner-izquierda">
-            
             <h2>
               <FaUserCircle aria-hidden="true" /> Bienvenido de nuevo <span>{negocio?.nombre_empresa}</span>
             </h2>
             <div className="chips">
               <span className={`chip`}>Estructura: {estructuraAlmacen}</span> <PlanBadge />
             </div>
-            
           </div>
 
           <div className="banner-derecha">
@@ -221,7 +258,7 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
           </div>
         </div>
       </div>
-      
+
       <TrialBanner />
 
       {/* Estadísticas */}

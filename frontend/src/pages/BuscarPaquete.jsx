@@ -15,7 +15,7 @@ import "../styles/BuscarPaquete.scss";
 
 /* ----------------- Constantes ----------------- */
 const RESULTADOS_POR_PAGINA = 10;
-const LS_KEY = "buscar_paquete_filtros_v11";
+const LS_KEY = "buscar_paquete_filtros_v12";
 
 /* ----------------- Utils búsqueda ----------------- */
 const normalize = (s = "") =>
@@ -141,8 +141,6 @@ export default function BuscarPaquete() {
   const [companias, setCompanias] = useState([]);
   const [ubicaciones, setUbicaciones] = useState([]); // [{id,label}]
   const [ubiIdToLabel, setUbiIdToLabel] = useState(() => new Map());
-  const [baldaIdToCode, setBaldaIdToCode] = useState(() => new Map()); // legacy
-  const [codeToBaldaId, setCodeToBaldaId] = useState(() => new Map()); // legacy
 
   // ui
   const [paginaActual, setPaginaActual] = useState(1);
@@ -197,11 +195,11 @@ export default function BuscarPaquete() {
 
         const tenantId = await getTenantIdOrThrow();
 
-        // Paquetes
+        // Paquetes (desde backend → ya lee 'packages')
         const paquetesAPI = await obtenerPaquetesBackend(token);
         if (cancelado) return;
 
-        // Empresas
+        // Empresas (tabla actual)
         const { data: empresas } = await supabase
           .from("empresas_transporte_tenant")
           .select("nombre")
@@ -215,26 +213,17 @@ export default function BuscarPaquete() {
           .eq("tenant_id", tenantId);
         const ubis = (uRows || []).map(r => ({ id: r.id, label: String(r.label || "").toUpperCase() }));
         setUbicaciones(ubis);
-        setUbiIdToLabel(new Map(ubis.map(u => [u.id, u.label])));
+        const mapU = new Map(ubis.map(u => [u.id, u.label]));
+        setUbiIdToLabel(mapU);
 
-        // Legacy baldas (para mapear B# -> balda_id cuando editemos)
-        const { data: bRows } = await supabase
-          .from("baldas")
-          .select("id, codigo")
-          .eq("id_negocio", tenantId);
-        const b2c = new Map((bRows || []).map(b => [b.id, String(b.codigo || "").toUpperCase()]));
-        const c2b = new Map((bRows || []).map(b => [String(b.codigo || "").toUpperCase(), b.id]));
-        setBaldaIdToCode(b2c);
-        setCodeToBaldaId(c2b);
-
-        // Normalizar ubicación visible de cada paquete
+        // Normalizar ubicación visible de cada paquete (sin baldas)
         const list = (paquetesAPI || []).map(p => {
           const label =
             (p.ubicacion_label && String(p.ubicacion_label).toUpperCase()) ||
             (p.compartimento && String(p.compartimento).toUpperCase()) ||
-            (p.ubicacion_id && (ubiIdToLabel.get(p.ubicacion_id) || "")) ||
-            (p.balda_id && b2c.get(p.balda_id)) ||
+            (p.ubicacion_id && (mapU.get(p.ubicacion_id) || "")) ||
             "";
+
           return {
             id: p.id,
             nombre_cliente: p.nombre_cliente ?? "",
@@ -242,11 +231,8 @@ export default function BuscarPaquete() {
             compania: p.empresa_transporte ?? p.compania ?? "",
             entregado: !!p.entregado,
             fecha_llegada: p.fecha_llegada ?? p.created_at ?? new Date().toISOString(),
-
-            // para edición/filtros
             ubicacion_id: p.ubicacion_id ?? null,
             ubicacion_label: label || null,
-            balda_id: Number.isFinite(Number(p.balda_id)) ? Number(p.balda_id) : null,
           };
         });
 
@@ -271,7 +257,6 @@ export default function BuscarPaquete() {
     const fromUbis = ubicaciones.map(u => u.label);
     const fromPaquetes = paquetes.map(p => p.ubicacion_label).filter(Boolean);
     const uniq = Array.from(new Set([...fromUbis, ...fromPaquetes])).sort((a,b)=> {
-      // ordenar por número si es B#
       const ma = /^B(\d+)$/i.exec(String(a)); const mb = /^B(\d+)$/i.exec(String(b));
       if (ma && mb) return parseInt(ma[1],10) - parseInt(mb[1],10);
       return String(a).localeCompare(String(b));
@@ -372,12 +357,10 @@ export default function BuscarPaquete() {
   };
 
   const abrirModalEdicion = (paquete) => {
-    // clonar con campos seguros
     setPaqueteEditando({
       id: paquete.id,
       nombre_cliente: paquete.nombre_cliente || "",
       empresa_transporte: paquete.empresa_transporte || paquete.compania || "",
-      // usaremos la etiqueta como fuente de verdad
       ubicacion_label: paquete.ubicacion_label || "",
     });
     setMostrarModal(true);
@@ -394,18 +377,12 @@ export default function BuscarPaquete() {
       const ubiRow = ubicaciones.find(u => u.label === label) || null;
       const ubiId = ubiRow?.id || null;
 
-      // legacy: por si el backend espera balda_id
-      const baldaId = codeToBaldaId.get(label) ?? null;
-
       const payload = {
         id: paqueteEditando.id,
         nombre_cliente: paqueteEditando.nombre_cliente,
         empresa_transporte: paqueteEditando.empresa_transporte,
-        // nuevos
         ubicacion_id: ubiId,
         ubicacion_label: label || null,
-        // legacy
-        balda_id: baldaId,
       };
 
       const actualizado = await editarPaqueteBackend(payload, token);
@@ -417,8 +394,6 @@ export default function BuscarPaquete() {
         compania: actualizado?.empresa_transporte ?? payload.empresa_transporte,
         ubicacion_id: actualizado?.ubicacion_id ?? ubiId ?? p.ubicacion_id,
         ubicacion_label: actualizado?.ubicacion_label ?? label ?? p.ubicacion_label,
-        balda_id: Number.isFinite(Number(actualizado?.balda_id)) ? Number(actualizado.balda_id)
-                  : (Number.isFinite(Number(baldaId)) ? Number(baldaId) : p.balda_id),
       } : p));
 
       setMostrarModal(false);
@@ -469,7 +444,6 @@ export default function BuscarPaquete() {
     });
   };
 
-  // Enter/Escape en búsqueda
   const onSearchKeyDown = (e) => { if (e.key === "Escape") limpiarBusqueda(); };
 
   const loc = (p) => p.ubicacion_label || "—";
@@ -659,7 +633,6 @@ export default function BuscarPaquete() {
                       </td>
 
                       <td data-label="Acciones" className="acciones">
-                        {/* Privacidad: visible siempre */}
                         <button
                           className="icono privacidad"
                           title={revealed ? "Ocultar nombre" : "Mostrar nombre"}

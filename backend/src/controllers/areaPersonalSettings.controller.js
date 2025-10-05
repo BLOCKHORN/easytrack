@@ -1,13 +1,25 @@
 // backend/src/controllers/areaPersonalSettings.controller.js
 const { supabase } = require('../utils/supabaseClient');
 
+async function resolveTenantId(req) {
+  if (req.tenant_id) return req.tenant_id;
+  if (req.tenant?.id) return req.tenant.id;
+  const slug = req.params?.tenantSlug || req.params?.slug || null;
+  if (slug) {
+    const { data, error } = await supabase.from('tenants').select('id').eq('slug', slug).maybeSingle();
+    if (error) throw error;
+    return data?.id || null;
+  }
+  return null;
+}
+
 /**
  * GET /settings
  * Devuelve { settings: { goal_annual_eur, currency } }
  */
 async function getFinanceSettings(req, res) {
   try {
-    const tenantId = req.tenant_id || req.tenant?.id || req.params?.tenantSlug;
+    const tenantId = await resolveTenantId(req);
     if (!tenantId) return res.status(403).json({ error: 'Tenant no resuelto' });
 
     const { data, error } = await supabase
@@ -38,7 +50,7 @@ async function getFinanceSettings(req, res) {
  */
 async function updateFinanceSettings(req, res) {
   try {
-    const tenantId = req.tenant_id || req.tenant?.id || req.params?.tenantSlug;
+    const tenantId = await resolveTenantId(req);
     if (!tenantId) return res.status(403).json({ error: 'Tenant no resuelto' });
 
     const { goal_annual_eur, currency } = req.body || {};

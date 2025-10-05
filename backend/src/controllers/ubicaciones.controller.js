@@ -1,306 +1,297 @@
-// CommonJS (robusto para distintas formas de export del cliente supabase)
+'use strict';
+
+// Cliente Supabase robusto (admite export default o named)
 const supa = require('../utils/supabaseClient');
-const supabase = supa.supabase || supa.default || supa;
+const supabase = supa?.supabase || supa?.default || supa;
 
 const DEFAULT_META = { cols: 5, order: 'horizontal' };
 
-/* ----------------------- helpers ----------------------- */
+// ===== Utils =====
 const up = (s = '') => String(s || '').trim().toUpperCase();
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
+const bool = (v, d = true) => (typeof v === 'boolean' ? v : d);
 
-/**
- * Resuelve tenant_id:
- * 1) req.query.tenant_id
- * 2) Authorization: Bearer <jwt> → supabase.auth.getUser(token) → (opcional) RPC/tabla
- * Si no se puede, devuelve null (el caller devolverá 200 con valores por defecto).
- */
+const wantDebug = (req) =>
+  (req?.query?.debug === '1') || (String(req?.headers?.['x-debug'] || '') === '1');
+
+function log(ctx, obj) {
+  try { console.log(`[ubicaciones.${ctx}]`, JSON.stringify(obj)); }
+  catch { console.log(`[ubicaciones.${ctx}]`, obj); }
+}
+
+// ===== Tenancy =====
 async function resolveTenantId(req) {
-  if (req.query && req.query.tenant_id) return String(req.query.tenant_id);
+  const q = req?.query?.tenant_id;
+  if (q) return String(q);
 
-  const auth = req.headers.authorization || '';
+  const auth = req?.headers?.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+
+  log('resolveTenantId.in', { hasAuth: !!token, hasQueryTenant: !!q });
+
   if (!token) return null;
 
   try {
     const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data?.user) return null;
-
+    if (error || !data?.user) {
+      log('resolveTenantId.authError', { error: error?.message || error || null });
+      return null;
+    }
     const userId = data.user.id;
 
-    // RPC opcional
+    // memberships
     try {
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('resolve_tenant_from_user', { p_user_id: userId });
-      if (!rpcErr && rpcData) return String(rpcData);
-    } catch (_) {}
-
-    // Tabla puente opcional
-    try {
-      const { data: map } = await supabase
-        .from('memberships') // o 'tenants_users' si ese es tu nombre
+      const { data: map, error: mErr } = await supabase
+        .from('memberships')
         .select('tenant_id')
         .eq('user_id', userId)
         .limit(1);
-      if (map && map[0]?.tenant_id) return String(map[0].tenant_id);
-    } catch (_) {}
+      if (!mErr && map?.[0]?.tenant_id) {
+        const tid = String(map[0].tenant_id);
+        log('resolveTenantId.ok.membership', { tenantId: tid });
+        return tid;
+      }
+    } catch (e) { log('resolveTenantId.membershipCatch', { msg: e?.message }); }
 
-    // Owner opcional
+    // fallback opcional por accepted_by
     try {
-      const { data: owned } = await supabase
+      const { data: owned, error: oErr } = await supabase
         .from('tenants')
         .select('id')
-        .eq('accepted_by', userId) // o 'owner_id' si tu esquema lo usa
+        .eq('accepted_by', userId)
         .limit(1);
-      if (owned && owned[0]?.id) return String(owned[0].id);
-    } catch (_) {}
+      if (!oErr && owned?.[0]?.id) {
+        const tid = String(owned[0].id);
+        log('resolveTenantId.ok.owner', { tenantId: tid });
+        return tid;
+      }
+    } catch (e) { log('resolveTenantId.ownerCatch', { msg: e?.message }); }
 
+    log('resolveTenantId.none', {});
     return null;
-  } catch {
+  } catch (e) {
+    log('resolveTenantId.fatal', { msg: e?.message });
     return null;
   }
 }
 
-/* ----------------------- GET /api/ubicaciones ----------------------- */
+// ===== GET: solo ubicaciones activas + meta =====
 async function listUbicaciones(req, res) {
   const tenantId = await resolveTenantId(req);
+  const dbg = wantDebug(req);
 
-  // Sin tenant → devolvemos vacío y meta por defecto (nunca 4xx)
+  log('list.in', { url: req.originalUrl, tenantId });
+
   if (!tenantId) {
-    return res.status(200).json({ ubicaciones: [], meta: DEFAULT_META });
+    if (dbg) return res.json({ ubicaciones: [], meta: DEFAULT_META, debug: { reason: 'no-tenant' } });
+    return res.json({ ubicaciones: [], meta: DEFAULT_META });
   }
 
   try {
-    // 1) Meta (OJO: la columna es 'orden' en tu esquema)
+    // Meta
     let meta = DEFAULT_META;
-    try {
-      const { data: metaRow } = await supabase
-        .from('ubicaciones_meta')
-        .select('cols, orden')
-        .eq('tenant_id', tenantId)
-        .maybeSingle();
+    const { data: metaRow, error: metaErr } = await supabase
+      .from('ubicaciones_meta')
+      .select('cols, orden')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
 
-      if (metaRow) {
-        meta = {
-          cols: num(metaRow.cols, 5),
-          order: metaRow.orden === 'vertical' ? 'vertical' : 'horizontal',
-        };
-      }
-    } catch (_) {}
-
-    // 2) Ubicaciones nuevas (tabla 'ubicaciones')
-    let ubicaciones = [];
-    try {
-      const { data: uRows } = await supabase
-        .from('ubicaciones')
-        .select('id, label, orden, activo')
-        .eq('tenant_id', tenantId)
-        .order('orden', { ascending: true });
-
-      if (uRows?.length) {
-        ubicaciones = uRows.map(r => ({
-          id: r.id,
-          label: up(r.label),
-          orden: num(r.orden, 0),
-          activo: r.activo ?? true,
-        }));
-      }
-    } catch (_) {}
-
-    // 3) Fallback legacy: derivar desde 'baldas' si no hay filas en 'ubicaciones'
-    if (!ubicaciones.length) {
-      try {
-        const { data: bRows } = await supabase
-          .from('baldas')
-          .select('id, codigo, estante, balda')
-          .eq('id_negocio', tenantId)
-          .order('estante', { ascending: true })
-          .order('balda', { ascending: true });
-
-        if (bRows?.length) {
-          ubicaciones = bRows.map((b, i) => ({
-            id: b.id,
-            label: up(b.codigo || `B${i + 1}`),
-            orden: i,
-            activo: true,
-          }));
-        }
-      } catch (_) {}
+    if (!metaErr && metaRow) {
+      meta = {
+        cols: num(metaRow.cols, 5),
+        order: (metaRow.orden === 'vertical') ? 'vertical' : 'horizontal',
+      };
     }
 
+    // SOLO activas
+    const { data: rows, error: uErr } = await supabase
+      .from('ubicaciones')
+      .select('id, label, orden, activo')
+      .eq('tenant_id', tenantId)
+      .eq('activo', true)
+      .order('orden', { ascending: true });
+
+    if (uErr) throw uErr;
+
+    const ubicaciones = (rows || []).map(r => ({
+      id: r.id,
+      label: up(r.label),
+      orden: num(r.orden, 0),
+      activo: true,
+    }));
+
+    log('list.out', { count: ubicaciones.length, meta });
+
+    if (dbg) return res.json({ ubicaciones, meta, debug: { count: ubicaciones.length } });
     return res.json({ ubicaciones, meta });
   } catch (e) {
-    console.error('[ubicaciones.list] error', e);
-    // Nunca reventar al cliente
-    return res.status(200).json({ ubicaciones: [], meta: DEFAULT_META });
+    log('list.error', { msg: e?.message });
+    if (dbg) return res.json({ ubicaciones: [], meta: DEFAULT_META, debug: { error: e?.message } });
+    return res.json({ ubicaciones: [], meta: DEFAULT_META });
   }
 }
 
-/* ----------------------- POST /api/ubicaciones ----------------------- */
-/**
- * Guarda meta (cols, order) + ubicaciones (label/orden/activo).
- * Además sincroniza la tabla legacy 'baldas' para que B6, B7… existan,
- * evitando así el 400 "No existe la ubicación B6" al crear paquetes.
- */
+// ===== POST: upsert + ARCHIVAR (activo=false) las que no mandas =====
 async function upsertUbicaciones(req, res) {
+  const dbg = wantDebug(req);
+
   const explicitTenant = req.body?.tenant_id;
   const resolvedTenant = await resolveTenantId(req);
   const tenantId = explicitTenant || resolvedTenant || null;
 
-  // Sin tenant → confirmamos ok pero no hacemos nada
-  if (!tenantId) return res.status(200).json({ ok: true });
+  log('upsert.in', {
+    hasTenantInBody: !!explicitTenant,
+    resolvedTenant: resolvedTenant || null,
+    finalTenant: tenantId || null,
+    bodyMeta: req.body?.meta || null,
+    bodyUbiLen: Array.isArray(req.body?.ubicaciones) ? req.body.ubicaciones.length : 0,
+  });
 
-  const metaIn = req.body?.meta || {};
+  if (!tenantId) {
+    const payload = { ok: false, message: 'No se pudo resolver el tenant.' };
+    return dbg ? res.status(400).json({ ...payload, debug: { reason: 'no-tenant' } }) : res.status(400).json(payload);
+  }
+
+  const mIn = req.body?.meta || {};
+  const cols = Math.max(1, Math.min(12, parseInt(mIn.cols ?? 5, 10) || 5));
+  const order = (mIn.order === 'vertical' || mIn.orden === 'vertical') ? 'vertical' : 'horizontal';
+
   const rowsIn = Array.isArray(req.body?.ubicaciones) ? req.body.ubicaciones : [];
+  const nowRows = rowsIn.map((u, i) => {
+    const label = up(u?.label || u?.codigo || `B${i + 1}`);
+    const orden = Number.isFinite(Number(u?.orden)) ? Number(u.orden) : i;
+    return {
+      tenant_id: tenantId,
+      label,
+      orden,
+      activo: true, // LAS QUE ENVÍAS QUEDAN ACTIVAS
+    };
+  });
 
   try {
-    // 1) Guardar meta (en tu schema el campo se llama 'orden')
-    try {
-      const mCols = num(metaIn.cols, 5);
-      const mOrder = (metaIn.order === 'vertical' ? 'vertical' : 'horizontal');
+    // 1) Guardar meta
+    const { error: metaErr } = await supabase
+      .from('ubicaciones_meta')
+      .upsert({ tenant_id: tenantId, cols, orden: order }, { onConflict: 'tenant_id' });
+    if (metaErr) throw metaErr;
 
-      await supabase
-        .from('ubicaciones_meta')
-        .upsert(
-          { tenant_id: tenantId, cols: mCols, orden: mOrder },
-          { onConflict: 'tenant_id' }
-        );
-    } catch (e) {
-      console.warn('[ubicaciones.upsert] meta warn:', e?.message);
-    }
+    // 2) Traer actuales (activas e inactivas)
+    const { data: existRows, error: existErr } = await supabase
+      .from('ubicaciones')
+      .select('id, label, orden, activo')
+      .eq('tenant_id', tenantId);
+    if (existErr) throw existErr;
 
-    // 2) Normalizar filas
-    const nowRows = rowsIn.map((u, i) => {
-      const label = up(u?.label || u?.codigo || `B${i + 1}`);
-      const orden = Number.isFinite(Number(u?.orden)) ? Number(u.orden) : i;
-      return {
-        tenant_id: tenantId,
-        label,
-        orden,
-        activo: typeof u?.activo === 'boolean' ? u.activo : true,
-      };
-    });
+    const byLabel = new Map((existRows || []).map(r => [up(r.label), r]));
+    const incomingLabels = new Set(nowRows.map(r => r.label));
 
-    // 3) Upsert a 'ubicaciones' SIN índices únicos (update-or-insert por (tenant_id, label))
-    //    a) intentamos UPDATE por (tenant_id, label)
-    //    b) si no afectó filas, hacemos INSERT
-    try {
-      for (const r of nowRows) {
-        const { data: updated, error: upErr } = await supabase
-          .from('ubicaciones')
-          .update({ orden: r.orden, activo: r.activo, label: r.label })
-          .eq('tenant_id', tenantId)
-          .eq('label', r.label)
-          .select('id');
+    let inserted = 0, updated = 0, reactivated = 0, archived = 0;
 
-        if (upErr) throw upErr;
-
-        if (!updated || updated.length === 0) {
-          const { error: insErr } = await supabase
+    // 3) Upsert/Reactivate lo enviado
+    for (const r of nowRows) {
+      const exists = byLabel.get(r.label);
+      if (exists) {
+        // Si estaba inactiva → reactivar
+        if (!exists.activo) {
+          const { error: reErr } = await supabase
             .from('ubicaciones')
-            .insert({ tenant_id: tenantId, label: r.label, orden: r.orden, activo: r.activo });
-          if (insErr) throw insErr;
+            .update({ activo: true })
+            .eq('id', exists.id)
+            .eq('tenant_id', tenantId);
+          if (reErr) throw reErr;
+          reactivated++;
         }
-      }
-    } catch (e) {
-      console.warn('[ubicaciones.upsert] ubicaciones warn:', e?.message);
-    }
-
-    // 4) Sincronizar 'baldas' (garantiza que existan B1..Bn)
-    //    - Leemos existentes por tenant
-    //    - Insertamos los que no existan
-    //    - Actualizamos estante/balda/codigo para los que existan
-    try {
-      const { data: existing } = await supabase
-        .from('baldas')
-        .select('id, codigo')
-        .eq('id_negocio', tenantId);
-
-      const byCode = new Map((existing || []).map(r => [up(r.codigo), r.id]));
-
-      const inserts = [];
-      const updates = [];
-
-      for (const r of nowRows) {
-        const codigo = r.label;           // espejo 1:1 con label (B1, B2, …)
-        const baldaIdx = r.orden + 1;     // balda = orden + 1 (estante fijo = 1)
-
-        if (byCode.has(codigo)) {
-          // preparar update por id
-          updates.push({
-            id: byCode.get(codigo),
-            id_negocio: tenantId,
-            estante: 1,
-            balda: baldaIdx,
-            codigo,
-            disponible: true,
-          });
+        // Actualiza orden/label si cambió
+        if (exists.orden !== r.orden || up(exists.label) !== r.label) {
+          const { error: upErr } = await supabase
+            .from('ubicaciones')
+            .update({ orden: r.orden, label: r.label, activo: true })
+            .eq('id', exists.id)
+            .eq('tenant_id', tenantId);
+          if (upErr) throw upErr;
+          updated++;
         } else {
-          inserts.push({
-            id_negocio: tenantId,
-            estante: 1,
-            balda: baldaIdx,
-            codigo,
-            disponible: true,
-          });
+          // asegura activo=true aunque no cambie nada
+          if (!exists.activo) {
+            const { error: actErr } = await supabase
+              .from('ubicaciones')
+              .update({ activo: true })
+              .eq('id', exists.id)
+              .eq('tenant_id', tenantId);
+            if (actErr) throw actErr;
+            reactivated++;
+          }
         }
+      } else {
+        const { error: insErr } = await supabase
+          .from('ubicaciones')
+          .insert({ tenant_id: tenantId, label: r.label, orden: r.orden, activo: true });
+        if (insErr) throw insErr;
+        inserted++;
       }
-
-      if (inserts.length) {
-        const { error: insB } = await supabase.from('baldas').insert(inserts);
-        if (insB) throw insB;
-      }
-      if (updates.length) {
-        // Supabase no soporta bulk-update por body, hacemos 1 a 1
-        for (const u of updates) {
-          const { error: upB } = await supabase
-            .from('baldas')
-            .update({
-              estante: u.estante,
-              balda: u.balda,
-              codigo: u.codigo,
-              disponible: u.disponible,
-            })
-            .eq('id', u.id)
-            .eq('id_negocio', tenantId);
-          if (upB) throw upB;
-        }
-      }
-    } catch (e) {
-      console.warn('[ubicaciones.upsert] baldas sync warn:', e?.message);
-      // aunque falle la sync de baldas, no reventamos: el front sigue funcionando
     }
 
-    return res.json({ ok: true });
+    // 4) ARCHIVAR (activo=false) las que ya no mandas
+    const missing = (existRows || []).filter(r => !incomingLabels.has(up(r.label)));
+    if (missing.length) {
+      const idsToArchive = missing.map(m => m.id);
+      const { error: archErr } = await supabase
+        .from('ubicaciones')
+        .update({ activo: false })
+        .in('id', idsToArchive)
+        .eq('tenant_id', tenantId);
+      if (archErr) throw archErr;
+      archived = idsToArchive.length;
+    }
+
+    log('upsert.out', { inserted, updated, reactivated, archived, cols, order });
+
+    const payload = { ok: true, debug: { inserted, updated, reactivated, archived, meta: { cols, order } } };
+    return dbg ? res.json(payload) : res.json({ ok: true });
   } catch (e) {
-    console.error('[ubicaciones.upsert] error', e);
-    // No mandamos 500 para no ensuciar la consola del cliente; devolvemos ok=false
-    return res.status(200).json({ ok: false });
+    log('upsert.error', { msg: e?.message });
+    const payload = { ok: false, message: e?.message || 'Error al guardar ubicaciones.' };
+    return dbg ? res.status(500).json({ ...payload, debug: { stack: e?.stack } }) : res.status(500).json(payload);
   }
 }
 
-/* ----------------------- PATCH /api/ubicaciones/meta ----------------------- */
+// ===== PATCH: meta solo =====
 async function patchMeta(req, res) {
+  const dbg = wantDebug(req);
+
   const explicitTenant = req.body?.tenant_id;
   const resolvedTenant = await resolveTenantId(req);
   const tenantId = explicitTenant || resolvedTenant || null;
 
-  if (!tenantId) return res.status(200).json({ ok: true });
+  log('patchMeta.in', {
+    hasTenantInBody: !!explicitTenant,
+    resolvedTenant: resolvedTenant || null,
+    finalTenant: tenantId || null,
+    bodyMeta: req.body?.meta || null,
+  });
 
-  const metaIn = req.body?.meta || {};
+  if (!tenantId) {
+    const payload = { ok: false, message: 'No se pudo resolver el tenant.' };
+    return dbg ? res.status(400).json({ ...payload, debug: { reason: 'no-tenant' } }) : res.status(400).json(payload);
+  }
+
+  const mIn = req.body?.meta || {};
+  const cols = Math.max(1, Math.min(12, parseInt(mIn.cols ?? 5, 10) || 5));
+  const order = (mIn.order === 'vertical' || mIn.orden === 'vertical') ? 'vertical' : 'horizontal';
+
   try {
-    const mCols = num(metaIn.cols, 5);
-    const mOrder = (metaIn.order === 'vertical' ? 'vertical' : 'horizontal');
-
-    await supabase
+    const { error } = await supabase
       .from('ubicaciones_meta')
-      .upsert(
-        { tenant_id: tenantId, cols: mCols, orden: mOrder },
-        { onConflict: 'tenant_id' }
-      );
+      .upsert({ tenant_id: tenantId, cols, orden: order }, { onConflict: 'tenant_id' });
+    if (error) throw error;
 
-    return res.json({ ok: true });
+    log('patchMeta.out', { cols, order });
+
+    return dbg ? res.json({ ok: true, debug: { cols, order } }) : res.json({ ok: true });
   } catch (e) {
-    console.error('[ubicaciones.patchMeta] error', e);
-    return res.status(200).json({ ok: false });
+    log('patchMeta.error', { msg: e?.message });
+    const payload = { ok: false, message: e?.message || 'Error al guardar meta.' };
+    return dbg ? res.status(500).json({ ...payload, debug: { stack: e?.stack } }) : res.status(500).json(payload);
   }
 }
 
