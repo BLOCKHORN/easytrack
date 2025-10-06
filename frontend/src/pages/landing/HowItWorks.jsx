@@ -1,3 +1,4 @@
+// src/components/HowItWorks.jsx
 import { useNavigate } from 'react-router-dom'
 import { FaClock, FaClipboardCheck, FaStore, FaTruck, FaCheckCircle } from 'react-icons/fa'
 import './HowItWorks.scss'
@@ -22,6 +23,7 @@ export default function HowItWorks({ onOpenDemo }) {
     } catch {}
   }
 
+  // Pasos adaptados al sistema de ubicaciones lineales B#
   const steps = [
     {
       id: 1,
@@ -32,17 +34,20 @@ export default function HowItWorks({ onOpenDemo }) {
     },
     {
       id: 2,
-      title: 'Configura tu almacén',
-      time: '5 min',
-      tasks: ['Estantes y baldas', 'Capacidad por zona'],
-      tip: 'Lo tendrás listo para empezar a operar.'
+      title: 'Activa tus ubicaciones',
+      time: '3–5 min',
+      tasks: [
+        'Define el rango inicial (p. ej., B1–B120)',
+        'Opcional: bloquea B reservadas'
+      ],
+      tip: 'Lo dejas listo para operar hoy.'
     },
     {
       id: 3,
       title: 'Empieza a operar',
       time: 'Ahora',
       tasks: [
-        'Alta en segundos con ubicación',
+        'Alta en segundos con B sugerida',
         'Entrega con verificación',
         'Seguimiento en panel (día/semana)'
       ],
@@ -84,7 +89,7 @@ export default function HowItWorks({ onOpenDemo }) {
 
                 {s.cta && (
                   <div className="ep-hiw__actions" role="group" aria-label="Acciones finales">
-                    <button className="ep-hiw__btn ep-hiw__btn--primary" onClick={startNow}>
+                    <button type="button" className="ep-hiw__btn ep-hiw__btn--primary" onClick={startNow}>
                       Probar ahora
                     </button>
                     <button type="button" className="ep-hiw__btn ep-hiw__btn--ghost" onClick={openDemo}>
@@ -97,7 +102,7 @@ export default function HowItWorks({ onOpenDemo }) {
           ))}
         </ol>
 
-        {/* Panel lateral */}
+        {/* Panel lateral: preview del onboarding con ubicaciones B */}
         <aside className="ep-hiw__preview">
           <div className="ep-hiw__assistant ep-hiw__reveal">
             <div className="ep-hiw__assistant-head">
@@ -110,15 +115,15 @@ export default function HowItWorks({ onOpenDemo }) {
                 <span className="ep-hiw__v">Centro Urbano</span>
               </div>
               <div className="ep-hiw__row">
-                <span className="ep-hiw__k">Estantes</span>
-                <span className="ep-hiw__v">A, B, C, D</span>
+                <span className="ep-hiw__k">Ubicaciones activas</span>
+                <span className="ep-hiw__v">B1–B120</span>
               </div>
               <div className="ep-hiw__row">
-                <span className="ep-hiw__k">Baldas por estante</span>
-                <span className="ep-hiw__v">4</span>
+                <span className="ep-hiw__k">Sugerencia de B</span>
+                <span className="ep-hiw__v">Cliente existente o B más libre</span>
               </div>
               <div className="ep-hiw__row">
-                <span className="ep-hiw__k">Empresas de transporte</span>
+                <span className="ep-hiw__k">Transportistas</span>
                 <span className="ep-hiw__v"><FaTruck /> InPost · SEUR · GLS</span>
               </div>
 
@@ -129,7 +134,7 @@ export default function HowItWorks({ onOpenDemo }) {
                   <FaCheckCircle aria-hidden="true" />
                   Cuenta creada
                 </li>
-                <li className="ep-hiw__state ep-hiw__state--current">Configurar almacén</li>
+                <li className="ep-hiw__state ep-hiw__state--current">Activar ubicaciones B</li>
                 <li className="ep-hiw__state ep-hiw__state--next">Empezar a operar</li>
               </ul>
             </div>

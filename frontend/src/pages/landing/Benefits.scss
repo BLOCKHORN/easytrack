@@ -1,5 +1,4 @@
 /* src/components/Benefits.scss */
-/* Scope completo al componente */
 .ep-bnf{
   --ep-bnf-text: var(--ld-text, #0f172a);
   --ep-bnf-surface: var(--ld-surface, #fff);
@@ -22,7 +21,7 @@
     background-clip: text; color: transparent;
   }
 
-  /* Fila de beneficio */
+  /* Fila */
   &__row{
     display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px;
     background: #fff; border: 1px solid rgba(2,6,23,.06); border-radius: 18px; padding: 20px;
@@ -48,9 +47,7 @@
     border: 1px solid rgba(var(--ep-bnf-primary-rgb), .2);
     padding:6px 10px; border-radius:999px; width:fit-content;
   }
-  &__points{
-    list-style:none; padding:0; margin:0; display:grid; gap:8px; color:var(--ep-bnf-text);
-  }
+  &__points{ list-style:none; padding:0; margin:0; display:grid; gap:8px; color:var(--ep-bnf-text); }
   &__chips{ display:flex; gap:8px; flex-wrap:wrap; }
 
   /* Columna demo */
@@ -60,17 +57,19 @@
   &__pill{
     display:inline-flex; align-items:center; gap:8px; border-radius:999px;
     padding:6px 10px; border:1px solid rgba(15,23,42,.12); background:#fff; color:var(--ep-bnf-text);
-    font-weight:700; font-size:13px;
+    font-weight:700; font-size:13px; cursor:pointer;
   }
   &__pill--ok{ background:#f0fdf4; border-color:#bbf7d0; color:#166534; }
 
-  /* Badges */
+  /* Etiquetas y badges */
+  &__label{ color:#64748b; font-size:12px; font-weight:700; }
   &__badge{
     display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:4px 10px;
     border:1px solid #e5e7eb; color:var(--ep-bnf-text); background:#fff; font-weight:700; font-size:12px;
   }
   &__badge--ok{ background:#f0fdf4; border-color:#bbf7d0; color:#14532d; }
   &__badge--warn{ background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
+  &__badge--code{ background:#eef2ff; border-color:#c7d2fe; color:#1e3a8a; }
 
   /* Botones */
   &__btn{
@@ -94,18 +93,17 @@
     display:grid; gap:10px;
   }
   &__ui-row{
-    display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;
-    &:first-of-type{ grid-template-columns: 1fr 1fr; }
+    display:grid; grid-template-columns: 1fr 1fr; gap:8px;
     @media (max-width:560px){ grid-template-columns:1fr; }
+    input, select{
+      width:100%; border:1px solid rgba(15,23,42,.1); border-radius:10px; padding:10px 12px;
+      font-weight:700; color:#0f172a; background:#fff;
+      &:focus{ outline:2px solid rgba(var(--ep-bnf-primary-rgb), .35); outline-offset:2px; }
+    }
   }
-  &__ui-field{
-    background:#fff; border:1px solid rgba(15,23,42,.1); border-radius:10px; padding:10px 12px; display:grid; gap:4px;
-    span{ font-size:12px; color:#64748b; }
-    i{ font-style:normal; color:var(--ep-bnf-text); }
-  }
-  &__actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  &__loc-code{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 
-  /* Resultados de búsqueda */
+  /* Resultados */
   &__results{ display:grid; gap:10px; }
   &__res{
     display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center;
@@ -115,39 +113,36 @@
   &__res-title{ display:flex; align-items:center; gap:8px; color:var(--ep-bnf-text); }
   &__res-badges{ display:flex; gap:6px; flex-wrap:wrap; }
   &__res-actions{ display:flex; gap:8px; }
+  .is-blur{ filter: blur(5px); }
 
-  /* Canales + WhatsApp template */
-  &__channels{ display:grid; gap:10px; }
-  &__ch{
-    display:grid; grid-template-columns: 32px 1fr auto; gap:10px; align-items:center;
-    background:#fff; border:1px solid rgba(15,23,42,.08); border-radius:12px; padding:10px;
+  /* Grid B (selección/ocupación) */
+  &__gridB{
+    display:grid; grid-template-columns: repeat(6, minmax(72px, 1fr)); gap:8px;
+    @media (max-width:700px){ grid-template-columns: repeat(4, minmax(60px, 1fr)); }
+    @media (max-width:480px){ grid-template-columns: repeat(3, minmax(56px, 1fr)); }
   }
-  &__ch-icon{ display:grid; place-items:center; color: rgb(var(--ep-bnf-primary-rgb)); }
-  &__ch-body{
-    display:grid; line-height:1.2;
-    strong{ color:var(--ep-bnf-text); }
-    span{ color:#64748b; font-size:13px; }
+  &__gridB--compact{
+    grid-template-columns: repeat(6, minmax(80px, 1fr));
+    @media (max-width:700px){ grid-template-columns: repeat(4, minmax(70px, 1fr)); }
   }
-  &__ch-state{ font-weight:800; color:var(--ep-bnf-text); }
-  &__ch-state--on{
-    color:#14532d; background:#f0fdf4; border:1px solid #bbf7d0; padding:4px 8px; border-radius:999px;
+  &__gridB-cell{
+    display:grid; place-items:center; gap:4px; height:56px; border-radius:10px;
+    font-weight:900; border:1px solid #e5e7eb; background:#fff; color:#0f172a;
+    position:relative;
+    &.is-active{ box-shadow:0 0 0 2px rgba(var(--ep-bnf-primary-rgb), .55) inset; }
+    &.is-suggested::after{
+      content:''; position:absolute; inset:-3px; border-radius:12px; box-shadow:0 0 .65rem rgba(79,70,229,.35);
+      pointer-events:none;
+    }
   }
+  &__gridB--free{ background:#ecfccb; border-color:#d9f99d; }   /* libre (0) */
+  &__gridB--low { background:#d9f99d; border-color:#bef264; }   /* 1–4 */
+  &__gridB--mid { background:#fde68a; border-color:#fcd34d; }   /* 5–9 */
+  &__gridB--high{ background:#fecaca; border-color:#fca5a5; }   /* 10+ */
+  .cell-top{ line-height:1; }
+  .cell-sub{ font-size:12px; opacity:.85; }
 
-  &__wa{
-    background: linear-gradient(180deg, rgba(16,185,129,.06), #fff);
-    border: 1px solid rgba(16,185,129,.25); border-radius: 14px; padding: 12px;
-    box-shadow: 0 18px 36px rgba(16,185,129,.12);
-    display:grid; gap:10px;
-  }
-  &__wa-title{ font-weight:900; color:var(--ep-bnf-text); }
-  &__wa-list{ display:grid; gap:8px; }
-  &__wa-line{
-    display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center;
-    background:#fff; border:1px solid rgba(15,23,42,.08); border-radius:10px; padding:10px;
-  }
-  &__wa-text{ color:var(--ep-bnf-text); font-size:14px; }
-
-  /* Skeleton */
+  /* Shimmer */
   &__shimmer{
     position:relative;
     background: linear-gradient(90deg, #eef2ff 20%, #ffffff 40%, #eef2ff 60%);
@@ -159,7 +154,7 @@
     100%{ background-position: -200% 0 }
   }
 
-  /* Animaciones de entrada */
+  /* Animaciones */
   &__animated{ opacity:0; transform: translateY(8px); animation: ep-bnf-fadeUp .5s ease forwards; }
   &__animated--d1{ animation-delay:.06s; }
   &__animated--d2{ animation-delay:.12s; }

@@ -29,7 +29,7 @@ export default function Soporte() {
         <>
           Sí. Usa <em>Paquetes → Importar</em>. Columnas recomendadas: <code>codigo</code>, <code>cliente</code>, <code>compania</code>,
           <code>estante</code>, <code>balda</code>, <code>estado</code>. Si necesitas una plantilla, escríbenos a
-          <a href="mailto:support@easytrack.pro"> support@easytrack.pro</a>.
+          <a href="mailto:info@easytrack.pro"> info@easytrack.pro</a>.
         </>
       ),
       keywords: 'importar excel csv plantilla columnas código cliente compañía',
@@ -42,7 +42,7 @@ export default function Soporte() {
       a: (
         <>
           Te guiamos en la puesta en marcha (30–45 min). Coordinamos por correo en
-          <a href="mailto:support@easytrack.pro"> support@easytrack.pro</a>.
+          <a href="mailto:info@easytrack.pro"> info@easytrack.pro</a>.
         </>
       ),
       keywords: 'demo onboarding sesión acompañamiento formación training',
@@ -453,8 +453,8 @@ export default function Soporte() {
       <section id="contacto" className="soporte__contact">
         <div className="soporte__contact-card">
           <h2>Contacta con soporte</h2>
-          <p>Correo recomendado:</p>
-          <p className="lead"><a href="mailto:support@easytrack.pro">support@easytrack.pro</a></p>
+          <p>Correo:</p>
+          <p className="lead"><a href="mailto:info@easytrack.pro">info@easytrack.pro</a></p>
           <ul>
             <li>Lun–Vie · 9:00–18:00 CET</li>
             <li>Tiempo medio de respuesta: 1–6 h</li>

@@ -1,7 +1,12 @@
+// src/pages/Cookies.jsx
 import { useMemo } from 'react'
 import { FiPrinter, FiSettings } from 'react-icons/fi'
 import '../styles/Legal.scss'
 
+/**
+ * Política de cookies alineada con RGPD/ePrivacy.
+ * Incluye apertura del gestor de consentimiento (CMP) si existe.
+ */
 export default function CookiesPage() {
   const updated = useMemo(
     () => new Date().toLocaleDateString('es-ES', { day:'numeric', month:'long', year:'numeric' }),
@@ -11,29 +16,23 @@ export default function CookiesPage() {
   const TOC = [
     { id: 'intro',   label: '1. Introducción' },
     { id: 'que-es',  label: '2. ¿Qué son las cookies?' },
-    { id: 'tipos',   label: '3. Tipos de cookies que usamos' },
+    { id: 'tipos',   label: '3. Categorías de cookies' },
     { id: 'base',    label: '4. Base legal' },
-    { id: 'gestion', label: '5. Cómo gestionar tus cookies' },
-    { id: 'lista',   label: '6. Lista de cookies' },
+    { id: 'gestion', label: '5. Gestor de preferencias' },
+    { id: 'lista',   label: '6. Inventario de cookies y almacenamiento' },
     { id: 'cambios', label: '7. Cambios en esta política' },
     { id: 'contacto',label: '8. Contacto' },
   ]
 
   const handlePrint = () => window.print()
 
-  // Intenta abrir el gestor de preferencias de tu CMP si existe
+  // Abre el gestor de consentimiento si tu CMP está presente
   const openCookiePreferences = () => {
-    // CookieYes
     if (window.cookieyes?.openSettings) return window.cookieyes.openSettings()
-    // Cookiebot
     if (window.Cookiebot?.show) return window.Cookiebot.show()
-    // OneTrust
     if (window.OnetrustActiveGroups !== undefined && window.Optanon) return window.Optanon.ToggleInfoDisplay()
-    // Klaro (ejemplo)
     if (window.klaro?.show) return window.klaro.show()
-    // Custom
     if (window.__cookiePrefs?.open) return window.__cookiePrefs.open()
-    // Fallback
     const anchor = document.getElementById('gestion')
     anchor?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     alert('No se detectó un gestor de preferencias. Integra tu CMP o define window.__cookiePrefs.open().')
@@ -77,8 +76,8 @@ export default function CookiesPage() {
           <section id="intro" className="legal__section">
             <h2>1. Introducción</h2>
             <p>
-              Esta Política explica cómo EasyTrack utiliza cookies y tecnologías similares en el sitio
-              web y la aplicación. Puedes gestionar tus preferencias en cualquier momento desde
+              En EasyTrack utilizamos cookies y tecnologías equivalentes para operar la plataforma y, si así lo aceptas,
+              para medir uso y mejorar la experiencia. Puedes cambiar tu elección en cualquier momento desde{' '}
               <button type="button" className="legal__link-btn" onClick={openCookiePreferences}>Configurar cookies</button>.
             </p>
           </section>
@@ -86,53 +85,45 @@ export default function CookiesPage() {
           <section id="que-es" className="legal__section">
             <h2>2. ¿Qué son las cookies?</h2>
             <p>
-              Son pequeños archivos que se almacenan en tu dispositivo para recordar información de tu
-              visita (preferencias, sesión, etc.). También usamos tecnologías equivalentes (localStorage,
-              sessionStorage, etiquetas de seguimiento cuando procede).
+              Pequeños archivos o identificadores que el sitio envía a tu navegador para recordar información durante tu
+              sesión. Tratamos como “similares” ciertos usos de <code>localStorage</code> o <code>sessionStorage</code>
+              cuando cumplen una función análoga.
             </p>
           </section>
 
           <section id="tipos" className="legal__section">
-            <h2>3. Tipos de cookies que usamos</h2>
+            <h2>3. Categorías de cookies</h2>
             <ul>
-              <li><span className="badge">Necesarias</span> habilitan funciones esenciales (inicio de sesión, seguridad, carga de páginas). No pueden desactivarse desde el sistema.</li>
-              <li><span className="badge badge--pref">Preferencias</span> recuerdan tus elecciones (idioma, interfaz).</li>
-              <li><span className="badge badge--analytics">Analíticas</span> nos ayudan a medir uso y rendimiento (se instalan solo con tu consentimiento).</li>
-              <li><span className="badge badge--mkt">Marketing</span> personalizan anuncios o miden campañas (si las activas).</li>
+              <li><span className="badge">Necesarias</span> — imprescindibles para iniciar sesión, seguridad y prestación del servicio.</li>
+              <li><span className="badge badge--pref">Preferencias</span> — recuerdan configuración de interfaz.</li>
+              <li><span className="badge badge--analytics">Analíticas</span> — métricas agregadas de uso (solo si las aceptas).</li>
+              <li><span className="badge badge--mkt">Marketing</span> — medición/publicidad (solo si las aceptas).</li>
             </ul>
           </section>
 
           <section id="base" className="legal__section">
             <h2>4. Base legal</h2>
             <p>
-              Las <strong>cookies necesarias</strong> se basan en nuestro <em>interés legítimo</em> para prestar el servicio.
-              El resto (<em>preferencias, analíticas, marketing</em>) se instalan solo con tu <strong>consentimiento</strong>,
-              que puedes retirar en cualquier momento desde
+              Las <strong>necesarias</strong> se basan en nuestro interés legítimo para prestar el servicio.
+              Preferencias, analíticas y marketing se instalan solo con tu <strong>consentimiento</strong>, que puedes
+              retirar desde{' '}
               <button type="button" className="legal__link-btn" onClick={openCookiePreferences}>Configurar cookies</button>.
             </p>
           </section>
 
           <section id="gestion" className="legal__section">
-            <h2>5. Cómo gestionar tus cookies</h2>
-            <p>
-              Puedes aceptar o rechazar categorías de cookies en el gestor de preferencias:
-            </p>
+            <h2>5. Gestor de preferencias</h2>
+            <p>Puedes aceptar o rechazar categorías de cookies:</p>
             <p>
               <button type="button" className="legal__btn legal__btn--primary" onClick={openCookiePreferences}>
                 Abrir preferencias de cookies
               </button>
             </p>
-            <p>
-              También puedes borrar o bloquear cookies desde la configuración de tu navegador. Ten en cuenta que
-              bloquear las necesarias puede afectar al funcionamiento del servicio.
-            </p>
+            <p>También puedes gestionar cookies desde tu navegador. Bloquear las necesarias puede impedir el funcionamiento.</p>
           </section>
 
           <section id="lista" className="legal__section">
-            <h2>6. Lista de cookies</h2>
-            <p>
-              Este inventario es orientativo; revisa y completa según tu configuración real (CMP/Analytics/Pagos).
-            </p>
+            <h2>6. Inventario de cookies y almacenamiento</h2>
 
             <div className="legal__table-wrap">
               <table className="legal__table" aria-label="Listado de cookies">
@@ -149,23 +140,9 @@ export default function CookiesPage() {
                   <tr>
                     <td>cookie_consent</td>
                     <td>EasyTrack</td>
-                    <td>Guardar las preferencias de consentimiento de cookies.</td>
+                    <td>Guardar las preferencias de consentimiento.</td>
                     <td>12 meses</td>
                     <td>Primera parte · Necesaria</td>
-                  </tr>
-                  <tr>
-                    <td>_ga</td>
-                    <td>Google</td>
-                    <td>Métricas agregadas de uso (si activas analíticas).</td>
-                    <td>13 meses</td>
-                    <td>Terceros · Analítica</td>
-                  </tr>
-                  <tr>
-                    <td>_gid</td>
-                    <td>Google</td>
-                    <td>Distinguir usuarios en sesiones (si activas analíticas).</td>
-                    <td>24 horas</td>
-                    <td>Terceros · Analítica</td>
                   </tr>
                   <tr>
                     <td>__stripe_mid</td>
@@ -174,30 +151,42 @@ export default function CookiesPage() {
                     <td>12 meses</td>
                     <td>Terceros · Necesaria</td>
                   </tr>
-                  {/* Añade/ajusta filas reales de tu proyecto si usas otras herramientas */}
+                  <tr>
+                    <td>_ga</td>
+                    <td>Google</td>
+                    <td>Analítica agregada (solo si la activas).</td>
+                    <td>13 meses</td>
+                    <td>Terceros · Analítica</td>
+                  </tr>
+                  <tr>
+                    <td>_gid</td>
+                    <td>Google</td>
+                    <td>Distinguir sesiones (solo si la activas).</td>
+                    <td>24 horas</td>
+                    <td>Terceros · Analítica</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
 
-            <p className="legal__note">
-              Si usas almacenamiento local (localStorage/sessionStorage) para sesión (p. ej., tokens de Supabase),
-              documenta su uso en la Política de Privacidad.
+            <h3>Almacenamiento local</h3>
+            <p>
+              Usamos <code>localStorage</code>/<code>sessionStorage</code> para datos técnicos de sesión (p. ej.,
+              tokens de Supabase, preferencias de interfaz). Su tratamiento se detalla en la{' '}
+              <a href="/legal/privacidad">Política de Privacidad</a>.
             </p>
           </section>
 
           <section id="cambios" className="legal__section">
             <h2>7. Cambios en esta política</h2>
             <p>
-              Podemos actualizar esta Política para reflejar cambios legales o técnicos. Publicaremos los cambios
-              y, cuando sea necesario, solicitaremos de nuevo tu consentimiento.
+              Publicaremos actualizaciones y, cuando sea necesario, solicitaremos de nuevo tu consentimiento.
             </p>
           </section>
 
           <section id="contacto" className="legal__section">
             <h2>8. Contacto</h2>
-            <p>
-              Dudas sobre cookies o privacidad: <a href="mailto:support@easytrack.pro">support@easytrack.pro</a>
-            </p>
+            <p>Privacidad y cookies: <a href="mailto:info@easytrack.pro">info@easytrack.pro</a></p>
           </section>
         </article>
       </div>

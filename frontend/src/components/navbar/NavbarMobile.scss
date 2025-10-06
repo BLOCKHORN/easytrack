@@ -1,3 +1,4 @@
+/* src/components/NavbarMobile.scss */
 /* =================== MENÚ MÓVIL =================== */
 .navbar__mobile{
   position: fixed; inset: 0; z-index: 3000;
@@ -116,14 +117,33 @@
   .navbar__mobile-panel{ width: 100%; }
 }
 
-/* Asegura que el logo del navbar (fuera del panel) nunca se tape por el chip o acciones */
-.navbar{
-  position: relative; z-index: 100; /* por encima del contenido */
-  .navbar__brand{ min-width: 0; }
-  .brand-wordmark{ white-space: nowrap; }
+/* =================== HEADER GLOBAL: SOLO SMARTPHONES =================== */
+/* Estas reglas NO afectan a laptop/desktop. Aplica hasta 640px (smartphones). */
+@media (max-width: 640px){
+  .navbar{
+    position: relative; z-index: 100; /* por encima del contenido */
+    display: flex; align-items: center; gap: 8px;
+    padding: max(0px, env(safe-area-inset-top)) 12px 0 12px;
+
+    .navbar__brand{ min-width: 0; position: relative; z-index: 2; }
+    .brand-wordmark{ white-space: nowrap; }
+
+    /* Empuja el botón a la derecha y evita posiciones absolutas/fijas que solapen */
+    .btn--enter{
+      position: static !important;
+      margin-left: auto;
+      flex: 0 0 auto;
+      z-index: 1; /* siempre bajo el logo si se diera el caso */
+      max-width: 56vw; /* evita que invada el lado izquierdo */
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+  }
+
+  /* Hamburguesa visible en móviles (si tu layout ya la muestra en tablet, esto no interfiere) */
+  .navbar__hamburger{ display:inline-block; }
 }
 
-/* ===== Hamburguesa (sin cambios funcionales; solo coherencia) ===== */
+/* ===== Hamburguesa (tablets en adelante como tenías) ===== */
 .navbar__hamburger{
   display:none; position:relative;
   width: 42px; height: 38px; border-radius:12px;

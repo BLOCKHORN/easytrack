@@ -1,3 +1,4 @@
+// src/components/NavbarMobile.jsx
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { FaSignOutAlt, FaLock } from 'react-icons/fa'

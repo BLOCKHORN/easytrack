@@ -1,27 +1,65 @@
+// src/pages/Privacidad.jsx
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FiPrinter } from 'react-icons/fi'
 import '../styles/Legal.scss'
 
+/** ===== Datos de la entidad (rellena cuando los tengas) =====
+ * Si un campo está vacío, NO se mostrará en la web.
+ */
+const COMPANY = {
+  brand: 'EasyTrack',            // Nombre comercial visible
+  legalName: '',                 // Razón social (ej.: Blockhorn Studios OÜ)
+  country: '',                   // País (ej.: Estonia)
+  regNo: '',                     // Nº registro mercantil
+  vatNo: '',                     // NIF/IVA (CIF/VAT)
+  address: '',                   // Dirección legal
+  email: 'info@easytrack.pro',   // Email de contacto general
+  privacyEmail: 'info@easytrack.pro' // Email específico privacidad (puede ser el mismo)
+}
+
+/** Encargados/subencargados (ajusta si cambias de stack) */
+const SUBPROCESSORS = [
+  {
+    name: 'Supabase',
+    purpose: 'Base de datos, autenticación y Storage',
+    dataScope: 'Datos de cuenta, operativa del servicio y ficheros subidos',
+    region: 'UE/EEE',
+    url: 'https://supabase.com'
+  },
+  {
+    name: 'Stripe Payments Europe, Ltd.',
+    purpose: 'Procesamiento de pagos y facturación',
+    dataScope: 'Datos de cobro, métodos de pago y metadatos de transacción',
+    region: 'UE/EEE y, en su caso, transferencias internacionales con garantías',
+    url: 'https://stripe.com'
+  },
+  {
+    name: 'Vercel / Render / Hetzner',
+    purpose: 'Hosting y entrega de la plataforma',
+    dataScope: 'Logs técnicos, telemetría mínima y contenidos servidos',
+    region: 'UE/EEE y, en su caso, transferencias internacionales con garantías',
+    url: 'https://vercel.com'
+  }
+]
+
 export default function Privacidad() {
   const updated = useMemo(() => {
-    // Fecha legible en español (p. ej., "6 de septiembre de 2025")
     return new Date().toLocaleDateString('es-ES', { day:'numeric', month:'long', year:'numeric' })
   }, [])
 
-  // Definición del índice (id debe coincidir con la sección)
   const TOC = useMemo(() => ([
     { id: 'resp',      label: '1. Responsable' },
     { id: 'datos',     label: '2. Datos tratados' },
-    { id: 'finalidad', label: '3. Finalidades y base legal' },
+    { id: 'finalidad', label: '3. Finalidades y base jurídica' },
     { id: 'dest',      label: '4. Destinatarios (encargados)' },
     { id: 'ti',        label: '5. Transferencias internacionales' },
-    { id: 'plazo',     label: '6. Conservación' },
-    { id: 'derechos',  label: '7. Derechos (RGPD)' },
+    { id: 'plazo',     label: '6. Plazos de conservación' },
+    { id: 'derechos',  label: '7. Derechos RGPD' },
     { id: 'seg',       label: '8. Seguridad' },
     { id: 'cookies',   label: '9. Cookies' },
   ]), [])
 
-  // Scroll-spy
+  // Scroll-spy TOC
   const [activeId, setActiveId] = useState(TOC[0].id)
   const sectionRefs = useRef({})
   useEffect(() => {
@@ -43,10 +81,39 @@ export default function Privacidad() {
 
   const handlePrint = () => window.print()
 
+  // Render helper: línea condicional
+  const Line = ({ label, value }) => {
+    if (!value) return null
+    return <div><strong>{label}:</strong> {value}</div>
+  }
+
+  // Texto “responsable” compacto y sin relleno
+  const Responsable = () => {
+    const who =
+      COMPANY.legalName?.trim()
+        ? `${COMPANY.legalName}${COMPANY.brand ? ` (${COMPANY.brand})` : ''}`
+        : COMPANY.brand
+    return (
+      <>
+        <p>
+          Responsable del tratamiento: <strong>{who}</strong>.
+        </p>
+        <Line label="País" value={COMPANY.country?.trim()} />
+        <Line label="Registro mercantil" value={COMPANY.regNo?.trim()} />
+        <Line label="N.º IVA" value={COMPANY.vatNo?.trim()} />
+        <Line label="Domicilio" value={COMPANY.address?.trim()} />
+        <div>
+          <strong>Contacto de privacidad:</strong>{' '}
+          <a href={`mailto:${COMPANY.privacyEmail}`}>{COMPANY.privacyEmail}</a>
+        </div>
+      </>
+    )
+  }
+
   return (
     <main className="legal" role="main">
       <div className="legal__shell">
-        {/* TOC lateral / superior (responsive) */}
+        {/* Índice */}
         <aside className="legal__card legal__toc" aria-label="Índice de contenidos">
           <div className="legal__toc-head">
             <h3>Contenido</h3>
@@ -75,108 +142,97 @@ export default function Privacidad() {
         <article className="legal__card legal__content">
           <header className="legal__head">
             <p className="legal__kicker">Legal · Protección de datos</p>
-            <h1 className="legal__title">Política de Privacidad de EasyTrack</h1>
+            <h1 className="legal__title">Política de Privacidad de {COMPANY.brand || 'la plataforma'}</h1>
             <p className="legal__meta">Última actualización: {updated}</p>
           </header>
 
-          <section id="resp" className="legal__section">
-            <h2>1. Responsable</h2>
-            <p>
-              Responsable del tratamiento: <strong>Blockhorn Studios OÜ</strong> (EasyTrack).
-              Contacto de privacidad/soporte: <a href="mailto:support@easytrack.pro">support@easytrack.pro</a>.
-            </p>
-            <p className="legal__note">
-              Este documento es orientativo. Adáptalo con tu asesoría legal para reflejar tu razón social,
-              datos registrales y dirección completos.
-            </p>
+          <section id="resp" className="legal__section" aria-labelledby="h-resp">
+            <h2 id="h-resp">1. Responsable</h2>
+            <Responsable />
           </section>
 
-          <section id="datos" className="legal__section">
-            <h2>2. Datos que tratamos</h2>
+          <section id="datos" className="legal__section" aria-labelledby="h-datos">
+            <h2 id="h-datos">2. Datos tratados</h2>
             <ul>
-              <li><strong>Cuenta y negocio</strong>: email, nombre de empresa, configuración del almacén.</li>
-              <li><strong>Operativa</strong>: paquetes, entregas, búsquedas y eventos técnicos (para mejorar el servicio).</li>
-              <li><strong>Pago y facturación</strong>: gestionado por Stripe (no almacenamos tarjetas en nuestros servidores).</li>
-              <li><strong>Datos técnicos</strong>: IP, dispositivo/navegador, logs de acceso (seguridad y prevención de abuso).</li>
-              <li><strong>Soporte</strong>: mensajes de contacto y metadatos asociados.</li>
+              <li><strong>Cuenta y tenant</strong>: email, nombre de empresa, parámetros de configuración del almacén.</li>
+              <li><strong>Uso de la plataforma</strong>: registros de paquetes, entregas, búsquedas y acciones en {COMPANY.brand || 'la plataforma'}.</li>
+              <li><strong>Pagos y facturación</strong>: gestionados por Stripe; no almacenamos números de tarjeta.</li>
+              <li><strong>Datos técnicos</strong>: IP, agente de usuario, trazas de error y logs de acceso para seguridad y diagnóstico.</li>
+              <li><strong>Soporte</strong>: mensajes y metadatos necesarios para atender solicitudes.</li>
             </ul>
-            <p>No tratamos categorías especiales de datos ni realizamos perfiles con efectos legales para el usuario.</p>
+            <p>No tratamos categorías especiales de datos ni tomamos decisiones automatizadas con efectos jurídicos.</p>
           </section>
 
-          <section id="finalidad" className="legal__section">
-            <h2>3. Finalidades y base legal</h2>
+          <section id="finalidad" className="legal__section" aria-labelledby="h-finalidad">
+            <h2 id="h-finalidad">3. Finalidades y base jurídica</h2>
             <ul>
-              <li><strong>Prestación del servicio</strong> (ejecución de contrato): alta, acceso y uso de EasyTrack.</li>
-              <li><strong>Soporte y mejoras</strong> (interés legítimo): atención a incidencias, telemetría mínima, QA.</li>
-              <li><strong>Facturación y cumplimiento</strong> (obligación legal): emisión de facturas, contabilidad.</li>
-              <li><strong>Comunicaciones informativas</strong> (interés legítimo/consentimiento): cambios relevantes, mantenimiento.</li>
-              <li><strong>Marketing voluntario</strong> (consentimiento): newsletters (si te suscribes). Podrás darte de baja en cualquier momento.</li>
+              <li><strong>Prestar el servicio</strong> (art. 6.1.b RGPD): alta, acceso y funcionamiento de {COMPANY.brand || 'la plataforma'}.</li>
+              <li><strong>Soporte y calidad</strong> (art. 6.1.f): resolución de incidencias, prevención de abuso y mejora con telemetría mínima.</li>
+              <li><strong>Facturación y cumplimiento</strong> (art. 6.1.c): emisión de facturas, contabilidad y fiscalidad.</li>
+              <li><strong>Comunicaciones operativas</strong> (art. 6.1.f / 6.1.a): avisos de servicio y mantenimiento; marketing opcional solo con consentimiento.</li>
             </ul>
           </section>
 
-          <section id="dest" className="legal__section">
-            <h2>4. Destinatarios (encargados/subencargados)</h2>
+          <section id="dest" className="legal__section" aria-labelledby="h-dest">
+            <h2 id="h-dest">4. Destinatarios (encargados de tratamiento)</h2>
+            <p>Proveedores esenciales para operar la plataforma; acceso limitado y bajo contrato de encargo:</p>
+            <ul className="legal__vendors">
+              {SUBPROCESSORS.map(v => (
+                <li key={v.name}>
+                  <strong>{v.name}</strong> — {v.purpose}. <em>Datos:</em> {v.dataScope}. <em>Ubicación:</em> {v.region}. <a href={v.url} target="_blank" rel="noreferrer">Más info</a>.
+                </li>
+              ))}
+            </ul>
+            <p>No vendemos datos a terceros. Solo comunicaremos información cuando una ley o autoridad lo exija.</p>
+          </section>
+
+          <section id="ti" className="legal__section" aria-labelledby="h-ti">
+            <h2 id="h-ti">5. Transferencias internacionales</h2>
             <p>
-              Utilizamos proveedores necesarios para operar el servicio (por ejemplo, Supabase para base de datos/Storage,
-              Stripe para pagos, y proveedores de hosting como Vercel/Render/Hetzner). Todos actúan como encargados con
-              acuerdos de tratamiento adecuados y solo acceden a los datos imprescindibles.
-            </p>
-            <p>
-              No vendemos datos a terceros. Podemos compartir información si es requerido por ley o autoridad competente.
+              Si algún proveedor procesa datos fuera del EEE, aplicamos garantías reconocidas por el RGPD
+              (Cláusulas Contractuales Tipo y medidas complementarias), limitando el acceso a lo imprescindible.
             </p>
           </section>
 
-          <section id="ti" className="legal__section">
-            <h2>5. Transferencias internacionales</h2>
-            <p>
-              Cuando un proveedor esté fuera del EEE, exigimos garantías adecuadas (p. ej., cláusulas contractuales tipo,
-              equivalencia o mecanismos reconocidos por el RGPD). Detalle disponible bajo solicitud.
-            </p>
-          </section>
-
-          <section id="plazo" className="legal__section">
-            <h2>6. Conservación</h2>
+          <section id="plazo" className="legal__section" aria-labelledby="h-plazo">
+            <h2 id="h-plazo">6. Plazos de conservación</h2>
             <ul>
-              <li><strong>Cuenta/operativa</strong>: mientras mantengas tu suscripción y por los plazos de prescripción aplicables.</li>
-              <li><strong>Facturación</strong>: según normativa fiscal/contable vigente.</li>
-              <li><strong>Logs de acceso</strong>: períodos acotados para seguridad y auditoría.</li>
+              <li><strong>Cuenta y uso</strong>: mientras seas cliente y, tras la baja, el tiempo necesario para responsabilidades y reclamaciones.</li>
+              <li><strong>Facturación</strong>: por los plazos exigidos en normativa contable y fiscal.</li>
+              <li><strong>Logs técnicos</strong>: periodos acotados para seguridad, auditoría y estabilidad.</li>
             </ul>
           </section>
 
-          <section id="derechos" className="legal__section">
-            <h2>7. Derechos (RGPD)</h2>
+          <section id="derechos" className="legal__section" aria-labelledby="h-derechos">
+            <h2 id="h-derechos">7. Derechos RGPD</h2>
             <p>
               Puedes ejercer acceso, rectificación, supresión, oposición, limitación y portabilidad escribiendo a
-              <a href="mailto:support@easytrack.pro"> support@easytrack.pro</a>. Responderemos en los plazos legales.
-              Si no quedaras conforme, puedes reclamar ante la autoridad de control competente (p. ej., AEPD o la
-              <em> Estonian Data Protection Inspectorate</em>).
+              <a href={`mailto:${COMPANY.privacyEmail}`}> {COMPANY.privacyEmail}</a>. Responderemos en plazo legal.
+              Si lo consideras, puedes reclamar ante la AEPD o la autoridad de control de tu país.
             </p>
           </section>
 
-          <section id="seg" className="legal__section">
-            <h2>8. Seguridad</h2>
+          <section id="seg" className="legal__section" aria-labelledby="h-seg">
+            <h2 id="h-seg">8. Seguridad</h2>
             <ul>
-              <li>Separación multi-tenant con políticas RLS y mínimos privilegios.</li>
-              <li>Cifrado en tránsito (HTTPS/TLS) y copias de seguridad gestionadas por el proveedor.</li>
-              <li>Controles internos de acceso y registro de eventos relevantes.</li>
+              <li>Arquitectura multi-tenant con RLS y mínimo privilegio.</li>
+              <li>Cifrado en tránsito (HTTPS/TLS) y backups gestionados por proveedor.</li>
+              <li>Controles de acceso internos y registro de eventos relevantes.</li>
             </ul>
           </section>
 
-          <section id="cookies" className="legal__section">
-            <h2>9. Cookies</h2>
+          <section id="cookies" className="legal__section" aria-labelledby="h-cookies">
+            <h2 id="h-cookies">9. Cookies</h2>
             <p>
-              Utilizamos cookies/técnicas para el funcionamiento de la plataforma y, si corresponde, analíticas con tu consentimiento.
-              Consulta la <a href="/legal/cookies">Política de Cookies</a> para más detalle y para administrar preferencias.
-            </p>
-            <p className="legal__note">
-              Si integras Analytics/Tag Manager, asegúrate de mostrar un banner de consentimiento con opción de configuración.
+              Cookies técnicas para funcionamiento y, en su caso, analíticas con tu consentimiento.
+              Gestiona tus preferencias en la <a href="/legal/cookies">Política de Cookies</a>.
             </p>
           </section>
 
-          <div className="legal__cta">
+          <footer className="legal__cta">
             <a className="legal__btn" href="/">Volver a inicio</a>
             <a className="legal__btn legal__btn--primary" href="/legal/terminos">Ver términos</a>
-          </div>
+          </footer>
         </article>
       </div>
     </main>

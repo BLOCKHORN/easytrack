@@ -1,10 +1,24 @@
+// src/pages/Terminos.jsx
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FiPrinter } from 'react-icons/fi'
 import '../styles/Legal.scss'
 
+/** ===== Datos de la entidad (rellénalos cuando los tengas)
+ *  Cualquier campo vacío NO se muestra en la página.
+ */
+const COMPANY = {
+  brand: 'EasyTrack',          // Nombre comercial visible
+  legalName: '',               // Razón social (ej. Blockhorn Studios OÜ)
+  country: '',                 // País de establecimiento (ej. Estonia)
+  regNo: '',                   // Nº de registro mercantil
+  vatNo: '',                   // NIF/IVA (CIF/VAT)
+  address: '',                 // Domicilio social
+  email: 'info@easytrack.pro'  // Email de contacto
+}
+
 export default function Terminos() {
   const updated = useMemo(
-    () => new Date().toLocaleDateString('es-ES', { day:'numeric', month:'long', year:'numeric' }),
+    () => new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }),
     []
   )
 
@@ -13,12 +27,12 @@ export default function Terminos() {
     { id: 'objeto',  label: '2. Objeto' },
     { id: 'cuenta',  label: '3. Cuenta y registro' },
     { id: 'uso',     label: '4. Uso permitido' },
-    { id: 'precios', label: '5. Precios y cancelación' },
+    { id: 'precios', label: '5. Precios, pagos y cancelación' },
     { id: 'pi',      label: '6. Propiedad intelectual' },
     { id: 'resp',    label: '7. Responsabilidad' },
     { id: 'datos',   label: '8. Datos personales' },
-    { id: 'mods',    label: '9. Modificaciones' },
-    { id: 'ley',     label: '10. Ley aplicable' },
+    { id: 'mods',    label: '9. Cambios en el servicio y en los términos' },
+    { id: 'ley',     label: '10. Ley aplicable y jurisdicción' },
   ]), [])
 
   // Scroll-spy
@@ -27,8 +41,9 @@ export default function Terminos() {
   useEffect(() => {
     const obs = new IntersectionObserver(
       (entries) => {
-        const v = entries.filter(e => e.isIntersecting)
-                         .sort((a,b) => b.intersectionRatio - a.intersectionRatio)
+        const v = entries
+          .filter(e => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)
         if (v[0]) setActiveId(v[0].target.id)
       },
       { rootMargin: '-20% 0px -60% 0px', threshold: [0, .25, .5, 1] }
@@ -41,6 +56,29 @@ export default function Terminos() {
   }, [TOC])
 
   const handlePrint = () => window.print()
+
+  // Helper visual para líneas condicionales
+  const Line = ({ label, value }) => (value ? <div><strong>{label}:</strong> {value}</div> : null)
+
+  // Bloque de identificación sin “rellenos”
+  const Identificacion = () => {
+    const who =
+      COMPANY.legalName?.trim()
+        ? `${COMPANY.legalName}${COMPANY.brand ? ` (${COMPANY.brand})` : ''}`
+        : (COMPANY.brand || 'La plataforma')
+    return (
+      <>
+        <p><strong>{who}</strong> opera el servicio {COMPANY.brand || ''}.</p>
+        <Line label="País de establecimiento" value={COMPANY.country?.trim()} />
+        <Line label="Registro mercantil" value={COMPANY.regNo?.trim()} />
+        <Line label="N.º IVA" value={COMPANY.vatNo?.trim()} />
+        <Line label="Domicilio" value={COMPANY.address?.trim()} />
+        <div>
+          <strong>Contacto:</strong> <a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a>
+        </div>
+      </>
+    )
+  }
 
   return (
     <main className="legal" role="main">
@@ -74,96 +112,103 @@ export default function Terminos() {
         <article className="legal__card legal__content">
           <header className="legal__head">
             <p className="legal__kicker">Legal · Términos</p>
-            <h1 className="legal__title">Términos y Condiciones de EasyTrack</h1>
+            <h1 className="legal__title">Términos y Condiciones de {COMPANY.brand || 'la plataforma'}</h1>
             <p className="legal__meta">Última actualización: {updated}</p>
           </header>
 
-          <section id="id" className="legal__section">
-            <h2>1. Identificación</h2>
+          <section id="id" className="legal__section" aria-labelledby="h-id">
+            <h2 id="h-id">1. Identificación</h2>
+            <Identificacion />
+          </section>
+
+          <section id="objeto" className="legal__section" aria-labelledby="h-objeto">
+            <h2 id="h-objeto">2. Objeto</h2>
             <p>
-              EasyTrack es un servicio SaaS operado por <strong>[Tu sociedad]</strong>, NIF/CIF <strong>[XXX]</strong>,
-              domicilio <strong>[Dirección]</strong>. Contacto: <a href="mailto:support@easytrack.pro">support@easytrack.pro</a>.
+              Estos términos regulan el acceso y uso de {COMPANY.brand || 'la plataforma'} por parte de clientes y
+              usuarios autorizados, así como la relación contractual derivada del alta y la suscripción.
             </p>
-            <p className="legal__note">Sustituye los corchetes por tus datos registrales reales.</p>
           </section>
 
-          <section id="objeto" className="legal__section">
-            <h2>2. Objeto</h2>
-            <p>Estos términos regulan el acceso y uso de EasyTrack por parte de clientes y usuarios autorizados.</p>
-          </section>
-
-          <section id="cuenta" className="legal__section">
-            <h2>3. Cuenta y registro</h2>
+          <section id="cuenta" className="legal__section" aria-labelledby="h-cuenta">
+            <h2 id="h-cuenta">3. Cuenta y registro</h2>
             <ul>
-              <li>Debes aportar información veraz y mantenerla actualizada.</li>
-              <li>Eres responsable de las credenciales y de la actividad realizada por tu equipo.</li>
-              <li>Podemos suspender cuentas por uso fraudulento o incumplimientos graves.</li>
+              <li>Debes facilitar información veraz y mantenerla actualizada.</li>
+              <li>Eres responsable de custodiar credenciales y de la actividad de tus usuarios internos.</li>
+              <li>Podremos suspender o cancelar el acceso ante incumplimientos graves, fraude o riesgos de seguridad.</li>
             </ul>
           </section>
 
-          <section id="uso" className="legal__section">
-            <h2>4. Uso permitido</h2>
+          <section id="uso" className="legal__section" aria-labelledby="h-uso">
+            <h2 id="h-uso">4. Uso permitido</h2>
             <ul>
-              <li>Prohibido el uso ilícito, la alteración de la seguridad o la denegación de servicio.</li>
-              <li>No está permitida la ingeniería inversa, scraping masivo o extracción automatizada salvo permiso escrito.</li>
-              <li>Debes respetar las leyes aplicables y los derechos de terceros.</li>
+              <li>Prohibido el uso ilícito, la alteración de medidas de seguridad y la denegación de servicio.</li>
+              <li>No se permite ingeniería inversa, scraping masivo o extracción automatizada sin autorización escrita.</li>
+              <li>Debes respetar la normativa aplicable y los derechos de terceros.</li>
             </ul>
           </section>
 
-          <section id="precios" className="legal__section">
-            <h2>5. Precios, pagos y cancelación</h2>
+          <section id="precios" className="legal__section" aria-labelledby="h-precios">
+            <h2 id="h-precios">5. Precios, pagos y cancelación</h2>
             <ul>
-              <li>La suscripción se cobra de forma periódica (p. ej., mensual/anual) a través de Stripe.</li>
-              <li>Los cambios de plan se prorratean cuando corresponde. Puedes cancelar en cualquier momento desde el panel; el acceso continúa hasta el fin del período abonado.</li>
-              <li>Los impuestos aplicables se muestran en el checkout según tu país.</li>
-              <li>Salvo disposición legal, no hay devoluciones por períodos ya iniciados.</li>
+              <li>La suscripción se cobra de forma periódica a través de Stripe (mensual/anual según el plan).</li>
+              <li>Los cambios de plan podrán prorratearse cuando proceda. Puedes cancelar en cualquier momento; el acceso continúa hasta el fin del período ya abonado.</li>
+              <li>Impuestos y retenciones se calculan en el checkout según tu jurisdicción.</li>
+              <li>Salvo obligación legal, no se emiten devoluciones por periodos ya iniciados.</li>
+              <li>Podemos ajustar precios o planes con aviso previo razonable y opción de cancelación antes de su efectividad.</li>
             </ul>
           </section>
 
-          <section id="pi" className="legal__section">
-            <h2>6. Propiedad intelectual</h2>
-            <p>El software, la marca y los materiales de EasyTrack pertenecen a sus titulares. No se concede ningún derecho salvo los necesarios para usar el servicio según estos términos.</p>
-            <p>El contenido que subas sigue siendo tuyo; nos concedes una licencia limitada para alojarlo y operarlo dentro del servicio.</p>
-          </section>
-
-          <section id="resp" className="legal__section">
-            <h2>7. Responsabilidad</h2>
+          <section id="pi" className="legal__section" aria-labelledby="h-pi">
+            <h2 id="h-pi">6. Propiedad intelectual</h2>
             <p>
-              EasyTrack se presta “tal cual”. En la máxima medida legal: (i) no respondemos por daños indirectos
-              (lucro cesante, pérdida de datos); y (ii) la responsabilidad total agregada no superará las tarifas
-              satisfechas por ti en los 12 meses anteriores al incidente.
+              El software, la marca y los materiales de {COMPANY.brand || 'la plataforma'} pertenecen a sus titulares.
+              No se concede ningún derecho salvo los necesarios para usar el servicio conforme a estos términos.
             </p>
-            <p>Podemos programar mantenimiento con aviso razonable. No somos responsables de fallos imputables a terceros o fuerza mayor.</p>
-          </section>
-
-          <section id="datos" className="legal__section">
-            <h2>8. Datos personales</h2>
             <p>
-              El tratamiento de datos se detalla en la <a href="/legal/privacidad">Política de Privacidad</a>.
-              Usamos proveedores como Stripe o servidores cloud como encargados de tratamiento con garantías adecuadas.
+              El contenido que subas es tuyo. Nos concedes una licencia no exclusiva, mundial y revocable para alojarlo y
+              operarlo dentro del servicio, únicamente con la finalidad de prestarte {COMPANY.brand || 'la plataforma'}.
             </p>
           </section>
 
-          <section id="mods" className="legal__section">
-            <h2>9. Modificaciones</h2>
+          <section id="resp" className="legal__section" aria-labelledby="h-resp">
+            <h2 id="h-resp">7. Responsabilidad</h2>
             <p>
-              Podemos actualizar estos términos por motivos legales, técnicos u operativos. Si hay cambios sustanciales,
-              te lo notificaremos con antelación razonable.
+              El servicio se presta “tal cual”. En la máxima medida permitida: (i) no respondemos de daños indirectos
+              o emergentes (lucro cesante, pérdida de datos); y (ii) la responsabilidad total agregada se limita a las
+              tarifas efectivamente pagadas por ti en los 12 meses anteriores al incidente.
+            </p>
+            <p>Podemos realizar mantenimiento con aviso razonable. No respondemos por fallos imputables a terceros o fuerza mayor.</p>
+          </section>
+
+          <section id="datos" className="legal__section" aria-labelledby="h-datos">
+            <h2 id="h-datos">8. Datos personales</h2>
+            <p>
+              El tratamiento de datos se rige por la <a href="/legal/privacidad">Política de Privacidad</a>.
+              Actuamos con proveedores como encargados de tratamiento bajo garantías adecuadas.
             </p>
           </section>
 
-          <section id="ley" className="legal__section">
-            <h2>10. Ley aplicable y jurisdicción</h2>
+          <section id="mods" className="legal__section" aria-labelledby="h-mods">
+            <h2 id="h-mods">9. Cambios en el servicio y en los términos</h2>
             <p>
-              Estos términos se rigen por la legislación española. Cualquier disputa se someterá a los tribunales de
-              <strong> [tu ciudad]</strong>, salvo normas imperativas en contrario.
+              Podremos actualizar funcionalidades, suspender elementos obsoletos y modificar estos términos por razones
+              legales, técnicas u operativas. Si el cambio es sustancial, lo comunicaremos con antelación razonable.
             </p>
           </section>
 
-          <div className="legal__cta">
+          <section id="ley" className="legal__section" aria-labelledby="h-ley">
+            <h2 id="h-ley">10. Ley aplicable y jurisdicción</h2>
+            <p>
+              La relación contractual se rige por la legislación aplicable en el lugar de establecimiento del responsable
+              (si lo has indicado) {COMPANY.country ? `(${COMPANY.country})` : ''}. Las controversias se someterán a los
+              tribunales competentes, sin perjuicio de normas imperativas de protección de consumidores que resulten de aplicación.
+            </p>
+          </section>
+
+          <footer className="legal__cta">
             <a className="legal__btn" href="/">Volver a inicio</a>
             <a className="legal__btn legal__btn--primary" href="/legal/privacidad">Ver privacidad</a>
-          </div>
+          </footer>
         </article>
       </div>
     </main>

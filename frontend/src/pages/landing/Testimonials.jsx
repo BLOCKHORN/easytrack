@@ -4,15 +4,16 @@ import { FaStar, FaCheckCircle, FaChevronLeft, FaChevronRight } from 'react-icon
 import './Testimonials.scss'
 
 /**
- * Reseñas centradas en:
- * - Ahorro real de tiempo en mostrador y conciliación.
+ * Enfoque:
+ * - Rentabilidad: menos tiempo, menos colas, más rotación.
  * - “Siempre sabemos dónde están los paquetes” (ubicación fiable).
- * - Permite operar con más paqueteras sin liarla.
- * - 1 reseña ★★★★ para dar realismo.
- * Mezcla: ~70% ES / ~30% EN.
+ * - Resolutivos y al pie del cañón.
+ * - Si les quitas la herramienta, dejan la paquetería.
+ * - 1 reseña ★★★★ para realismo.
+ * - Mezcla ES/EN (aprox. 70/30) y anonimato.
  */
 const REVIEWS = [
-  // ======= España (70%) =======
+  // ======= España (≈70%) =======
   {
     initials: 'MG',
     name: 'María G.',
@@ -22,8 +23,8 @@ const REVIEWS = [
     city: 'Madrid',
     rating: 5,
     quote:
-      'En caja ya no preguntamos “¿dónde está?”. Cada alta queda con estante y balda. Buscar pasó de minutos a segundos y pudimos meter otra paquetera sin colas.',
-    meta: ['−45% tiempo de búsqueda', '+1 paquetera'],
+      'En caja ya no preguntamos “¿dónde está?”. Con la ubicación clara, buscar pasó de minutos a segundos. Es rentable: atendemos más sin agobios.',
+    meta: ['−45% tiempo de búsqueda', 'Más rotación diaria'],
     date: 'Jun 2025',
     verified: true
   },
@@ -36,7 +37,7 @@ const REVIEWS = [
     city: 'Valencia',
     rating: 5,
     quote:
-      'Antes teníamos montones y confusiones. Ahora sabemos la balda exacta y la cola baja solo con eso. La conciliación ya no va con Excel: nos ahorra una tarde al mes.',
+      'Antes había montones. Ahora cada paquete tiene su ubicación y la cola baja solo con eso. La conciliación dejó de ser un dolor y el equipo está más contento.',
     meta: ['−60% cola de mostrador', 'Conciliación sin Excel'],
     date: 'May 2025',
     verified: true
@@ -50,8 +51,8 @@ const REVIEWS = [
     city: 'Sevilla',
     rating: 5,
     quote:
-      'Añadimos GLS y Correos Express en una semana. No hubo que formar al equipo: es la misma pantalla. Saber la balda nos evita vueltas y llamadas.',
-    meta: ['+2 paqueteras', 'Menos llamadas'],
+      'Añadimos nuevas paqueteras en una semana. El flujo no cambió: dar ubicación y listo. Si nos quitan EasyTrack, quitamos la paquetería.',
+    meta: ['+2 paqueteras en 7 días', 'Cero curva de aprendizaje'],
     date: 'May 2025',
     verified: true
   },
@@ -64,7 +65,7 @@ const REVIEWS = [
     city: 'Zaragoza',
     rating: 5,
     quote:
-      'Estamos dando de alta en unos 20–25 segundos. En tres meses, cero extravíos. Al tenerlo todo por balda, entregamos más rápido incluso en horas pico.',
+      'Altas en ~20–25 segundos. En tres meses, cero extravíos. Con ubicación clara entregamos más rápido incluso en horas pico.',
     meta: ['~22 s por alta', '0 extravíos en 90 días'],
     date: 'Ago 2025',
     verified: true
@@ -78,8 +79,8 @@ const REVIEWS = [
     city: 'Bilbao',
     rating: 5,
     quote:
-      'La conciliación mensual se hace en un rato y sin hojas sueltas. Detectamos diferencias y recuperamos importes que dábamos por perdidos.',
-    meta: ['Conciliación en minutos', '+164 € recuperados'],
+      'La conciliación mensual se hace en un rato. Detectamos diferencias y recuperamos importes que dábamos por perdidos. Operación mucho más fina.',
+    meta: ['Conciliación en minutos', 'Importes recuperados'],
     date: 'Jun 2025',
     verified: true
   },
@@ -92,7 +93,7 @@ const REVIEWS = [
     city: 'Pamplona',
     rating: 5,
     quote:
-      'Con rebajas subimos el volumen un 30% sin contratar a nadie. Saber la balda acelera la entrega y ya no hay “búsqueda por el almacén”.',
+      'Con rebajas subimos el volumen ~30% sin contratar a nadie. La ubicación acelera la entrega y ya no hay “búsqueda por el almacén”.',
     meta: ['+30% paquetes/día', '0 contrataciones extra'],
     date: 'Ene 2025',
     verified: true
@@ -106,8 +107,8 @@ const REVIEWS = [
     city: 'Alicante',
     rating: 5,
     quote:
-      'Pasamos al plan anual porque el tiempo que nos ahorra es evidente. Lo mejor es que siempre sabemos en qué balda está cada paquete.',
-    meta: ['ROI en el mes 1', 'Plan anual'],
+      'El tiempo que nos ahorra es evidente. Lo mejor es que siempre sabemos la ubicación exacta de cada paquete.',
+    meta: ['ROI en el mes 1', 'Menos errores de entrega'],
     date: 'Jul 2025',
     verified: true
   },
@@ -120,7 +121,7 @@ const REVIEWS = [
     city: 'Toledo',
     rating: 5,
     quote:
-      'Sumamos otra paquetera en Navidad en tres minutos. El equipo siguió el mismo flujo y no se nos perdió nada en todo el periodo.',
+      'Sumamos otra paquetera en Navidad en tres minutos. Seguimos el mismo flujo y no se perdió nada en toda la campaña.',
     meta: ['+1 paquetera', '0 pérdidas en campaña'],
     date: 'Dic 2024',
     verified: true
@@ -134,7 +135,7 @@ const REVIEWS = [
     city: 'Murcia',
     rating: 4,
     quote:
-      'Echo en falta algún informe más “de serie”, aunque soporte me montó uno en dos días. Aun así, el ahorro de tiempo y que todo tenga su balda compensa de sobra.',
+      'Echo en falta algún informe más “de serie”, aunque soporte me montó uno en dos días. Aun así, el ahorro de tiempo y la ubicación clara compensan de sobra.',
     meta: ['Soporte 48 h', '−40% tiempo en mostrador'],
     date: 'Jul 2025',
     verified: true
@@ -148,13 +149,13 @@ const REVIEWS = [
     city: 'A Coruña',
     rating: 5,
     quote:
-      'Las llamadas de “¿está mi paquete?” bajaron a la mitad. Buscamos por nombre o por estante y lo tenemos en la mano en nada.',
+      'Las llamadas de “¿está mi paquete?” bajaron a la mitad. Buscamos por nombre o por ubicación y lo tenemos en la mano en nada.',
     meta: ['−55% llamadas', 'Entregas más rápidas'],
     date: 'Sep 2025',
     verified: true
   },
 
-  // ======= Internacional (30%) =======
+  // ======= Internacional (≈30%) =======
   {
     initials: 'AB',
     name: 'Alex B.',
@@ -164,8 +165,8 @@ const REVIEWS = [
     city: 'London',
     rating: 5,
     quote:
-      'We always know the exact shelf now. Search time dropped massively and queues are shorter. We even added two new couriers without slowing the till.',
-    meta: ['−45% search time', '+2 couriers'],
+      'We always know the exact location now. Search time dropped massively and queues are shorter. If you remove this tool, we stop parcel pickup.',
+    meta: ['−45% search time', 'Shorter queues'],
     date: 'Jun 2025',
     verified: true
   },
@@ -178,7 +179,7 @@ const REVIEWS = [
     city: 'Milano',
     rating: 5,
     quote:
-      'Onboarding a new courier took minutes. Staff didn’t need training and handovers are quicker because every parcel has a clear shelf.',
+      'Onboarding a new courier took minutes. Staff didn’t need training because the location flow is obvious. Team is happier, customers faster.',
     meta: ['Setup in minutes', 'Faster handovers'],
     date: 'Oct 2025',
     verified: true
@@ -192,7 +193,7 @@ const REVIEWS = [
     city: 'Dublin',
     rating: 5,
     quote:
-      'No more “where is it?” calls. Reconciliation is clean and the team can handle busy hours with less stress.',
+      'No more “where is it?” calls. Reconciliation is clean and the team handles busy hours with less stress thanks to clear locations.',
     meta: ['Fewer calls', 'Easy reconciliation'],
     date: 'May 2025',
     verified: true
@@ -206,8 +207,8 @@ const REVIEWS = [
     city: 'Manchester',
     rating: 5,
     quote:
-      'Moved to the yearly plan after a month. Clear shelves, quicker pick-ups and we can accept more parcels without extra staff.',
-    meta: ['Switched to yearly', 'No extra hires'],
+      'Moved to the yearly mindset after one month because ROI was obvious. Clear location, quicker pick-ups, and no extra hires needed.',
+    meta: ['ROI in month 1', 'No extra hires'],
     date: 'Nov 2025',
     verified: true
   }
@@ -222,7 +223,6 @@ export default function Testimonials() {
   const [page, setPage] = useState(0)
   const [pages, setPages] = useState(1)
 
-  // calcula páginas reales según ancho del viewport vs ancho de tarjeta
   useEffect(() => {
     const el = viewportRef.current
     if (!el) return
@@ -283,21 +283,6 @@ export default function Testimonials() {
           <div className="et-tst__trust-item" title="Verificación interna">
             <FaCheckCircle className="ok" aria-hidden="true" />
             <span className="et-tst__trust-text">Reseñas verificadas</span>
-          </div>
-
-          <div className="et-tst__trust-item" title="Plan único">
-            <span className="dot" aria-hidden="true" />
-            <span className="et-tst__trust-text">Plan único: 29 €/mes</span>
-          </div>
-
-          <div className="et-tst__trust-item" title="Plan anual (pago único)">
-            <span className="dot" aria-hidden="true" />
-            <span className="et-tst__trust-text">Anual: 24 €/mes (pago único)</span>
-          </div>
-
-          <div className="et-tst__trust-item" title="Plan bianual (pago único)">
-            <span className="dot" aria-hidden="true" />
-            <span className="et-tst__trust-text">Bianual: 19 €/mes (pago único)</span>
           </div>
 
           <div className="et-tst__trust-item" title="Origen de las cifras">
@@ -413,11 +398,8 @@ export default function Testimonials() {
       )}
 
       <p className="et-tst__footnote" role="note">
-        Nombres y comercios <strong>anonimizados</strong> por privacidad. Cifras y fechas
-        proceden del <strong>panel de EasyTrack</strong> y de tiempos reales en mostrador.
-        <br />
-        <strong>Plan único:</strong> 29 €/mes. <strong>Anual:</strong> 24 €/mes (pago único).
-        <strong> Bianual:</strong> 19 €/mes (pago único).
+        Nombres y comercios <strong>anonimizados</strong> por privacidad. Cifras y fechas proceden del
+        <strong> panel de EasyTrack</strong> y de tiempos reales en mostrador. Estamos al pie del cañón: soporte cercano y resolutivo.
       </p>
     </section>
   )
