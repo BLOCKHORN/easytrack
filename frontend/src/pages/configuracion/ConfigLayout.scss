@@ -10,12 +10,21 @@
 
   /* ---------- Header ---------- */
   .cfg__head { margin-bottom: 12px; }
-  .cfg__headrow{ display:flex; align-items:flex-start; gap:12px; justify-content:space-between; }
+  .cfg__headrow{
+    display:flex; align-items:flex-start; gap:12px; justify-content:space-between;
+    flex-wrap:wrap; /* en móviles los controles saltan a la línea siguiente sin cortar */
+  }
   .cfg__titlegrp{ min-width:0; }
-  h2{ margin:0 0 6px; font-size:1.4rem; font-weight:900; letter-spacing:.2px; line-height:1.2; }
-  .cfg__crumb{ display:flex; align-items:center; gap:6px; color:var(--muted); flex-wrap:wrap; svg{opacity:.7;} }
+  h2{
+    margin:0 0 6px; font-size:clamp(1.05rem, 3.8vw, 1.4rem);
+    font-weight:900; letter-spacing:.2px; line-height:1.2;
+  }
+  .cfg__crumb{
+    display:flex; align-items:center; gap:6px; color:var(--muted);
+    flex-wrap:wrap; svg{opacity:.7;}
+  }
 
-  .cfg__actions{ display:flex; gap:8px; align-items:center; }
+  .cfg__actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .cfg__iconbtn{
     inline-size:36px; block-size:36px; display:grid; place-items:center;
     border-radius:10px; border:1px solid var(--border); background:#fff; cursor:pointer;
@@ -24,18 +33,20 @@
     &:focus-visible{ outline:none; box-shadow:0 0 0 3px var(--ring); }
   }
 
-  /* ---------- Tabs móviles ---------- */
+  /* ---------- Tabs móviles (carrusel horizontal con autoscroll) ---------- */
   .cfg__tabs{ display:none; }
   .cfg-tab{
     appearance:none; flex:0 0 auto; display:inline-flex; align-items:center; gap:6px;
     padding:8px 12px; border-radius:999px; border:1px solid var(--border);
     background:#fff; color:#111827; white-space:nowrap; cursor:pointer;
     transition: background .15s ease, border-color .15s ease, transform .06s ease, box-shadow .15s ease;
+    max-width: max(44vw, 148px);  /* evita pastillas gigantes y recorte del texto */
+    overflow:hidden; text-overflow:ellipsis;
     &:hover{ background:#f8fafc; border-color:#e5e7eb; }
     &:active{ transform:translateY(1px); }
     &:focus-visible{ outline:none; box-shadow:0 0 0 3px var(--ring); }
     &.is-active{ background:#eef4ff; border-color:#dbe7ff; box-shadow:0 6px 16px rgba(2,6,23,.06); }
-    svg{ color:var(--primary); }
+    svg{ color:var(--primary); flex:0 0 auto; }
   }
   .cfg__pill{ margin-left:6px; font-size:.75rem; color:#334155; background:#eef2f7; padding:2px 6px; border-radius:999px; }
 
@@ -45,9 +56,7 @@
     grid-template-columns: minmax(0,1fr) 280px; /* contenido | sidebar */
     column-gap:24px;
     align-items:start;
-
-    /* MUY IMPORTANTE: que este contenedor no cree scroll propio */
-    overflow: visible;
+    overflow: visible; /* que no cree scroll propio (lo debe llevar la ventana) */
   }
 
   /* Contenido */
@@ -60,11 +69,20 @@
   .cfg__secthead{
     display:flex; align-items:center; gap:10px;
     padding:10px 12px; border-radius:12px; border:1px solid var(--border); background:#fff;
-    margin:8px 0 10px;
-    .cfg__secticon{ width:28px; height:28px; display:grid; place-items:center; color:var(--primary); background:#eef4ff; border-radius:8px; }
-    h3{ margin:0; font-size:1.05rem; font-weight:800; letter-spacing:.2px; }
+    margin:8px 0 10px; min-width:0;
+    .cfg__secticon{
+      width:28px; height:28px; display:grid; place-items:center;
+      color:var(--primary); background:#eef4ff; border-radius:8px; flex:0 0 auto;
+    }
+    h3{
+      margin:0; font-size:clamp(1rem, 3.2vw, 1.05rem); font-weight:800; letter-spacing:.2px;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
   }
-  .cfg__sectbody{ background:#fff; border:1px solid var(--border); border-radius:14px; padding:16px; }
+  .cfg__sectbody{
+    background:#fff; border:1px solid var(--border); border-radius:14px;
+    padding:clamp(12px, 2.6vw, 16px);
+  }
 
   /* Sidebar (STICKY, acompaña todo el scroll sin solaparse) */
   .cfg__side{
@@ -79,7 +97,9 @@
     height: fit-content;     /* clave para sticky en grid */
     max-height: calc(100vh - var(--sticky-top) - 12px);
     overflow: auto;          /* si hay muchas secciones, scrollea dentro */
+    overscroll-behavior: contain;
     will-change: top;
+    contain: layout paint;   /* evita layout-shifts hacia fuera */
   }
 
   .cfg__nav{ list-style:none; padding:0; margin:0; display:grid; gap:6px; }
@@ -117,10 +137,37 @@
   @media (max-width: 979.98px){
     .cfg__body{ grid-template-columns: 1fr; }
     .cfg__side{ display:none; }
+
+    /* carrusel de tabs */
     .cfg__tabs{
-      display:flex; gap:8px; margin-bottom:12px; overflow:auto; -webkit-overflow-scrolling:touch;
-      padding-bottom:2px;
+      display:flex; gap:8px; margin-bottom:12px;
+      overflow:auto; -webkit-overflow-scrolling:touch;
+      padding: 2px 2px 6px;
+      scroll-snap-type:x mandatory;
+      scroll-padding-inline: 16px;
+      /* degradado para indicar overflow en extremos */
       mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 16px), transparent);
     }
+    .cfg-tab{ scroll-snap-align:center; }
+    .cfg__tabs::-webkit-scrollbar{ display:none; }
+  }
+
+  /* Microajustes móviles (evita cortes y desbordes) */
+  @media (max-width: 560px){
+    .cfg__secthead{ padding:8px 10px; }
+    .cfg__sectbody{ padding: 12px; }
+    .cfg__headrow{ gap:8px; }
+  }
+
+  /* Safe-area en iOS para que el contenido no choque con la barra inferior */
+  @supports (padding: max(0px)){
+    .cfg__tabs{ padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+  }
+
+  /* Respetar “reduced motion” */
+  @media (prefers-reduced-motion: reduce){
+    .cfg__iconbtn,
+    .cfg-tab,
+    .cfg__navbtn{ transition: none !important; }
   }
 }

@@ -1,6 +1,6 @@
 // src/pages/VerEstantes.jsx
 import "../styles/VerEstantes.scss";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { getTenantIdOrThrow } from "../utils/tenant";
 import {
@@ -78,48 +78,31 @@ function makeVisualUbicaciones(rawUbis, meta) {
   return { visual, cols, order };
 }
 
-/* ===== UI consts ===== */
-const GAP_PX = 12;
-const CELL_W = 300;
-const MIN_SCALE = 0.40;
-const FLUID_BREAK = 1000;
-const MAX_EXPAND_PX = 3000;
+/* ===================================================================== */
 
 export default function VerEstantes() {
-  // fuente de verdad del backend
-  const [rawUbicaciones, setRawUbicaciones] = useState([]); // [{id,label,orden,activo}]
+  const [rawUbicaciones, setRawUbicaciones] = useState([]);
   const [metaUbi, setMetaUbi] = useState({ cols: 5, order: 'horizontal' });
 
-  // derivados visuales
   const { visual: ubicaciones, cols: gridCols } = useMemo(
     () => makeVisualUbicaciones(rawUbicaciones, metaUbi),
     [rawUbicaciones, metaUbi]
   );
 
-  // Paquetes por ubicación
-  const [pkgsByUbiId, setPkgsByUbiId] = useState({}); // { ubicacion_id: [paquetes] }
-
-  // Colores compañías
+  const [pkgsByUbiId, setPkgsByUbiId] = useState({});
   const [coloresCompania, setColoresCompania] = useState(() => new Map());
   const getCompColor = (name) => normHex(coloresCompania.get(name), "#2563eb");
 
-  // UI
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [q, setQ] = useState("");
   const [soloConPkgs, setSoloConPkgs] = useState(false);
   const [openSet, setOpenSet] = useState(() => new Set());
 
-  // Privacidad
   const [revealAll, setRevealAll] = useState(false);
   const [revealedSet, setRevealedSet] = useState(() => new Set());
 
-  // Token y scale
   const [authToken, setAuthToken] = useState("");
-  const wrapRef = useRef(null);
-  const innerRef = useRef(null);
-  const [scale, setScale] = useState(1);
-  const [fluid, setFluid] = useState(false);
 
   /* =============== Carga =============== */
   useEffect(() => {
@@ -135,17 +118,14 @@ export default function VerEstantes() {
         setAuthToken(token);
         const tenantId = await getTenantIdOrThrow();
 
-        // 1) Ubicaciones + meta
         const { ubicaciones: ubis = [], meta = {} } = await cargarUbicaciones(token, tenantId);
         if (cancel) return;
         setRawUbicaciones(ubis || []);
         setMetaUbi({ cols: meta?.cols ?? 5, order: meta?.order ?? meta?.orden ?? 'horizontal' });
 
-        // 2) Paquetes normalizados
         const paquetes = await obtenerPaquetesBackend(token).catch(() => []);
         if (cancel) return;
 
-        // 3) Colores compañías
         const { data: empresasRows } = await supabase
           .from("empresas_transporte_tenant")
           .select("nombre,color")
@@ -154,7 +134,6 @@ export default function VerEstantes() {
         (empresasRows || []).forEach(e => colMap.set(e?.nombre, normHex(e?.color || "#2563eb")));
         setColoresCompania(colMap);
 
-        // 4) Indexación paquetes a ubicaciones (id o label)
         const ubisVisual = makeVisualUbicaciones(ubis || [], meta || {}).visual;
         const byId = new Map(ubisVisual.map(u => [String(u.id), u]));
         const byLabel = new Map(ubisVisual.map(u => [String(u.label).toUpperCase(), u]));
@@ -185,30 +164,6 @@ export default function VerEstantes() {
     })();
 
     return () => { cancel = true; };
-  }, []);
-
-  /* =============== Escalado responsive =============== */
-  const recomputeScale = () => {
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-    const cols = gridCols || 1;
-    const contentW = cols * CELL_W + (cols - 1) * GAP_PX;
-    const avail = wrap.clientWidth - 2;
-    const s = Math.min(1, Math.max(MIN_SCALE, avail / contentW));
-    setScale(s);
-  };
-  useEffect(() => { recomputeScale(); }, [gridCols, ubicaciones.length]);
-  useEffect(() => {
-    const onResize = () => {
-      const w = window.innerWidth || document.documentElement.clientWidth || 0;
-      setFluid(w <= FLUID_BREAK);
-      recomputeScale();
-    };
-    onResize();
-    window.addEventListener("resize", onResize);
-    const ro = new ResizeObserver(() => recomputeScale());
-    if (wrapRef.current) ro.observe(wrapRef.current);
-    return () => { window.removeEventListener("resize", onResize); ro.disconnect(); };
   }, []);
 
   /* =============== Filtros/derivados =============== */
@@ -322,23 +277,11 @@ export default function VerEstantes() {
       ) : visibleUbicaciones.length === 0 ? (
         <div className="estado-vacio">No hay ubicaciones que coincidan con el filtro.</div>
       ) : (
-        <div
-          className={`fit-wrapper lanes-fit ${fluid ? "fluid" : ""}`}
-          ref={wrapRef}
-          style={{ ['--zoom']: fluid ? 1 : scale }}
-        >
+        <div className="fit-wrapper lanes-fit">
           <div
             className="lanes-matrix"
-            ref={innerRef}
-            style={
-              fluid
-                ? { gridTemplateColumns: `repeat(auto-fit, minmax(var(--lane-cell-w), 1fr))`, width: "auto" }
-                : {
-                    gridTemplateColumns: `repeat(${gridCols || 1}, var(--lane-cell-w))`,
-                    width: `${(gridCols || 1) * CELL_W + ((gridCols || 1) - 1) * GAP_PX}px`
-                  }
-            }
             role="grid"
+            style={{ ['--cols']: gridCols || 1 }}
           >
             {visibleUbicaciones.map(u => {
               const arr = pkgsByUbiId[u.id] || [];
@@ -357,7 +300,7 @@ export default function VerEstantes() {
               const occClass = clsOcupacion(n);
 
               return (
-                <div key={u.id} className={`lane-cell wrap ${open ? "activa" : ""}`} role="gridcell">
+                <div key={u.id} className={`lane-cell wrap ${open ? "open activa" : ""}`} role="gridcell">
                   <button
                     type="button"
                     className={`lane-head ${occClass}`}
@@ -370,10 +313,7 @@ export default function VerEstantes() {
                     aria-expanded={open}
                     aria-controls={`vis-ubi-${u.id}`}
                     title={n === 1 ? "1 paquete" : `${n} paquetes`}
-                    style={{
-                      ['--carrier']: carrierColor,
-                      ['--carrier-rgba']: carrierTint
-                    }}
+                    style={{ ['--carrier']: carrierColor, ['--carrier-rgba']: carrierTint }}
                   >
                     <i className="lane-tape" aria-hidden />
                     <div className="lane-title">{highlight(u.label, q)}</div>
@@ -381,11 +321,7 @@ export default function VerEstantes() {
                     <FaChevronDown className={`chev ${open ? "rot" : ""}`} aria-hidden />
                   </button>
 
-                  <div
-                    id={`vis-ubi-${u.id}`}
-                    className="lane-visor"
-                    style={{ maxHeight: open ? `${MAX_EXPAND_PX}px` : "0px", opacity: open ? 1 : 0 }}
-                  >
+                  <div id={`vis-ubi-${u.id}`} className="lane-visor">
                     {n > 0 ? (
                       <ul className="lista-paquetes">
                         {arr.map(p => {

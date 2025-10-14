@@ -120,6 +120,15 @@ router.post('/demo/requests', createLimiter, async (req, res) => {
       return res.status(400).json({ ok:false, code:'DB_ERROR', error: error.message });
     }
 
+     // <-- NUEVO: notificar al staff
+    try {
+      const { notifyStaffNewDemo } = require('../utils/notifyStaffNewDemo');
+      notifyStaffNewDemo(inserted.id, payload);
+    } catch (e) {
+      // no bloqueamos la respuesta al cliente por un fallo de email
+      console.error('[POST /api/demo/requests] notifyStaffNewDemo error:', e);
+    }
+
     return res.status(201).json({
       ok: true,
       id: inserted.id,

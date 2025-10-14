@@ -6,37 +6,44 @@
 
 .configuracion {
   .hero--config {
-    margin: clamp(16px, 3vw, 28px) auto 10px;
+    /* Caja */
+    margin: clamp(14px, 3vw, 28px) auto 10px;
     max-width: 1200px;
-    padding: clamp(16px, 2.2vw, 24px);
+    padding: clamp(14px, 2.2vw, 24px);
     border-radius: 18px;
     background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.9));
     border: 1px solid var(--border, #e6e9ef);
     box-shadow: 0 6px 18px rgba(15,23,42,.08);
 
+    /* Grid principal */
     display: grid;
-    grid-template-columns: minmax(72px, 92px) 1fr; /* orb fijo + contenido fluido */
-    column-gap: clamp(14px, 2.2vw, 22px);
+    grid-template-columns: minmax(68px, 92px) 1fr; /* orb fijo + contenido fluido */
+    column-gap: clamp(12px, 2.2vw, 22px);
     align-items: center;
 
+    /* Evita desbordes de hijos largos */
     > * { min-width: 0; }
 
-    @media (max-width: 780px) {
+    /* Colapsa a una columna en móvil */
+    @media (max-width: 760px) {
       grid-template-columns: 1fr;
       align-items: start;
       row-gap: 12px;
+      padding: clamp(12px, 3.6vw, 18px);
     }
 
-    /* Marca */
+    /* Marca / Orb */
     .hero__brand {
       display: grid; place-items: center;
       align-self: start;
+      min-width: 0;
 
-      @media (max-width: 780px) { place-items: start; }
+      @media (max-width: 760px) { place-items: start; }
     }
+
     .hero__orb {
-      width: clamp(64px, 8vw, 84px);
-      height: clamp(64px, 8vw, 84px);
+      width: clamp(58px, 8vw, 84px);
+      height: clamp(58px, 8vw, 84px);
       border-radius: 999px;
       position: relative; display: grid; place-items: center;
       background:
@@ -44,24 +51,34 @@
         radial-gradient(72% 72% at 70% 30%, rgba(0,212,255,.45), transparent 60%),
         conic-gradient(from 220deg, #a5b4fc, #22d3ee, #fca5a5, #a5b4fc);
       box-shadow: inset 0 10px 24px rgba(99,91,255,.22), 0 6px 18px rgba(15,23,42,.08);
+      flex: 0 0 auto;
     }
+
     .hero__initials {
       color: #fff; font-weight: 800; letter-spacing: .2px;
       text-shadow: 0 1px 2px rgba(0,0,0,.25); z-index: 1;
-      font-size: clamp(16px, 2.2vw, 18px); line-height: 1;
+      font-size: clamp(15px, 2.2vw, 18px); line-height: 1;
+      user-select: none;
     }
-    .hero__icon { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.5); font-size: clamp(22px, 2.6vw, 24px); }
 
-    /* Contenido centrado */
+    .hero__icon {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      color: rgba(255,255,255,.5);
+      font-size: clamp(20px, 2.6vw, 24px);
+      pointer-events: none;
+    }
+
+    /* Contenido */
     .hero__content {
-      --underline-w: min(680px, 78%); /* ancho del subrayado del título, centrado */
+      --underline-w: min(680px, 78%); /* ancho del subrayado del título */
       display: grid;
       gap: 8px;
-      justify-items: center;  /* <-- centra eyebrow, título, subtítulo y chips */
+      justify-items: center;  /* desktop centrado */
       align-content: center;
+      min-width: 0;
 
-      @media (max-width: 780px) {
-        justify-items: start; /* en móvil, vuelve a izquierda */
+      @media (max-width: 760px) {
+        justify-items: start; /* móvil a la izquierda */
         align-content: start;
       }
     }
@@ -71,23 +88,27 @@
       color: var(--muted, #64748b);
       font-weight: 700;
       letter-spacing: .22px;
-      font-size: clamp(12px, 1.4vw, 13px);
+      font-size: clamp(11px, 1.6vw, 13px);
       text-align: center;
+      white-space: nowrap;
+      max-width: 100%;
 
-      @media (max-width: 780px) { text-align: left; }
+      @media (max-width: 760px) { text-align: left; white-space: normal; }
     }
 
     .hero__title {
       position: relative;
       margin: 0;
-      font-size: clamp(20px, 3.4vw, 28px);
+      font-size: clamp(19px, 3.4vw, 28px);
       font-weight: 900;
       letter-spacing: -.2px;
       line-height: 1.25;
       text-align: center;
-      display: inline-block; /* se ajusta al texto para subrayado centrado */
+      display: inline-block;
+      max-width: 100%;
+      overflow-wrap: anywhere;
 
-      /* Subrayado centrado y de ancho controlado */
+      /* Subrayado centrado con ancho controlado */
       &::after {
         content: "";
         position: absolute;
@@ -99,35 +120,46 @@
         background: linear-gradient(90deg, rgba(99,91,255,.22), rgba(0,212,255,.22));
       }
 
-      @media (max-width: 780px) {
+      @media (max-width: 760px) {
         text-align: left;
-        &::after { left: 0; transform: none; width: 66%; }
+        &::after { left: 0; transform: none; width: 64%; }
       }
     }
 
     .hero__subtitle {
-      margin: 8px 0 0;
+      margin: 10px 0 0;
       color: var(--muted, #64748b);
-      max-width: 66ch;        /* controla longitud para lectura */
-      text-align: center;     /* <-- centrado real */
-      font-size: clamp(13px, 1.6vw, 14px);
-      line-height: 1.45;
+      max-width: 66ch;
+      text-align: center;
+      font-size: clamp(13px, 1.7vw, 14px);
+      line-height: 1.5;
       overflow-wrap: anywhere;
 
-      @media (max-width: 780px) {
+      @media (max-width: 760px) {
         text-align: left;
         max-width: none;
       }
     }
 
-    /* Chips */
+    /* Chips / meta */
     .hero__meta {
       margin-top: 12px;
       display: flex; flex-wrap: wrap; gap: 8px;
-      justify-content: center; /* <-- centrado */
+      justify-content: center;
       align-items: center;
+      min-width: 0;
 
-      @media (max-width: 780px) { justify-content: flex-start; }
+      /* Si hay muchísimas chips, permite scroll horizontal con fade */
+      @media (max-width: 480px) {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 2px;
+        mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+        gap: 10px;
+      }
+
+      @media (max-width: 760px) { justify-content: flex-start; }
     }
 
     .hero__chip {
@@ -137,8 +169,9 @@
       font-weight: 700; font-size: 12px; letter-spacing: .2px;
       background: #fff; border: 1px solid var(--chip-border);
       color: #0b1220; box-shadow: 0 6px 14px rgba(15,23,42,.05);
+      min-width: 0;  /* evita que crezca más que el contenedor */
 
-      svg { width: 16px; height: 16px; color: #4f46e5; }
+      svg { width: 16px; height: 16px; color: #4f46e5; flex: 0 0 auto; }
 
       &.chip--success {
         background: linear-gradient(180deg, #f0fdf4, #ecfdf5);
@@ -156,8 +189,32 @@
       display: inline-block;
       max-width: 38ch;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      min-width: 0;
 
-      @media (max-width: 780px) { max-width: 26ch; }
+      @media (max-width: 760px) { max-width: 26ch; }
+      @media (max-width: 480px) { max-width: 20ch; }
+    }
+
+    /* Accesibilidad: respeta reduce motion */
+    @media (prefers-reduced-motion: reduce) {
+      * { transition-duration: .001ms !important; animation-duration: .001ms !important; }
+    }
+  }
+
+  /* Tema oscuro opcional */
+  .dark & .hero--config,
+  &.dark .hero--config {
+    background: linear-gradient(180deg, rgba(2,6,23,.85), rgba(2,6,23,.78));
+    border-color: #1f2a44;
+
+    .hero__subtitle { color: #cbd5e1; }
+    .hero__eyebrow  { color: #93a4bf; }
+
+    .hero__chip {
+      background: #0b1220;
+      color: #e5e7eb;
+      border-color: #2a3562;
+      .truncate { color: inherit; }
     }
   }
 }

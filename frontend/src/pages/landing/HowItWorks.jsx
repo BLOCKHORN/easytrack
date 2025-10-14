@@ -92,9 +92,7 @@ export default function HowItWorks({ onOpenDemo }) {
                     <button type="button" className="ep-hiw__btn ep-hiw__btn--primary" onClick={startNow}>
                       Probar ahora
                     </button>
-                    <button type="button" className="ep-hiw__btn ep-hiw__btn--ghost" onClick={openDemo}>
-                      Ver demo
-                    </button>
+
                   </div>
                 )}
               </div>

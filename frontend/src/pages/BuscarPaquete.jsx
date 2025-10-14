@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FaSearch, FaEdit, FaTrashAlt, FaTimes, FaInfoCircle,
-  FaEye, FaEyeSlash
+  FaEye, FaEyeSlash, FaCheckSquare, FaRegSquare, FaCheck
 } from "react-icons/fa";
 import { supabase } from "../utils/supabaseClient";
 import {
@@ -136,6 +136,25 @@ export default function BuscarPaquete() {
   const [revealAll, setRevealAll] = useState(false);
   const [revealedSet, setRevealedSet] = useState(() => new Set());
 
+  // selección múltiple
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const isSelected = (id) => selectedIds.has(id);
+  const clearSelection = () => setSelectedIds(new Set());
+  const toggleSelectOne = (id) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  };
+  const selectPage = (ids) => setSelectedIds(prev => new Set([...prev, ...ids]));
+  const deselectPage = (ids) => setSelectedIds(prev => {
+    const n = new Set(prev);
+    ids.forEach(id => n.delete(id));
+    return n;
+  });
+  const selectAllFiltered = (ids) => setSelectedIds(new Set(ids));
+
   // datos
   const [paquetes, setPaquetes] = useState([]);
   const [companias, setCompanias] = useState([]);
@@ -151,8 +170,10 @@ export default function BuscarPaquete() {
   const [sortBy, setSortBy] = useState({ field: "fecha_llegada", dir: "desc" });
   const [flashRowId, setFlashRowId] = useState(null);
 
-  // confirmaciones
+  // confirmaciones (individual)
   const [confirmState, setConfirmState] = useState({ open: false, payload: null });
+  // confirmación (masiva)
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   // toasts
   const [toasts, setToasts] = useState([]);
@@ -315,7 +336,7 @@ export default function BuscarPaquete() {
       : { field, dir: field === "fecha_llegada" ? "desc" : "asc" });
   };
 
-  /* ===== Acciones ===== */
+  /* ===== Acciones (individuales) ===== */
   const marcarEntregado = async (id) => {
     const snapshot = paquetes;
     setPaquetes(prev => prev.map(p => p.id === id ? { ...p, entregado: true } : p));
@@ -350,6 +371,11 @@ export default function BuscarPaquete() {
       if (!token) throw new Error("Sesión no encontrada");
       await eliminarPaqueteBackend(id, token);
       showToast("Paquete eliminado", "success");
+      setSelectedIds(prev => {
+        const n = new Set(prev);
+        n.delete(id);
+        return n;
+      });
     } catch (e) {
       setPaquetes(snapshot);
       showToast("No se pudo eliminar el paquete", "error");
@@ -404,6 +430,93 @@ export default function BuscarPaquete() {
     }
   };
 
+  /* ===== Acciones masivas ===== */
+  // IDs seleccionados que están pendientes (no entregados)
+  const selectedPendingIds = useMemo(() => {
+    const set = new Set(selectedIds);
+    return paquetes.filter(p => set.has(p.id) && !p.entregado).map(p => p.id);
+  }, [selectedIds, paquetes]);
+
+  const entregarSeleccionados = async () => {
+    const ids = selectedPendingIds;
+    if (ids.length === 0) {
+      showToast("No hay seleccionados pendientes por entregar", "info");
+      return;
+    }
+
+    const snapshot = paquetes;
+    const idsSet = new Set(ids);
+
+    // Optimista: marcamos como entregados en UI
+    setPaquetes(prev => prev.map(p => idsSet.has(p.id) ? { ...p, entregado: true } : p));
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Sesión no encontrada");
+
+      const results = await Promise.allSettled(ids.map(id => entregarPaqueteBackend(id, token)));
+
+      const failed = results
+        .map((r, i) => ({ r, id: ids[i] }))
+        .filter(x => x.r.status === "rejected")
+        .map(x => x.id);
+
+      if (failed.length === 0) {
+        showToast(`Entregados ${ids.length} paquete(s)`, "success");
+      } else {
+        // Revertimos únicamente los fallidos
+        const failedSet = new Set(failed);
+        setPaquetes(prev => prev.map(p => failedSet.has(p.id) ? { ...p, entregado: false } : p));
+        showToast(`Entregados ${ids.length - failed.length}. Fallaron ${failed.length}.`, "error");
+      }
+    } catch (e) {
+      // Revertimos todo
+      setPaquetes(snapshot);
+      showToast("No se pudo completar la entrega masiva", "error");
+    }
+  };
+
+  const eliminarSeleccionados = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setConfirmBulk(false);
+
+    const snapshot = paquetes;
+    setPaquetes(prev => prev.filter(p => !selectedIds.has(p.id)));
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Sesión no encontrada");
+
+      const results = await Promise.allSettled(
+        ids.map(id => eliminarPaqueteBackend(id, token))
+      );
+
+      const rejected = results
+        .map((r, i) => ({ r, id: ids[i] }))
+        .filter(x => x.r.status === "rejected")
+        .map(x => x.id);
+
+      if (rejected.length === 0) {
+        showToast(`Eliminados ${ids.length} paquetes`, "success");
+        clearSelection();
+      } else {
+        const failedSet = new Set(rejected);
+        const failedRows = snapshot.filter(p => failedSet.has(p.id));
+        setPaquetes(prev => [...prev, ...failedRows].sort((a,b)=> new Date(b.fecha_llegada) - new Date(a.fecha_llegada)));
+        const okIds = ids.filter(id => !failedSet.has(id));
+        setSelectedIds(new Set(rejected)); // dejamos seleccionados los que fallaron
+        showToast(`Eliminados ${okIds.length}. Fallaron ${rejected.length}.`, "error");
+      }
+    } catch (e) {
+      setPaquetes(snapshot);
+      showToast("No se pudo completar la eliminación masiva", "error");
+    }
+  };
+
+  /* ===== Varios ===== */
   const formatearFecha = (iso) =>
     new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
 
@@ -447,6 +560,21 @@ export default function BuscarPaquete() {
   const onSearchKeyDown = (e) => { if (e.key === "Escape") limpiarBusqueda(); };
 
   const loc = (p) => p.ubicacion_label || "—";
+
+  /* ===== Selección: helpers derivados ===== */
+  const paginadosIds = paginados.map(p => p.id);
+  const filtradosIds = filtrados.map(p => p.id);
+  const allPageSelected = paginados.length > 0 && paginados.every(p => selectedIds.has(p.id));
+  const anySelected = selectedIds.size > 0;
+  const selectedPendingCount = selectedPendingIds.length;
+
+  const toggleSelectAllPage = () => {
+    if (allPageSelected) {
+      deselectPage(paginadosIds);
+    } else {
+      selectPage(paginadosIds);
+    }
+  };
 
   /* =================== UI =================== */
   return (
@@ -553,6 +681,44 @@ export default function BuscarPaquete() {
         </div>
       )}
 
+      {/* Barra de selección (con acciones masivas) */}
+      {anySelected && (
+        <div className="selection-bar" role="region" aria-label="Selección">
+          <div className="selection-info">
+            <FaCheckSquare /> {selectedIds.size} seleccionados
+          </div>
+          <div className="selection-actions">
+            {/* Entregar seleccionados (solo pendientes) */}
+            <button
+              className="btn"
+              onClick={entregarSeleccionados}
+              disabled={selectedPendingCount === 0}
+              title={selectedPendingCount === 0 ? "No hay seleccionados pendientes" : `Entregar ${selectedPendingCount} pendiente(s)`}
+              style={{
+                backgroundColor: "var(--ok)",
+                color: "#fff",
+                border: 0
+              }}
+            >
+              <FaCheck style={{ marginRight: 6 }} />
+              Entregar seleccionados ({selectedPendingCount})
+            </button>
+
+            <button className="btn-ghost" onClick={() => clearSelection()}>Quitar selección</button>
+
+            {selectedIds.size < filtradosIds.length && (
+              <button className="btn-ghost" onClick={() => selectAllFiltered(filtradosIds)}>
+                Seleccionar todos los {filtradosIds.length} filtrados
+              </button>
+            )}
+
+            <button className="btn btn--danger" onClick={() => setConfirmBulk(true)}>
+              <FaTrashAlt style={{ marginRight: 6 }} /> Eliminar seleccionados
+            </button>
+          </div>
+        </div>
+      )}
+
       {cargando && (
         <div className="estado-cargando" aria-busy="true" aria-live="polite">
           <div className="skeleton-row" />
@@ -589,15 +755,27 @@ export default function BuscarPaquete() {
           <div className="tabla-wrapper" role="region" aria-label="Resultados">
             <table className="tabla-paquetes">
               <colgroup>
-                <col style={{ width: "34%" }} />
-                <col style={{ width: "22%" }} />
-                <col style={{ width: "18%" }} />
+                <col style={{ width: "44px" }} />
+                <col style={{ width: "30%" }} />
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "16%" }} />
                 <col style={{ width: "12%" }} />
+                <col style={{ width: "14%" }} />
                 <col style={{ width: "14%" }} />
               </colgroup>
 
               <thead>
                 <tr>
+                  <th className="sel-col">
+                    <button
+                      className={`sel-toggle ${allPageSelected ? "on" : ""}`}
+                      onClick={toggleSelectAllPage}
+                      title={allPageSelected ? "Quitar selección de esta página" : "Seleccionar toda la página"}
+                      aria-label={allPageSelected ? "Quitar selección de esta página" : "Seleccionar toda la página"}
+                    >
+                      {allPageSelected ? <FaCheckSquare /> : <FaRegSquare />}
+                    </button>
+                  </th>
                   <th onClick={() => toggleSort("nombre_cliente")} className={sortBy.field==="nombre_cliente" ? sortBy.dir : ""}>Cliente</th>
                   <th onClick={() => toggleSort("compania")} className={sortBy.field==="compania" ? sortBy.dir : ""}>Compañía</th>
                   <th onClick={() => toggleSort("ubicacion_label")} className={sortBy.field==="ubicacion_label" ? sortBy.dir : ""}>Ubicación</th>
@@ -609,8 +787,20 @@ export default function BuscarPaquete() {
               <tbody>
                 {paginados.map(p => {
                   const revealed = revealAll || revealedSet.has(p.id);
+                  const checked = isSelected(p.id);
                   return (
-                    <tr key={p.id} className={`${flashRowId === p.id ? "flash" : ""}`}>
+                    <tr key={p.id} className={`${flashRowId === p.id ? "flash" : ""} ${checked ? "row-selected" : ""}`}>
+                      <td className="sel-col">
+                        <button
+                          className={`sel-toggle ${checked ? "on" : ""}`}
+                          onClick={() => toggleSelectOne(p.id)}
+                          aria-label={checked ? "Quitar de la selección" : "Seleccionar fila"}
+                          title={checked ? "Quitar de la selección" : "Seleccionar fila"}
+                        >
+                          {checked ? <FaCheckSquare /> : <FaRegSquare />}
+                        </button>
+                      </td>
+
                       <td data-label="Cliente" className="cliente-col">
                         <div className={`cliente ${revealed ? "" : "blurred"}`}>
                           {busqueda ? highlightApprox(p.nombre_cliente, busqueda) : p.nombre_cliente}
@@ -658,7 +848,7 @@ export default function BuscarPaquete() {
                           </button>
                         )}
 
-                        <button className="icono eliminar" title="Eliminar" aria-label={`Eliminar paquete de ${p.nombre_cliente}`} onClick={() => solicitarEliminar(p)}>
+                        <button className="icono eliminar" title="Eliminar (uno)" aria-label={`Eliminar paquete de ${p.nombre_cliente}`} onClick={() => solicitarEliminar(p)}>
                           <FaTrashAlt size={16} />
                         </button>
                       </td>
@@ -668,13 +858,59 @@ export default function BuscarPaquete() {
               </tbody>
             </table>
 
+            {/* Acciones bajo tabla para selección por página / filtrados */}
+            <div className="selection-foot">
+              <button className="btn-ghost" onClick={toggleSelectAllPage}>
+                {allPageSelected ? "Quitar selección de esta página" : `Seleccionar los ${paginadosIds.length} de esta página`}
+              </button>
+
+              {selectedIds.size < filtradosIds.length && (
+                <button className="btn-ghost" onClick={() => selectAllFiltered(filtradosIds)}>
+                  Seleccionar todos los {filtradosIds.length} filtrados
+                </button>
+              )}
+
+              {anySelected && (
+                <>
+                  <button
+                    className="btn"
+                    onClick={entregarSeleccionados}
+                    disabled={selectedPendingCount === 0}
+                    title={selectedPendingCount === 0 ? "No hay seleccionados pendientes" : `Entregar ${selectedPendingCount} pendiente(s)`}
+                    style={{
+                      backgroundColor: "var(--ok)",
+                      color: "#fff",
+                      border: 0
+                    }}
+                  >
+                    <FaCheck style={{ marginRight: 6 }} />
+                    Entregar seleccionados ({selectedPendingCount})
+                  </button>
+
+                  <button className="btn btn--danger" onClick={() => setConfirmBulk(true)}>
+                    <FaTrashAlt style={{ marginRight: 6 }} />
+                    Eliminar seleccionados
+                  </button>
+                </>
+              )}
+            </div>
+
             {/* Tarjetas móvil */}
             <div className="cards-m" aria-label="Resultados (móvil)">
               {paginados.map(p => {
                 const revealed = revealAll || revealedSet.has(p.id);
+                const checked = isSelected(p.id);
                 return (
-                  <article key={p.id} className="card">
+                  <article key={p.id} className={`card ${checked ? "row-selected" : ""}`}>
                     <header className="card__head">
+                      <button
+                        className={`sel-toggle ${checked ? "on" : ""}`}
+                        onClick={() => toggleSelectOne(p.id)}
+                        aria-label={checked ? "Quitar de la selección" : "Seleccionar elemento"}
+                        title={checked ? "Quitar de la selección" : "Seleccionar elemento"}
+                      >
+                        {checked ? <FaCheckSquare /> : <FaRegSquare />}
+                      </button>
                       <h4 className={`card__title ${revealed ? "" : "blurred"}`}>{p.nombre_cliente}</h4>
                       <div className="card__head-actions">
                         <button className="btn-icon" onClick={() => toggleRevealOne(p.id)} title={revealed ? "Ocultar nombre" : "Mostrar nombre"}>
@@ -773,7 +1009,7 @@ export default function BuscarPaquete() {
         </div>
       )}
 
-      {/* Confirmar eliminar */}
+      {/* Confirmar eliminar (uno) */}
       {confirmState.open && (
         <div className="bp-confirm" role="dialog" aria-modal="true" aria-label="Confirmar">
           <div className="bp-confirm__panel">
@@ -786,6 +1022,20 @@ export default function BuscarPaquete() {
             <div className="bp-confirm__actions">
               <button className="btn btn--muted" onClick={() => setConfirmState({ open: false, payload: null })}>Cancelar</button>
               <button className="btn btn--danger" onClick={confirmarEliminar}>Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmar eliminar (masivo) */}
+      {confirmBulk && (
+        <div className="bp-confirm" role="dialog" aria-modal="true" aria-label="Confirmar eliminación masiva">
+          <div className="bp-confirm__panel">
+            <h4>Eliminar seleccionados</h4>
+            <p>Vas a eliminar <strong>{selectedIds.size}</strong> paquete(s). Esta acción no se puede deshacer.</p>
+            <div className="bp-confirm__actions">
+              <button className="btn btn--muted" onClick={() => setConfirmBulk(false)}>Cancelar</button>
+              <button className="btn btn--danger" onClick={eliminarSeleccionados}><FaTrashAlt /> Eliminar</button>
             </div>
           </div>
         </div>

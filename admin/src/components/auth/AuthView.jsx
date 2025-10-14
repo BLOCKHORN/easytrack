@@ -58,7 +58,6 @@ export default function AuthView() {
           <span className="logo-dot" />
           <span>EasyTrack — Superadmin</span>
         </div>
-        <div className="env-pill">localhost</div>
       </div>
 
       <div className="auth__bg" ref={bgRef} />

@@ -31,7 +31,6 @@ const playChime = (durationMs = 220) => {
 };
 
 /* ========== mapeos para reproducir EXACTAMENTE la configuración ========== */
-// pos -> idx (idx es B{idx+1}) según orientación y columnas
 function buildPosToIdx(count, cols, orientation) {
   const n = Math.max(0, count | 0);
   const c = Math.max(1, cols | 0);
@@ -51,18 +50,15 @@ function buildPosToIdx(count, cols, orientation) {
   return posToIdx;
 }
 
-// obtiene idx (0-based) a partir de label "B<n>"
 const idxFromLabel = (label) => {
   const m = /^B\s*(\d+)$/i.exec(String(label||'').trim());
   return m ? (parseInt(m[1],10)-1) : null;
 };
 
-// a partir del array “crudo” del backend + meta ➜ array visual en el orden correcto
 function makeVisualUbicaciones(rawUbis, meta) {
   const cols = clamp(parseInt(meta?.cols ?? 5,10) || 5, 1, 12);
   const order = (meta?.order || meta?.orden) === 'vertical' ? 'vertical' : 'horizontal';
 
-  // 1) normalizar y construir índice por B#
   const sorted = (rawUbis || []).map((u,i) => ({
     id    : u.id ?? u.ubicacion_id ?? `temp-${i}`,
     label : String(u.label || u.codigo || `B${i+1}`).toUpperCase(),
@@ -76,12 +72,10 @@ function makeVisualUbicaciones(rawUbis, meta) {
     const k = idxFromLabel(u.label);
     if (k != null && k >= 0 && k < count) byIdx[k] = u;
   }
-  // huecos
   for (let k = 0; k < count; k++) {
     if (!byIdx[k]) byIdx[k] = { id: `ghost-${k}`, label: `B${k+1}`, orden: k, activo: true };
   }
 
-  // 2) aplicar orden visual con meta
   const posToIdx = buildPosToIdx(count, cols, order);
   const visual = Array.from({ length: count }, (_, pos) => byIdx[posToIdx[pos]]);
   return { visual, cols, order };
@@ -117,14 +111,12 @@ function bestClientSuggestion(input, paquetesPendientes, threshold = 0.55) {
   const q = toUpperVis(input);
   if (!q) return null;
 
-  // nombres únicos y su “peso” = nº de paquetes pendientes
   const counts = new Map();
   for (const p of paquetesPendientes) {
     const name = toUpperVis(p?.nombre_cliente || '');
     if (!name) continue;
     counts.set(name, (counts.get(name) || 0) + 1);
   }
-  // evaluar similitud
   let best = null;
   for (const [name, cnt] of counts.entries()) {
     const containBoost = (name.includes(q) || q.includes(name)) ? 0.15 : 0;
@@ -144,7 +136,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const [compania, setCompania]   = useState('');
   const [cliente, setCliente]     = useState('');
 
-  // Tabs (solo cambian la parte superior)
+  // Tabs
   const [activeTab, setActiveTab] = useState('single'); // 'single' | 'multi'
 
   // Batch (pestaña múltiple)
@@ -159,7 +151,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const [sugCliente, setSugCliente] = useState(null); // {name, count}
   const [matchInfo, setMatchInfo] = useState(null);   // {label, count}
 
-  // Ubicaciones del backend (crudo) + meta
+  // Ubicaciones + meta
   const [rawUbicaciones, setRawUbicaciones] = useState([]);
   const [metaUbi, setMetaUbi] = useState({ cols: 5, order: 'horizontal' });
 
@@ -169,7 +161,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
     [rawUbicaciones, metaUbi]
   );
 
-  // Paquetes actuales (para ocupación y sugerencias)
+  // Paquetes actuales
   const [paquetes, setPaquetes] = useState([]);
 
   // selección { id, label }
@@ -200,12 +192,10 @@ export default function AnadirPaquete({ modoRapido = false }) {
   }
   .top-tabs .tab:hover{ filter:brightness(1.02); transform:translateY(-1px); }
   .top-tabs .tab.active{ background:var(--brand); color:#fff; box-shadow:0 6px 18px rgba(37,99,235,.25); }
-  /* chips grandes, cuadrados y simétricos */
   .chips.xl { gap:16px; }
   .chip.square { min-width:280px; min-height:110px; border-radius:16px; display:grid; grid-auto-flow:row; align-content:center; justify-items:center; text-align:center; }
   .chip.square .lbl{ font-size:13px; }
   .chip.square .pill{ font-size:26px; padding:10px 16px; }
-  /* rejilla: resaltado de sugerida/relacionada/activa */
   .balda.is-suggested::after, .balda.is-related::after, .balda.is-activePulse::after{
     content:''; position:absolute; inset:-4px; border-radius:12px; box-shadow:0 0 .75rem rgba(99,91,255,.6);
     animation:pulseGlowX 1.4s ease-in-out infinite; pointer-events:none;
@@ -270,7 +260,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
     return map;
   }, [paquetes]);
 
-  // helpers slots
   const getMostEmptySlot = useCallback(() => {
     if (!ubicaciones.length) return null;
     const sorted = [...ubicaciones].sort((a,b)=> {
@@ -282,7 +271,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
     return best ? { id: best.id, label: best.label } : null;
   }, [ubicaciones, occupancy]);
 
-  // 🔎 selección por cliente (mejorada: más usada; empate → la más reciente)
+  // 🔎 selección por cliente
   const pickForClient = useCallback((clienteNombre) => {
     const up = toUpperVis(clienteNombre || '');
     if (!up) return getMostEmptySlot();
@@ -291,7 +280,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
     const matches = pendientes.filter(p => toUpperVis(p?.nombre_cliente || '') === up);
 
     if (matches.length) {
-      // contabilizar por label y quedarnos con la más usada; si hay empate, la más reciente
       const counter = new Map(); // label -> {count, latestISO, idGuess}
       for (const p of matches) {
         const label = String(p.ubicacion_label ?? p.compartimento ?? '').toUpperCase() || null;
@@ -300,7 +288,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
         prev.count += 1;
         const ts = String(p.fecha_llegada || p.created_at || '');
         if (!prev.latestISO || (ts && ts > prev.latestISO)) prev.latestISO = ts;
-        // si vemos un id válido lo conservamos como referencia
         if (p.ubicacion_id || p.balda_id) prev.idGuess = p.ubicacion_id ?? p.balda_id;
         counter.set(label, prev);
       }
@@ -308,17 +295,14 @@ export default function AnadirPaquete({ modoRapido = false }) {
         const bestLabel = [...counter.entries()].sort((a,b)=>{
           const ca=a[1].count, cb=b[1].count;
           if (cb!==ca) return cb-ca;
-          // empate → más reciente
           return (b[1].latestISO || '').localeCompare(a[1].latestISO || '');
         })[0][0];
 
-        // Intentar devolver con id si lo tenemos mapeado a ubicaciones reales
         const guessId = counter.get(bestLabel)?.idGuess ?? null;
         if (guessId != null) {
           const u = ubicaciones.find(x => String(x.id) === String(guessId));
           if (u) return { id: u.id, label: u.label };
         }
-        // o por label
         const u = ubicaciones.find(x => x.label === bestLabel);
         if (u) return { id: u.id, label: u.label };
         return { id: null, label: bestLabel };
@@ -327,19 +311,33 @@ export default function AnadirPaquete({ modoRapido = false }) {
     return getMostEmptySlot();
   }, [paquetes, ubicaciones, getMostEmptySlot]);
 
-  // autoselección mientras se escribe + sugerencia fuzzy
+  /* ========= Unificamos fuente de nombre para SINGLE y MULTI ========= */
+  const leadingName = activeTab === 'single' ? cliente : (multiNames[0] || '');
+  const setLeadingName = useCallback((val) => {
+    const up = toUpperVis(val);
+    if (activeTab === 'single') {
+      setCliente(up);
+    } else {
+      setMultiNames(prev => {
+        const next = [...prev];
+        next[0] = up;
+        return next;
+      });
+    }
+  }, [activeTab]);
+
+  // autoselección + sugerencias (usa leadingName)
   useEffect(() => {
     const pendientes = paquetes.filter(p => !p.entregado);
-    const sug = bestClientSuggestion(cliente, pendientes);
+    const sug = bestClientSuggestion(leadingName, pendientes);
     setSugCliente(sug);
 
     if (!seleccionManual) {
-      const slot = pickForClient(cliente) || getMostEmptySlot();
+      const slot = pickForClient(leadingName) || getMostEmptySlot();
       if (slot) setSlotSel(slot);
     }
 
-    // “match hint”
-    if (sug && toUpperVis(cliente) !== toUpperVis(sug.name)) {
+    if (sug && toUpperVis(leadingName) !== toUpperVis(sug.name)) {
       let bestLabel = null;
       let cnt = 0;
       for (const p of pendientes) {
@@ -352,22 +350,46 @@ export default function AnadirPaquete({ modoRapido = false }) {
     } else {
       setMatchInfo(null);
     }
-  }, [cliente, paquetes, seleccionManual, pickForClient, getMostEmptySlot]);
+  }, [leadingName, paquetes, seleccionManual, pickForClient, getMostEmptySlot]);
 
-  // sugerida (para brillo constante)
   const suggestedLabel = useMemo(() => {
-    const s = pickForClient(cliente) || getMostEmptySlot();
+    const s = pickForClient(leadingName) || getMostEmptySlot();
     return s?.label || '';
-  }, [cliente, pickForClient, getMostEmptySlot]);
+  }, [leadingName, pickForClient, getMostEmptySlot]);
 
   const puedeGuardar = useMemo(
     () => cliente.trim() && compania && slotSel && (slotSel.id || slotSel.label),
     [cliente, compania, slotSel]
   );
 
-  // ¿cuándo pulsan los chips?
   const suggestionPulse = !!(sugCliente || matchInfo?.label);
   const selectedPulse   = !!(seleccionManual || sugCliente || matchInfo?.label);
+
+  // ===== util: redimensionar arrays cuando cambia el count =====
+  const applyNewMultiCount = useCallback((v) => {
+    const n = clamp(v|0, 1, 20);
+    setMultiCount(n);
+
+    setMultiNames(prev => {
+      const next = [...prev];
+      if (next.length < n) {
+        while (next.length < n) next.push('');
+      } else if (next.length > n) {
+        next.length = n;
+      }
+      return next;
+    });
+
+    setMultiCompanies(prev => {
+      const next = [...prev];
+      if (next.length < n) {
+        while (next.length < n) next.push(batchSameCompany ? (batchCompany || compania) : (companias[0] || ''));
+      } else if (next.length > n) {
+        next.length = n;
+      }
+      return next;
+    });
+  }, [batchSameCompany, batchCompany, compania, companias]);
 
   // ✈️ animación
   const flyFromInputToSlot = useCallback(() => {
@@ -414,7 +436,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
       if (!upperCliente) throw new Error('Falta nombre del cliente.');
       if (!compania) throw new Error('Falta empresa de transporte.');
 
-      // etiqueta visible para backend
       const slotLabel = String(
         (slotSel?.label || (Number.isFinite(Number(slotSel?.id)) ? `B${Number(slotSel.id)}` : ''))
       ).trim().toUpperCase();
@@ -426,7 +447,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
         label: slotLabel,
       };
 
-      // Optimista
       const ahora = new Date().toISOString();
       const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const temp = {
@@ -445,7 +465,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
 
       flyFromInputToSlot();
 
-      // Backend
       const payload = {
         tenant_id: tenant.id,
         nombre_cliente: upperCliente,
@@ -456,20 +475,16 @@ export default function AnadirPaquete({ modoRapido = false }) {
       const creado = await crearPaqueteBackend(payload, token);
       if (!creado?.id) throw new Error('No se pudo crear el paquete en backend.');
 
-      // Sustituir temporal
       setPaquetes(prev => prev.map(p =>
         p.id === tempId ? { ...p, id: creado.id, balda_id: creado.balda_id ?? p.balda_id } : p
       ));
 
-      // Recuerdos
       localStorage.setItem('ap_last_company', compania);
 
-      // Feedback
       setUltimoGuardado(slotAtSave);
       setExito(true);
       setTimeout(() => setExito(false), 1800);
 
-      // Limpieza
       setCliente('');
       setSeleccionManual(false);
       startTransition(() => inputClienteRef.current?.focus());
@@ -582,17 +597,16 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const aceptarSugerenciaCliente = useCallback(() => {
     if (!sugCliente) return;
     const nombre = sugCliente.name;
-    setCliente(nombre);
-    setSeleccionManual(false); // permitimos que pickForClient actúe
+    setLeadingName(nombre);
+    setSeleccionManual(false);
     const slot = pickForClient(nombre);
     if (slot) setSlotSel(slot);
     playChime(220);
-  }, [sugCliente, pickForClient]);
+  }, [sugCliente, setLeadingName, pickForClient]);
 
   // ===== Render =====
   return (
     <div className="anadir-paquete">
-      {/* estilos extra (tabs/chips XL/pulsos) */}
       <style dangerouslySetInnerHTML={{ __html: extraStyles }} />
       <div id="fly-layer" ref={flyLayerRef} aria-hidden="true" />
 
@@ -604,7 +618,7 @@ export default function AnadirPaquete({ modoRapido = false }) {
             <p>Registra el paquete y elige la ubicación.</p>
           </div>
         </div>
-        {/* Tabs superiores */}
+
         <div className="top-tabs" role="tablist" aria-label="Modo de alta">
           <button
             type="button"
@@ -628,7 +642,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
       </header>
 
       <form className="form" onSubmit={activeTab==='single' ? guardar : (e)=>{ e.preventDefault(); guardarMultiple(); }}>
-        {/* ========== PANEL SUPERIOR (cambia con tabs) ========== */}
         {activeTab === 'single' ? (
           <section className="panel datos" aria-labelledby="panel-single">
             <h2 id="panel-single">Datos del paquete</h2>
@@ -642,14 +655,13 @@ export default function AnadirPaquete({ modoRapido = false }) {
                   type="text"
                   placeholder="Añadir cliente…"
                   value={cliente}
-                  onChange={e => { setCliente(toUpperVis(e.target.value)); setSeleccionManual(false); }}
+                  onChange={e => { setLeadingName(e.target.value); setSeleccionManual(false); }}
                   autoComplete="off"
                   maxLength={80}
                   aria-describedby="cliente-hint cliente-suggestion"
                 />
 
-                {/* Sugerencia fuzzy bajo el input */}
-                {sugCliente && toUpperVis(cliente) !== toUpperVis(sugCliente.name) && (
+                {sugCliente && toUpperVis(leadingName) !== toUpperVis(sugCliente.name) && (
                   <div id="cliente-suggestion" className="sugerencia-cliente">
                     <button
                       type="button"
@@ -662,7 +674,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
                   </div>
                 )}
 
-                {/* Mensajito en cursiva si hay coincidencia con paquetes pendientes */}
                 {matchInfo?.label && (
                   <em id="cliente-hint" className="match-hint">
                     Hay otro paquete pendiente de este cliente en <strong className="pulse-constant glow-strong">{matchInfo.label}</strong>.
@@ -710,42 +721,25 @@ export default function AnadirPaquete({ modoRapido = false }) {
           <section className="panel multiple open" aria-labelledby="panel-multi">
             <div className="multiple-head">
               <h2 id="panel-multi"><FaLayerGroup style={{ marginRight: 8 }} /> Añadir varios paquetes</h2>
-              <p className="hint">Introduce varios nombres. Usarán la <strong>misma ubicación</strong> seleccionada/sugerida.</p>
+              <p className="hint">
+                Introduce varios nombres. Usarán la <strong>misma ubicación</strong> seleccionada/sugerida.
+                {slotSel?.label && <> Actual: <strong>{slotSel.label}</strong>.</>}
+              </p>
             </div>
 
             <div className="multiple-config">
               <div className="row">
                 <label className="multi-label">¿Cuántos paquetes vas a añadir?</label>
                 <div className="multi-controls">
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
+                  {/* === NUEVO: selector 1..20 en lugar del input numérico === */}
+                  <select
+                    className="multi-select"
                     value={multiCount}
-                    onChange={(e) => {
-                      const v = clamp(parseInt(e.target.value||'1',10) || 1, 1, 100);
-                      setMultiCount(v);
-                      setMultiNames(prev => {
-                        const next = [...prev];
-                        if (next.length < v) {
-                          while (next.length < v) next.push('');
-                        } else if (next.length > v) {
-                          next.length = v;
-                        }
-                        return next;
-                      });
-                      setMultiCompanies(prev => {
-                        const next = [...prev];
-                        if (next.length < v) {
-                          while (next.length < v) next.push(batchSameCompany ? batchCompany || compania : (companias[0] || ''));
-                        } else if (next.length > v) {
-                          next.length = v;
-                        }
-                        return next;
-                      });
-                    }}
-                    className="multi-number"
-                  />
+                    onChange={(e)=> applyNewMultiCount(parseInt(e.target.value,10) || 1)}
+                    aria-label="Cantidad de paquetes a añadir"
+                  >
+                    {Array.from({length:20},(_,i)=>(<option key={i+1} value={i+1}>{i+1}</option>))}
+                  </select>
                 </div>
               </div>
 
@@ -778,6 +772,24 @@ export default function AnadirPaquete({ modoRapido = false }) {
               </div>
             </div>
 
+            {/* === Chips de Sugerencia / Seleccionado también en MULTI === */}
+            <div className="bloque-central" style={{ marginTop: 10 }}>
+              <div className="chips xl">
+                <span className={`chip chip--hint square ${suggestionPulse ? 'pulse-constant glow-strong' : ''}`}>
+                  <FaLightbulb aria-hidden="true" />
+                  <span className="lbl">Sugerencia</span>
+                  <code className="pill">{suggestedLabel || '—'}</code>
+                </span>
+
+                <span className={`chip chip--selected square ${selectedPulse ? 'pulse-constant glow-strong' : ''}`}>
+                  <FaCheckCircle aria-hidden="true" />
+                  <span className="lbl">Seleccionado</span>
+                  <code className="pill">{slotSel?.label || '—'}</code>
+                </span>
+              </div>
+            </div>
+
+            {/* === Grid de nombres (con sugerencias para el PRIMERO) === */}
             <div className="multi-grid">
               {Array.from({length: multiCount}).map((_,i)=>(
                 <div key={i} className="multi-item">
@@ -787,15 +799,42 @@ export default function AnadirPaquete({ modoRapido = false }) {
                     placeholder="Nombre cliente…"
                     value={multiNames[i] || ''}
                     onChange={(e)=>{
-                      const val = toUpperVis(e.target.value);
+                      const val = e.target.value;
                       setMultiNames(prev => {
                         const next = [...prev];
-                        next[i] = val;
+                        next[i] = toUpperVis(val);
                         return next;
                       });
+                      if (i === 0) {
+                        setSeleccionManual(false);
+                        setLeadingName(val);
+                      }
                     }}
                     maxLength={80}
+                    aria-describedby={i===0 ? "multi-0-hint multi-0-suggestion" : undefined}
                   />
+
+                  {/* Sugerencia fuzzy SOLO bajo el PRIMER input */}
+                  {i===0 && sugCliente && toUpperVis(leadingName) !== toUpperVis(sugCliente.name) && (
+                    <div id="multi-0-suggestion" className="sugerencia-cliente" style={{ marginTop: 6 }}>
+                      <button
+                        type="button"
+                        className={`suggestion-pill ${suggestionPulse ? 'pulse-constant glow-strong' : ''}`}
+                        onClick={aceptarSugerenciaCliente}
+                        title="Usar este cliente y autoseleccionar su balda"
+                      >
+                        ¿Querías decir <strong>{sugCliente.name}</strong>? Pulsa para usarlo.
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Hint → proponer misma balda */}
+                  {i===0 && matchInfo?.label && (
+                    <em id="multi-0-hint" className="match-hint" style={{ marginTop: 4 }}>
+                      Hay otro paquete pendiente de este cliente en <strong className="pulse-constant glow-strong">{matchInfo.label}</strong>. 
+                      Podemos ponerlos juntos.
+                    </em>
+                  )}
 
                   {!batchSameCompany && (
                     <select
@@ -842,10 +881,13 @@ export default function AnadirPaquete({ modoRapido = false }) {
           </section>
         )}
 
-        {/* ========== REJILLA (siempre visible bajo el panel superior) ========== */}
+        {/* ========== REJILLA ========== */}
         <section className="panel rejilla">
           <h2>Ubicaciones</h2>
-          <p className="hint">Selecciona una ubicación. Verás la ocupación actual.</p>
+          <p className="hint">
+            Selecciona una ubicación. Verás la ocupación actual.
+            {activeTab==='multi' && slotSel?.label && <> Todos los nuevos se colocarán en <strong>{slotSel.label}</strong>.</>}
+          </p>
 
           <div
             className="estantes-grid"

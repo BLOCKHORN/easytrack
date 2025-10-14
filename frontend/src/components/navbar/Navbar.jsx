@@ -1,4 +1,3 @@
-// src/components/navbar/Navbar.jsx
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useModal } from '../../context/ModalContext'
@@ -66,16 +65,21 @@ export default function Navbar() {
     setMobileOpen(false)
   }, [location.pathname])
 
+  // 🚫 Quitar "inert" (causa taps perdidos / doble tap en iOS)
   useEffect(() => {
     document.body.classList.toggle('no-scroll', mobileOpen)
-    const el = mobileRootRef.current
-    if (el) {
-      // @ts-ignore inert es experimental pero soportado
-      el.inert = !mobileOpen
-      if (!mobileOpen) el.setAttribute('aria-hidden', 'true')
-      else el.removeAttribute('aria-hidden')
-    }
     return () => document.body.classList.remove('no-scroll')
+  }, [mobileOpen])
+
+  // 👉 mover el foco al botón cerrar cuando se abra (sin rAF + sin inert)
+  useEffect(() => {
+    if (mobileOpen) {
+      // pequeño delay para asegurar que está montado
+      const t = setTimeout(() => {
+        try { mobileCloseRef.current?.focus({ preventScroll: true }) } catch {}
+      }, 0)
+      return () => clearTimeout(t)
+    }
   }, [mobileOpen])
 
   useEffect(() => {
@@ -94,12 +98,19 @@ export default function Navbar() {
   // móvil: open/close con foco correcto
   const openMobile = () => {
     setMobileOpen(true)
-    requestAnimationFrame(() => mobileCloseRef.current?.focus())
   }
   const closeMobile = () => {
-    hamburgerRef.current?.focus?.({ preventScroll: true })
-    requestAnimationFrame(() => setMobileOpen(false))
+    // devuelve foco a la hamburguesa sin forzar scroll
+    requestAnimationFrame(() => {
+      try { hamburgerRef.current?.focus({ preventScroll: true }) } catch {}
+      setMobileOpen(false)
+    })
   }
+
+  // 💡 Mostrar hamburguesa solo si aporta algo:
+  // - si NO está logueado (CTA de demo/login), sirve
+  // - si está logueado pero no tienes más navegación móvil que no esté ya en el chip de cuenta → la ocultamos
+  const showHamburger = !isLoggedIn // ajusta si añades enlaces del landing en el panel
 
   // ocultar navbar en rutas concretas
   if (location.pathname === '/email-confirmado') return null
@@ -130,17 +141,20 @@ export default function Navbar() {
       />
 
       {/* HAMBURGUESA (móvil) */}
-      <button
-        ref={hamburgerRef}
-        id="navbarHamburger"
-        className={`navbar__hamburger ${mobileOpen ? 'active' : ''}`}
-        onClick={mobileOpen ? closeMobile : openMobile}
-        aria-label="Abrir menú"
-        aria-expanded={mobileOpen}
-        aria-controls="mobileMenu"
-      >
-        <span /><span /><span />
-      </button>
+      {showHamburger && (
+        <button
+          ref={hamburgerRef}
+          id="navbarHamburger"
+          className={`navbar__hamburger ${mobileOpen ? 'active' : ''}`}
+          // usar pointerup para evitar “ghost click”/doble tap en iOS
+          onPointerUp={mobileOpen ? closeMobile : openMobile}
+          aria-label="Abrir menú"
+          aria-expanded={mobileOpen}
+          aria-controls="mobileMenu"
+        >
+          <span /><span /><span />
+        </button>
+      )}
 
       <NavbarMobile
         id="mobileMenu"

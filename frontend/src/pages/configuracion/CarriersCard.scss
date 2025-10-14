@@ -22,6 +22,7 @@
     border: 1px solid var(--bd);
     border-radius: 14px;
     background: linear-gradient(180deg, rgba(2,6,23,.02), rgba(2,6,23,.04));
+    min-width: 0;
   }
   .hdr-left {
     display: grid;
@@ -31,18 +32,30 @@
     min-width: 0;
   }
   .hdr-icon {
-    width: clamp(46px, 5vw, 56px);
-    height: clamp(46px, 5vw, 56px);
+    width: clamp(44px, 5vw, 56px);
+    height: clamp(44px, 5vw, 56px);
     border-radius: 999px;
     display: grid; place-items: center;
     color: #fff;
     background: conic-gradient(from 220deg, #a5b4fc, #22d3ee, #fca5a5, #a5b4fc);
     box-shadow: inset 0 8px 20px rgba(99,91,255,.18);
     svg { font-size: 1.1rem; opacity: .95; }
+    flex: 0 0 auto;
   }
-  .hdr-title { margin: 0; font-weight: 900; letter-spacing: .2px; line-height: 1.2; }
-  .hdr-subtitle { margin: 0; color: var(--mut); }
-  .hdr-actions { display:flex; gap:8px; align-items:center; }
+  .hdr-title {
+    margin: 0; font-weight: 900; letter-spacing: .2px;
+    line-height: 1.2; font-size: clamp(1rem, 3.4vw, 1.05rem);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .hdr-subtitle {
+    margin: 0; color: var(--mut); font-size: clamp(.9rem, 3vw, .95rem);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* Acciones del header */
+  .hdr-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  /* Sólo en escritorio (se oculta en móvil para evitar duplicado) */
+  .hdr-actions--desktop { display:flex; }
 
   /* ===== Body ===== */
   &__body { display:grid; gap:12px; margin-top:10px; }
@@ -50,24 +63,25 @@
   /* ===== Row ===== */
   .cc-row{
     /* Geometría y nudges */
-    --ctrlH: 40px;        /* altura de todos los controles */
+    --ctrlH: 42px;
     --labelSize: 13px;
     --gap: 6px;
-    --hintH: 18px;        /* reserva de hint constante */
-    --ctrlYOffset: -1px;  /* si ves 1px raro, prueba 0 o +1 */
+    --hintH: 18px;
+    --ctrlYOffset: -1px;
     --topOfControls: calc(var(--labelSize) + var(--gap));
 
     display:grid;
-    grid-template-columns: auto 1fr minmax(180px, 220px) 120px 120px auto;
+    grid-template-columns: auto 1fr minmax(160px, 220px) minmax(120px, 140px) 120px auto;
     grid-template-areas: "badge empresa ingreso color switch remove";
-    gap: 12px;
+    gap: clamp(8px, 2.4vw, 12px);
     align-items: start;
 
-    padding: 12px;
+    padding: clamp(10px, 2.6vw, 12px);
     border: 1px solid var(--bd);
     border-radius: 14px;
     background: var(--surface);
     box-shadow: 0 8px 22px rgba(15,23,42,.06);
+    min-width: 0;
 
     @media (max-width: 980px){
       grid-template-columns: auto 1fr 1fr auto;
@@ -85,27 +99,32 @@
     }
   }
 
-  /* ===== Badge (alineado con controles, no con labels) ===== */
+  /* ===== Badge ===== */
   .cc-badge{
     --accent: #2563eb;
     grid-area: badge;
     width: 42px; height: 42px;
     border-radius: 12px;
+    position: relative;
     display: grid; place-items: center;
     background: linear-gradient(180deg, #f8fbff, #eef4ff);
     border: 1px solid var(--bd);
     box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), 0 6px 16px rgba(2,6,23,.06);
-    margin-top: var(--topOfControls); /* <- CLAVE: alinea con la fila de controles */
+    margin-top: var(--topOfControls);
 
     &__dot{
       position: absolute; top: 6px; right: 6px;
       width: 8px; height: 8px; border-radius: 999px;
       background: var(--accent); box-shadow: 0 0 0 2px #fff;
     }
-    &__letters{ font-weight: 900; letter-spacing: .2px; font-size: .95rem; color: #0b1220; }
+    &__letters{
+      font-weight: 900; letter-spacing: .2px; font-size: .95rem; color: #0b1220;
+      /* siempre visible (no opacar en móvil) */
+      opacity: 1;
+    }
   }
 
-  /* ===== Campos: label arriba / control / hint ===== */
+  /* ===== Campos ===== */
   .cc-field{
     display: grid;
     grid-template-rows: auto var(--ctrlH) var(--hintH);
@@ -124,12 +143,13 @@
       font-weight: 700;
       line-height: 1.1;
       align-self: end;
-      padding-top: 1px; /* micro nudge */
+      padding-top: 1px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
 
-    /* Controles nativos normalizados */
     select,
+    input[type="text"],
+    input[type="number"],
     input[type="color"]{
       box-sizing: border-box;
       width: 100%;
@@ -146,11 +166,13 @@
       transform: translateY(var(--ctrlYOffset));
     }
     select:focus-visible,
+    input[type="text"]:focus-visible,
+    input[type="number"]:focus-visible,
     input[type="color"]:focus-visible{
       outline: none; border-color: transparent; box-shadow: 0 0 0 3px var(--ring);
     }
 
-    /* Color picker con mismo alto visual */
+    /* Color picker compacto */
     &--color input[type="color"]{
       padding: 0;
       width: var(--ctrlH);
@@ -168,15 +190,13 @@
       grid-row: 3; min-height: var(--hintH);
       color: var(--mut); font-size: 12px; line-height: 1.2;
       margin: 0; align-self: start;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    /* Si no hay hint, se deja hueco igualmente vía ::after */
-    &::after{
-      content:""; grid-row: 3; height: var(--hintH);
-    }
+    &::after{ content:""; grid-row: 3; height: var(--hintH); }
     &:has(.cc-hint)::after{ display: none; }
   }
 
-  /* ===== Switch con misma geometría que los selects ===== */
+  /* ===== Switch ===== */
   .switch{
     --h: var(--ctrlH);
     --w: 56px;
@@ -204,28 +224,59 @@
     }
   }
 
-  /* ===== Botón eliminar alineado a controles ===== */
-  .cc-remove{
+  /* ===== Botón eliminar (GRANDE y accesible) ===== */
+  .cc-remove,
+  .cc-remove.btn,
+  .btn.btn--ghost.cc-remove {
     grid-area: remove;
     justify-self: end;
-    min-height: var(--ctrlH);
-    min-width: 40px;
-    padding: 0 10px;
+
+    inline-size: 44px;
+    block-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+
+    display: grid;
+    place-items: center;
+
+    /* neutralizar estilos heredados de .btn */
+    padding: 0 !important;
+    border-radius: 12px;
+    border: 1px solid var(--bd);
+    background: #fff;
+    box-shadow: none;
+    clip-path: none;
     margin-top: var(--topOfControls);
-    svg{ width: 18px; height: 18px; }
+
+    transform: none !important;
+    filter: none !important;
+
+    svg { width: 20px; height: 20px; }
+  }
+  .cc-remove:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+  .cc-remove:hover { background: #f8fafc; }
+
+  @media (min-width: 641px){
+    .cc-remove,
+    .cc-remove.btn,
+    .btn.btn--ghost.cc-remove{
+      inline-size: 40px;
+      block-size: 40px;
+    }
   }
 
-  /* CTA inferior (móvil) */
+  /* ===== CTA inferior ===== */
   &__actions{
-    display: none;
-    @media (max-width: 720px){ display: flex; }
+    display: none;       /* oculto por defecto (desktop) */
+    justify-content: center;
   }
 
-  /* Empty state */
+  /* ===== Empty state ===== */
   &__empty{
     display: grid; grid-template-columns: 160px 1fr; gap: 14px; align-items: center;
     padding: 16px; border: 1px dashed var(--bd); border-radius: 14px;
     background: linear-gradient(180deg, #f8fbff, #f3f6fd);
+    min-width: 0;
 
     @media (max-width: 560px){ grid-template-columns: 1fr; text-align: center; }
     .empty-ill{
@@ -236,8 +287,8 @@
         linear-gradient(180deg, #fff, #f7f9ff);
     }
     .empty-txt{
-      display: grid; gap: 6px;
-      h4{ margin: 0; font-weight: 900; letter-spacing: .2px; }
+      display: grid; gap: 6px; min-width:0;
+      h4{ margin: 0; font-weight: 900; letter-spacing: .2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       p{ margin: 0; color: var(--mut); }
       .btn{ justify-self: start; @media (max-width: 560px){ justify-self: center; } }
     }
@@ -251,6 +302,7 @@
     background: #fff; color: var(--text); font-weight: 800; letter-spacing: .2px;
     cursor: pointer; transition: transform .12s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease;
     box-shadow: 0 10px 22px rgba(15,23,42,.06);
+    max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     &:focus-visible{ outline: none; box-shadow: 0 0 0 4px var(--ring); }
     &:hover{ transform: translateY(-1px); filter: brightness(1.01); }
     svg{ width: 18px; height: 18px; }
@@ -262,6 +314,14 @@
     &:hover{ box-shadow: 0 16px 34px rgba(99,91,255,.22); }
   }
   .btn--ghost{ background:#fff; }
+
+  /* ===== Responsive toggles ===== */
+  @media (max-width: 720px){
+    /* Oculta CTA del header en móvil */
+    .hdr-actions--desktop { display: none !important; }
+    /* Muestra CTA inferior en móvil */
+    &__actions { display: flex; }
+  }
 }
 
 /* Fallback si :has no está soportado */

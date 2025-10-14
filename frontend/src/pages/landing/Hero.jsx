@@ -81,12 +81,7 @@ export default function Hero({ onPrimaryCta }) {
           <button className="btn btn--primary btn--xl" onClick={startNow}>
             Empieza ahora!
           </button>
-          <button
-            className="btn btn--ghost btn--xl"
-            onClick={() => setDemoOpen(true)}
-          >
-            Ver demo
-          </button>
+
         </div>
 
         {/* Beneficios rápidos */}

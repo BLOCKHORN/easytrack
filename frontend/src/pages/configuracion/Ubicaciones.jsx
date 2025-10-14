@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  MdLocationOn, MdAdd, MdRemove, MdSave,
+  MdLocationOn, MdAdd, MdRemove,
   MdSwapHoriz, MdSwapVert
 } from "react-icons/md";
 import "./Ubicaciones.scss";
@@ -31,16 +31,16 @@ function buildPosToIdx(count, cols, orientation) {
  * Props:
  * - initial: [{ label:'B1', codigo:'B1', orden:0 }, ...]
  * - initialMeta: { cols:number, orden|'order': 'horizontal'|'vertical' }
- * - onSave: ({ tenantId, ubicaciones: [{label,codigo,orden}], meta: {cols, order} }) => void
- * - tenantId
+ * - onChange: ({ ubicaciones:[{label,codigo,orden}], meta:{cols, order} }) => void
+ * - tenantId (opcional, no se persiste aquí)
  * - locked: boolean  -> true si hay paquetes y no se puede cambiar la cantidad
  * - lockedCount: number -> nº de paquetes para el mensaje
  */
 export default function Ubicaciones({
   initial = [],
   initialMeta = null,
-  onSave,
-  tenantId = null,
+  onChange,
+  tenantId = null,            // eslint-disable-line no-unused-vars
   locked = false,
   lockedCount = 0,
 }) {
@@ -71,28 +71,29 @@ export default function Ubicaciones({
 
   const posToIdx = useMemo(() => buildPosToIdx(count, cols, order), [count, cols, order]);
 
+  // Bloqueos
   const initialCount = initial?.length ?? 0;
   const cantidadCambiada = count !== initialCount;
-  // Si hay paquetes, bloquear cambios de cantidad (añadir/quitar). Permitimos guardar cambios visuales.
-  const stepperDisabled = locked;
-  const saveDisabledForCantidad = locked && cantidadCambiada;
+  const stepperDisabled = locked;                // no permitimos variar cantidad si locked
+  const cantidadBloqueada = locked && cantidadCambiada;
 
-  const handleSave = () => {
-    if (saveDisabledForCantidad) return; // defensa en UI
+  // Emite cambios al padre cuando hay modificaciones (edición local)
+  useEffect(() => {
+    if (!onChange) return;
 
-    // ⚠️ SIEMPRE enviamos {label, codigo, orden} para no romper "baldas.codigo NOT NULL"
-    const payload = Array.from({ length: count }, (_, pos) => {
+    // ⚠️ SIEMPRE enviamos {label, codigo, orden}
+    const ubicaciones = Array.from({ length: count }, (_, pos) => {
       const idx = posToIdx[pos];
       const label = `B${idx + 1}`;
       return { label, codigo: label, orden: pos };
     });
 
-    onSave?.({
-      tenantId,
-      ubicaciones: payload,
+    onChange({
+      ubicaciones,
       meta: { cols, order }
     });
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [count, cols, order, posToIdx]);
 
   return (
     <div className="ub-simple">
@@ -106,16 +107,7 @@ export default function Ubicaciones({
             <strong> B1, B2, B3…</strong>
           </p>
         </div>
-        <div className="ub-actions">
-          <button
-            className="btn btn-primary"
-            onClick={handleSave}
-            disabled={!!saveDisabledForCantidad}
-            title={saveDisabledForCantidad ? "No puedes cambiar la cantidad mientras existan paquetes" : "Guardar cambios"}
-          >
-            <MdSave/>&nbsp;Guardar
-          </button>
-        </div>
+        {/* Botón de guardar eliminado (guardado global en la página) */}
       </div>
 
       {/* Aviso de bloqueo si hay paquetes */}
@@ -165,6 +157,11 @@ export default function Ubicaciones({
               <MdAdd/>
             </button>
           </div>
+          {cantidadBloqueada && (
+            <div className="hint error" role="status">
+              No puedes cambiar la <strong>cantidad</strong> mientras existan paquetes.
+            </div>
+          )}
         </div>
       </section>
 
@@ -224,19 +221,22 @@ export default function Ubicaciones({
           </div>
         </div>
 
-        <div
-          className="grid"
-          style={{ gridTemplateColumns: `repeat(${cols}, minmax(130px, 1fr))` }}
-        >
-          {Array.from({ length: count }, (_, pos) => {
-            const idx = posToIdx[pos];
-            const code = `B${idx + 1}`;
-            return (
-              <div key={`cell-${pos}`} className="cell" title={code}>
-                <div className="pill">{code}</div>
-              </div>
-            );
-          })}
+        {/* ⚠️ En móvil, esta envoltura permite scroll horizontal suave sin desbordes */}
+        <div className="grid-scroller" role="region" aria-label="Vista de ubicaciones scrolleable">
+          <div
+            className="grid"
+            style={{ gridTemplateColumns: `repeat(${cols}, minmax(130px, 1fr))` }}
+          >
+            {Array.from({ length: count }, (_, pos) => {
+              const idx = posToIdx[pos];
+              const code = `B${idx + 1}`;
+              return (
+                <div key={`cell-${pos}`} className="cell" title={code}>
+                  <div className="pill">{code}</div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </section>
 

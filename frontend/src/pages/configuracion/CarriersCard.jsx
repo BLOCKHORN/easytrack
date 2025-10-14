@@ -1,9 +1,5 @@
 import { useMemo } from "react";
-import {
-  MdLocalShipping,
-  MdAddCircle,
-  MdDelete,
-} from "react-icons/md";
+import { MdLocalShipping, MdAddCircle, MdDelete } from "react-icons/md";
 import "./CarriersCard.scss";
 
 export default function CarriersCard({
@@ -29,15 +25,19 @@ export default function CarriersCard({
             <MdLocalShipping />
           </div>
           <div className="hdr-txt">
-            <h3 id="carriers-title" className="hdr-title">Empresas de transporte</h3>
+            <h3 id="carriers-title" className="hdr-title">
+              Empresas de transporte
+            </h3>
             <p className="hdr-subtitle">
-              Define con qué compañías trabajas y el ingreso por entrega para tu negocio.
+              Define con qué compañías trabajas y el ingreso por entrega para tu
+              negocio.
             </p>
           </div>
         </div>
 
+        {/* CTA sólo en escritorio (se oculta en móvil por CSS) */}
         {empresas.length > 0 && (
-          <div className="hdr-actions">
+          <div className="hdr-actions hdr-actions--desktop">
             <button className="btn btn--primary" onClick={añadirEmpresa}>
               <MdAddCircle /> Añadir empresa
             </button>
@@ -55,7 +55,7 @@ export default function CarriersCard({
 
           return (
             <article
-              key={i}
+              key={`${e?.nombre || "emp"}-${i}`}
               className="cc-row"
               style={{ ["--accent"]: color }}
             >
@@ -75,7 +75,8 @@ export default function CarriersCard({
                 >
                   <option value="">Seleccionar…</option>
                   {empresasDisponibles.map((emp) => {
-                    const disabled = usados.has(emp.nombre) && emp.nombre !== e.nombre;
+                    const disabled =
+                      usados.has(emp.nombre) && emp.nombre !== e.nombre;
                     return (
                       <option
                         key={emp.id ?? emp.nombre}
@@ -88,7 +89,6 @@ export default function CarriersCard({
                     );
                   })}
                 </select>
-                {/* hueco de hint reservado por CSS; no hace falta texto aquí */}
               </label>
 
               {/* Ingreso */}
@@ -121,7 +121,6 @@ export default function CarriersCard({
                   title="Color de etiqueta"
                   aria-label="Color de etiqueta"
                 />
-                {/* hint reservado por CSS */}
               </label>
 
               {/* Activo */}
@@ -132,7 +131,6 @@ export default function CarriersCard({
                   onChange={(val) => actualizarEmpresa(i, "activo", val)}
                   ariaLabel="Alternar activo"
                 />
-                {/* hint reservado por CSS */}
               </label>
 
               {/* Eliminar */}
@@ -148,7 +146,7 @@ export default function CarriersCard({
           );
         })}
 
-        {/* CTA inferior (solo móvil por CSS) */}
+        {/* CTA inferior — sólo en móvil (visible por CSS) */}
         {empresas.length > 0 && (
           <div className="carriers-card__actions">
             <button className="btn btn--primary" onClick={añadirEmpresa}>
@@ -169,7 +167,10 @@ function EmptyState({ onAdd }) {
       <div className="empty-ill" aria-hidden="true" />
       <div className="empty-txt">
         <h4>Sin empresas configuradas</h4>
-        <p>Añade tu primera compañía para empezar a registrar entregas e ingresos.</p>
+        <p>
+          Añade tu primera compañía para empezar a registrar entregas e
+          ingresos.
+        </p>
         <button className="btn btn--primary" onClick={onAdd}>
           <MdAddCircle /> Añadir empresa
         </button>

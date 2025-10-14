@@ -317,4 +317,50 @@ router.post('/demo-requests/:id/decline', async (req, res) => {
   }
 });
 
+// ========== ELIMINAR (hard delete) ==========
+router.delete('/demo-requests/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    // Si hay FKs que impidan borrar, configura ON DELETE CASCADE en la DB
+    // o cambia a soft-delete (deleted_at). Aquí hacemos hard delete directo.
+    const { error } = await db
+      .from('demo_requests')
+      .delete()
+      .eq('id', id);
+
+    if (error) return bad(res, 'DB_ERROR', error.message);
+    return ok(res, { deleted: true });
+  } catch (e) {
+    console.error('[DELETE /admin/demo-requests/:id] Unexpected:', e);
+    return bad(res, 'SERVER_ERROR', e.message || 'SERVER_ERROR', 500);
+  }
+});
+
+// ========== CONTADORES ==========
+// Devuelve: total, pending, pending_unseen, accepted, declined
+router.get('/demo-requests/counters', async (_req, res) => {
+  try {
+    const countExact = async (fn) => {
+      const { count, error } = await fn.select('id', { count: 'exact', head: true });
+      if (error) throw error;
+      return count || 0;
+    };
+
+    const total = await countExact(db.from('demo_requests'));
+    const pending = await countExact(db.from('demo_requests').eq('status', 'pending'));
+    const pending_unseen = await countExact(
+      db.from('demo_requests').eq('status', 'pending').is('reviewed_at', null)
+    );
+    const accepted = await countExact(db.from('demo_requests').eq('status', 'accepted'));
+    const declined = await countExact(db.from('demo_requests').eq('status', 'declined'));
+
+    return ok(res, { total, pending, pending_unseen, accepted, declined });
+  } catch (e) {
+    console.error('[GET /admin/demo-requests/counters] Unexpected:', e);
+    return bad(res, 'SERVER_ERROR', e.message || 'SERVER_ERROR', 500);
+  }
+});
+
+
 module.exports = router;

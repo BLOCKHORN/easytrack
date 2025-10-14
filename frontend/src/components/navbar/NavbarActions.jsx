@@ -1,6 +1,5 @@
-// src/components/navbar/NavbarActions.jsx
 import { Link } from 'react-router-dom'
-import { FaLock } from 'react-icons/fa'
+import { FaLock, FaArrowRight } from 'react-icons/fa'
 import NavbarAccountMenu from './NavbarAccountMenu'
 
 export default function NavbarActions({
@@ -16,6 +15,8 @@ export default function NavbarActions({
   goConfig,
   handleLogout,
 }) {
+  const panelHref = slug ? `/${slug}/dashboard` : '/dashboard';
+
   return (
     <div className="navbar__actions" aria-label="Acciones de usuario">
       {checking ? (
@@ -26,18 +27,25 @@ export default function NavbarActions({
       ) : !isLoggedIn ? (
         <>
           <button className="navbar__link" onClick={openLogin}>
-            <FaLock /> <span>Login</span>
+            <FaLock aria-hidden="true" />
+            <span>Login</span>
           </button>
           <Link to="/registro" className="btn btn-primary">Solicitar DEMO</Link>
         </>
       ) : (
         <>
+          {/* Botón pro */}
           <Link
-            className="btn btn--enter"
-            to={slug ? `/${slug}/dashboard` : '/dashboard'}
+            className="btn nav-btn-pro btn--enter"
+            to={panelHref}
+            title="Ir al panel"
           >
-            Ir al panel
+            <span className="btn__label">Ir al panel</span>
+            <FaArrowRight className="btn__icon" aria-hidden="true" />
           </Link>
+
+          {/* Separador a la DERECHA del botón */}
+          <span className="nav-sep" aria-hidden="true" />
 
           <NavbarAccountMenu
             avatarUrl={avatarUrl}

@@ -41,13 +41,15 @@
     margin-bottom: var(--gap-3);
     background: var(--surface);
 
-    /* altura responsiva sin “saltos” */
+    /* altura responsiva sin “saltos” en desktop/tablet */
     aspect-ratio: 21 / 5; /* 1440×360 aprox */
     min-height: 180px;
 
     .banner-bg {
       position: absolute; inset: 0;
-      background-size: cover; background-position: center;
+      background-size: cover;                  /* fill sin bandas */
+      background-position: center;
+      background-repeat: no-repeat;
       filter: saturate(1.02);
     }
     .banner-bg::before {
@@ -137,10 +139,52 @@
       &:hover::after{ transform: translateX(120%) rotate(8deg); }
       &:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--brand-ring), 0 12px 28px rgba(99,91,255,.22); }
     }
+  }
 
-    @media (max-width: 720px) {
-      .banner-content { grid-template-columns: 1fr; align-items: end; }
+  /* ======= Móvil (sin bandas, con foco ajustable) ======= */
+  @media (max-width: 720px) {
+    .banner-negocio {
+      /* sin ratio fijo para permitir más alto en móvil */
+      aspect-ratio: auto;
+      min-height: clamp(220px, 54vw, 320px);
+
+      /* puedes ajustar el encuadre vertical según imagen */
+      --banner-focus-y: 42%; /* 0%=arriba, 100%=abajo */
+
+      .banner-bg{
+        background-size: cover;                          /* 🔥 adiós bandas negras */
+        background-position: 50% var(--banner-focus-y);  /* foco útil por defecto */
+        background-repeat: no-repeat;
+        background-color: transparent;
+        filter: none;
+      }
+
+      .banner-bg::before{
+        background:
+          linear-gradient(180deg, rgba(2,6,23,.00) 45%, rgba(2,6,23,.30) 100%),
+          linear-gradient(90deg,  rgba(2,6,23,.00) 18%, rgba(2,6,23,.22) 100%);
+      }
+
+      .banner-content { 
+        grid-template-columns: 1fr;
+        align-items: end;
+        padding: 12px;
+        gap: 10px;
+      }
+
+      .banner-izquierda h2{
+        font-size: clamp(18px, 5.2vw, 22px);
+        text-wrap: balance;
+      }
+
       .banner-derecha { place-items: start; }
+      .btn-rapido{ width: 100%; justify-content: center; }
+
+      .btn-editar-banner{
+        top: 8px; right: 8px;
+        width: 40px; height: 40px; padding: 0;
+        display: grid; place-items: center;
+      }
     }
   }
 

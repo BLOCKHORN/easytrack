@@ -15,21 +15,13 @@ import {
 } from 'react-icons/md';
 import './ConfigLayout.scss';
 
-/**
- * Uso:
- * sections = [
- *   { id:'warehouse', label:'Almacén', icon: IconTune, content:<TuCard/> },
- *   { id:'carriers',  label:'Empresas de transporte', icon: IconTruck, content:<TuCard/> },
- *   { id:'account',   label:'Cuenta', icon: IconUser, content:<TuCard/> },
- * ]
- */
 export default function ConfigLayout({
   title = 'Configuración',
   sections = [],
-  active,            // id controlada desde arriba (opcional)
-  onChange,          // (id) => void
-  renderSection,     // (section) => ReactNode (opcional)
-  children,          // fallback modo antiguo
+  active,
+  onChange,
+  renderSection,
+  children,
 }) {
   const hasOwnContent = useMemo(
     () => sections.some(s => s.content) || typeof renderSection === 'function',
@@ -44,7 +36,7 @@ export default function ConfigLayout({
   useEffect(() => { localStorage.setItem('cfg:collapsed', collapsed ? '1' : '0'); }, [collapsed]);
   useEffect(() => { localStorage.setItem('cfg:focus',     focus ? '1' : '0');     }, [focus]);
 
-  // ---- medir header para fijar el offset del sticky exactamente "a ras" del título
+  // medir header para fijar offset sticky (con raf para evitar micro saltos)
   const rootRef  = useRef(null);
   const headRef  = useRef(null);
   useLayoutEffect(() => {
@@ -52,32 +44,82 @@ export default function ConfigLayout({
     const head = headRef.current;
     if (!root || !head) return;
 
+    let raf = 0;
     const setTop = () => {
-      const h = head.offsetHeight || 0;
-      root.style.setProperty('--sticky-top', `${h + 12}px`);
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const h = head.offsetHeight || 0;
+        root.style.setProperty('--sticky-top', `${h + 12}px`);
+      });
     };
 
     setTop();
     const ro = new ResizeObserver(setTop);
     ro.observe(head);
     window.addEventListener('resize', setTop);
-    return () => { ro.disconnect(); window.removeEventListener('resize', setTop); };
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener('resize', setTop);
+    };
   }, []);
 
-
-  // ---- refs + scroll-spy
+  // refs + scroll-spy
   const sectionRefs = useRef({});
   const setRef = useCallback((id) => (el) => { if (el) sectionRefs.current[id] = el; }, []);
+
+  // reduced motion
+  const prefersReduced = useRef(
+    typeof window !== 'undefined' &&
+    window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+
+  // tabs container para autoscroll en móvil
+  const tabsRef = useRef(null);
+  const scrollActiveTabIntoView = useCallback((id) => {
+    const wrap = tabsRef.current;
+    if (!wrap) return;
+    const btn = wrap.querySelector(`[data-tab="${id}"]`);
+    if (!btn) return;
+    const behavior = prefersReduced.current ? 'auto' : 'smooth';
+    btn.scrollIntoView({ inline: 'center', block: 'nearest', behavior });
+  }, []);
+
+  // scroll suave con offset real del sticky-top (en vez de scrollIntoView)
+  const smoothScrollToEl = useCallback((el) => {
+    if (!el) return;
+    const root = rootRef.current;
+    const cs = root ? getComputedStyle(root) : null;
+    const stickyVar = cs ? parseFloat(cs.getPropertyValue('--sticky-top')) : 0;
+    const offset = Number.isFinite(stickyVar) ? stickyVar : 76; // fallback seguro
+
+    const targetY = el.getBoundingClientRect().top + window.scrollY - offset;
+    const nowY = window.scrollY;
+
+    if (Math.abs(nowY - targetY) < 2) return; // ya estamos ahí
+    const behavior = prefersReduced.current ? 'auto' : 'smooth';
+    window.scrollTo({ top: Math.max(0, targetY), behavior });
+  }, []);
+
   const go = useCallback((id) => {
     const el = sectionRefs.current[id];
     if (!el) return;
+
     setCurrentId(id);
     onChange?.(id);
+
+    // Actualiza hash sin provocar scroll automático del navegador
     const url = new URL(window.location.href);
     url.hash = `#${id}`;
     window.history.replaceState({}, '', url);
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [onChange]);
+
+    // Scroll controlado con offset
+    smoothScrollToEl(el);
+
+    // centra el tab activo en móvil
+    scrollActiveTabIntoView(id);
+  }, [onChange, smoothScrollToEl, scrollActiveTabIntoView]);
 
   useEffect(() => {
     if (!hasOwnContent) return;
@@ -91,6 +133,7 @@ export default function ConfigLayout({
           if (id && id !== currentId) {
             setCurrentId(id);
             onChange?.(id);
+            scrollActiveTabIntoView(id);
           }
         }
       },
@@ -98,11 +141,14 @@ export default function ConfigLayout({
     );
     sections.forEach(s => { const el = sectionRefs.current[s.id]; if (el) io.observe(el); });
     return () => io.disconnect();
-  }, [sections, hasOwnContent, currentId, onChange]);
+  }, [sections, hasOwnContent, currentId, onChange, scrollActiveTabIntoView]);
 
   useEffect(() => {
     const fromHash = (window.location.hash || '').replace('#','');
-    if (fromHash && sections.some(s => s.id === fromHash)) setTimeout(() => go(fromHash), 0);
+    if (fromHash && sections.some(s => s.id === fromHash) && fromHash !== currentId) {
+      setTimeout(() => go(fromHash), 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sections, go]);
 
   const current = useMemo(
@@ -149,8 +195,8 @@ export default function ConfigLayout({
         </div>
       </header>
 
-      {/* Tabs móviles */}
-      <nav className="cfg__tabs" role="tablist" aria-label="Secciones">
+      {/* Tabs móviles (con autoscroll del activo) */}
+      <nav ref={tabsRef} className="cfg__tabs" role="tablist" aria-label="Secciones">
         {sections.map(s => (
           <button
             key={s.id}
@@ -160,6 +206,7 @@ export default function ConfigLayout({
             role="tab"
             aria-selected={s.id === currentId}
             aria-controls={`panel-${s.id}`}
+            data-tab={s.id}
           >
             <s.icon aria-hidden /> <span>{s.label}</span>
             {s.badge && <em className="cfg__pill">{s.badge}</em>}
@@ -196,7 +243,7 @@ export default function ConfigLayout({
           )}
         </main>
 
-        {/* Sidebar sticky a la derecha (NO se superpone) */}
+        {/* Sidebar sticky a la derecha */}
         <aside className="cfg__side" aria-label="Navegación secundaria">
           <ul className="cfg__nav" role="tablist" aria-orientation="vertical">
             {sections.map(s => (

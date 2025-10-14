@@ -197,3 +197,29 @@ export async function declineDemoRequest(id, { reason = '', purge = false } = {}
   if (!r.ok) throw new Error('DEMO_DECLINE_FAILED');
   return r.json();
 }
+export async function resendDemoRequest(id, { frontend_url } = {}) {
+  const r = await fetch(`${API}/admin/demo-requests/${id}/resend`, {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify({ frontend_url }),
+  });
+  if (!r.ok) throw new Error('DEMO_RESEND_FAILED');
+  return r.json();
+}
+
+export async function deleteDemoRequest(id) {
+  const r = await fetch(`${API}/admin/demo-requests/${id}`, {
+    method: 'DELETE',
+    headers: await getHeaders(),
+  });
+  if (!r.ok) throw new Error('DEMO_DELETE_FAILED');
+  return r.json();
+}
+
+export async function getDemoCounters() {
+  const r = await fetch(`${API}/admin/demo-requests/counters`, {
+    headers: await getHeaders()
+  });
+  if (!r.ok) throw new Error('DEMO_COUNTERS_FAILED');
+  return r.json(); // -> { ok:true, total, pending, pending_unseen, accepted, declined }
+}

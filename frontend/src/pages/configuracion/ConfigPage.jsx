@@ -1,4 +1,6 @@
+// src/pages/config/ConfigPage.jsx
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../utils/supabaseClient';
 import { ensureTenantResolved } from '../../utils/ensureTenant';
 import Toast from '../../components/Toast';
@@ -7,9 +9,8 @@ import Hero from './Hero';
 import IdentityCard from './IdentityCard';
 import Ubicaciones from './Ubicaciones';
 import CarriersCard from './CarriersCard';
-import FooterActions from './FooterActions';
 import Skeleton from './Skeleton';
-import AccountSettings from './AccountSettings';
+import AccountSettings, { applyEmailDraft, applyPasswordDraft } from './AccountSettings';
 
 import ConfigLayout from './ConfigLayout';
 import './ConfigBase.scss';
@@ -27,7 +28,6 @@ const rowsFromCount = (n) =>
     return { label, codigo: label, orden: i };
   });
 
-// Normaliza filas para backend (siempre con codigo)
 const sanitizeUbicaciones = (rows = []) =>
   rows.map((r, i) => {
     const label = (r?.label || `B${i + 1}`).toUpperCase();
@@ -38,15 +38,19 @@ const sanitizeUbicaciones = (rows = []) =>
     };
   });
 
+const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
+
 export default function ConfigPage() {
+  const navigate = useNavigate();
+
   const [usuario, setUsuario] = useState(null);
   const [tenant, setTenant] = useState(null);
   const [nombre, setNombre] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
 
-  // Ubicaciones: filas + meta (cols/orden)
-  const [ubiRows, setUbiRows] = useState([]);                         // [{label,codigo,orden}]
+  // Ubicaciones
+  const [ubiRows, setUbiRows] = useState([]);
   const [ubiMeta, setUbiMeta] = useState({ cols: 5, orden: 'horizontal' });
   const [ubiLoading, setUbiLoading] = useState(false);
 
@@ -55,13 +59,16 @@ export default function ConfigPage() {
   const [empresasDisponibles, setEmpresasDisponibles] = useState([]);
   const carriersRef = useRef(null);
 
-  // Paquetes → bloqueo
+  // Borradores de Cuenta (desde AccountSettings)
+  const [accountDraft, setAccountDraft] = useState(null);
+
+  // Paquetes → bloqueo (solo para validar al guardar)
   const [packagesCount, setPackagesCount] = useState(0);
 
   const [toast, setToast] = useState(null);
   const mostrarToast = (mensaje, tipo = 'success') => setToast({ mensaje, tipo });
 
-  // Snapshot + dirty
+  // Snapshot + dirty (solo negocio/almacén/carriers)
   const [snapshot, setSnapshot] = useState(null);
   const [dirty, setDirty] = useState(false);
 
@@ -79,6 +86,7 @@ export default function ConfigPage() {
     setUbiMeta(snapshot.ubiMeta);
     setEmpresas(snapshot.empresas);
     setDirty(false);
+    setAccountDraft(null);
     mostrarToast('Cambios revertidos.', 'success');
   };
 
@@ -99,7 +107,6 @@ export default function ConfigPage() {
       const orden = (metaResp.orden || metaResp.order) === 'vertical' ? 'vertical' : 'horizontal';
       setUbiMeta({ cols, orden });
     } catch {
-      // fallback
       setUbiRows(rowsFromCount(25));
       setUbiMeta({ cols: 5, orden: 'horizontal' });
     } finally {
@@ -116,7 +123,6 @@ export default function ConfigPage() {
   };
 
   const loadAll = async (forTenantId, cancelRef) => {
-    // Tenant + nombre
     const { data: tenantData, error: tErr } = await supabase
       .from('tenants').select('*').eq('id', forTenantId).maybeSingle();
     if (tErr) throw tErr;
@@ -125,7 +131,6 @@ export default function ConfigPage() {
       setNombre(tenantData?.nombre_empresa || '');
     }
 
-    // Carriers del tenant
     const { data: empresasData, error: eErr } = await supabase
       .from('empresas_transporte_tenant').select('*').eq('tenant_id', forTenantId);
     if (eErr) throw eErr;
@@ -136,13 +141,11 @@ export default function ConfigPage() {
       })));
     }
 
-    // Catálogo empresas global
     const { data: listaEmpresas, error: catErr } = await supabase
       .from('empresas_transporte').select('*').order('nombre', { ascending: true });
     if (catErr) throw catErr;
     if (!cancelRef.current) setEmpresasDisponibles(listaEmpresas || []);
 
-    // Ubicaciones y paquetes
     await Promise.all([
       loadUbicacionesForTenant(forTenantId),
       loadPackagesCount(forTenantId),
@@ -182,7 +185,7 @@ export default function ConfigPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Dirty tracking
+  // Dirty tracking (secciones de config)
   useEffect(() => {
     if (!snapshot) return;
     setDirty(!sameJSON(deepPack(), snapshot));
@@ -193,14 +196,14 @@ export default function ConfigPage() {
     const onKey = (e) => {
       const key = e.key?.toLowerCase();
       if ((e.ctrlKey || e.metaKey) && key === 's') { e.preventDefault(); handleGuardar(); }
-      if (key === 'escape' && dirty && snapshot) { e.preventDefault(); revertirCambios(); }
+      if (key === 'escape' && (dirty || hasAccountPending) && snapshot) { e.preventDefault(); revertirCambios(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [dirty, snapshot]); // eslint-disable-line
 
   /* ---------- Carriers helpers ---------- */
-  const sanitizeCarriers = () => {
+  const sanitizeCarriersLocal = () => {
     const trimmed = empresas.map(e => ({
       ...e,
       nombre: (e.nombre || '').trim(),
@@ -223,7 +226,7 @@ export default function ConfigPage() {
   };
 
   const buildCarriersPayload = () => {
-    const sane = sanitizeCarriers();
+    const sane = sanitizeCarriersLocal();
     if (!sane) return null;
     return sane
       .filter(e => e.nombre && e.ingreso_por_entrega !== '')
@@ -238,12 +241,35 @@ export default function ConfigPage() {
 
   const hasPackages = packagesCount > 0;
 
+  // Cambios pendientes en Cuenta
+  const hasAccountPending = useMemo(() => {
+    if (!accountDraft || !usuario) return false;
+    const emailPending =
+      accountDraft?.provider === 'email' &&
+      accountDraft?.emailDraft &&
+      accountDraft.emailDraft !== (usuario?.email || '') &&
+      isValidEmail(accountDraft.emailDraft);
+    const passPending =
+      accountDraft?.provider === 'email' &&
+      accountDraft?.pwd1 &&
+      accountDraft?.pwd2 &&
+      accountDraft.pwd1.length >= 8 &&
+      accountDraft.pwd1 === accountDraft.pwd2;
+    return !!(emailPending || passPending);
+  }, [accountDraft, usuario]);
+
   /* ---------- Guardar global ---------- */
   const handleGuardar = async () => {
-    if (!nombre.trim()) { mostrarToast('El nombre no puede estar vacío.', 'error'); return; }
     const carriersPayload = buildCarriersPayload();
     if (carriersPayload === null) return;
-    if (!dirty) { mostrarToast('Nada que guardar.', 'success'); return; }
+
+    const somethingToSave = dirty || hasAccountPending;
+
+    // Si no hay nada que guardar, ir directamente al panel
+    if (!somethingToSave) {
+      navigate('/dashboard');
+      return;
+    }
 
     const countChanged = (ubiRows?.length ?? 0) !== (snapshot?.ubiRows?.length ?? 0);
     if (hasPackages && countChanged) {
@@ -251,50 +277,80 @@ export default function ConfigPage() {
       return;
     }
 
+    if (dirty && !nombre.trim()) { mostrarToast('El nombre no puede estar vacío.', 'error'); return; }
+
     setGuardando(true);
     try {
       const tId = tenant?.id;
       if (!tId) throw new Error('Tenant no encontrado');
 
-      // 1) Nombre negocio
-      const { error: nameErr } = await supabase.rpc('update_tenant_name_secure', {
-        p_tenant: tId, p_nombre: nombre.trim(),
-      });
-      if (nameErr) throw nameErr;
-      setTenant(prev => prev ? { ...prev, nombre_empresa: nombre.trim() } : prev);
+      // 1) Config
+      if (dirty) {
+        const { error: nameErr } = await supabase.rpc('update_tenant_name_secure', {
+          p_tenant: tId, p_nombre: nombre.trim(),
+        });
+        if (nameErr) throw nameErr;
+        setTenant(prev => prev ? { ...prev, nombre_empresa: nombre.trim() } : prev);
 
-      // 2) Ubicaciones (con meta)  <<<<<< SIEMPRE con {label,codigo,orden} >>>>>>
-      {
         const sanitized = sanitizeUbicaciones(ubiRows);
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         await guardarUbicaciones(
-          {
-            tenantId: tId,
-            ubicaciones: sanitized,
-            meta: { cols: ubiMeta.cols, order: ubiMeta.orden },
-          },
+          { tenantId: tId, ubicaciones: sanitized, meta: { cols: ubiMeta.cols, order: ubiMeta.orden } },
           token
         );
+
+        if (token) await guardarCarriers(carriersPayload, token, { sync: true });
       }
 
-      // 3) Carriers
-      {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (token && (carriersPayload?.length ?? 0) > 0) {
-          await guardarCarriers(carriersPayload, token, { sync: true });
+      // 2) Cuenta
+      if (hasAccountPending && usuario) {
+        if (
+          accountDraft?.provider === 'email' &&
+          accountDraft?.emailDraft &&
+          accountDraft.emailDraft !== (usuario?.email || '') &&
+          isValidEmail(accountDraft.emailDraft)
+        ) {
+          const r = await applyEmailDraft({
+            currentEmail: usuario?.email || '',
+            nextEmail: accountDraft.emailDraft.trim(),
+          });
+          if (r?.error) throw r.error;
+          if (r?.notice) mostrarToast(r.notice, 'success');
+          const { data } = await supabase.auth.getUser();
+          setUsuario(data?.user || null);
         }
+
+        if (
+          accountDraft?.provider === 'email' &&
+          accountDraft?.pwd1 &&
+          accountDraft?.pwd2 &&
+          accountDraft.pwd1 === accountDraft.pwd2 &&
+          accountDraft.pwd1.length >= 8
+        ) {
+          const r = await applyPasswordDraft({
+            currentEmail: (usuario?.email || '').trim(),
+            pwd1: accountDraft.pwd1,
+            pwd2: accountDraft.pwd2,
+          });
+          if (r?.error) throw r.error;
+          if (r?.notice) mostrarToast(r.notice, 'success');
+        }
+
+        setAccountDraft(null);
       }
 
       const newSnap = deepPack();
       setSnapshot(newSnap);
       setDirty(false);
       mostrarToast('Configuración guardada correctamente.', 'success');
+
+      // ➜ Ir al panel tras guardar OK
+      setTimeout(() => navigate('/dashboard'), 150);
     } catch (err) {
       const e = err?.error ?? err;
       console.error('[ConfigPage] guardar error:', e);
-      mostrarToast('Error al guardar la configuración.', 'error');
+      mostrarToast(e?.message || 'Error al guardar la configuración.', 'error');
     } finally { setGuardando(false); }
   };
 
@@ -318,38 +374,12 @@ export default function ConfigPage() {
               tenantId={tenant?.id}
               locked={hasPackages}
               lockedCount={packagesCount}
-              onSave={async ({ ubicaciones, meta }) => {
-                try {
-                  // Bloquear cambio de cantidad si hay paquetes
-                  const newCount = ubicaciones.length;
-                  const oldCount = (ubiRows?.length ?? 0);
-                  if (hasPackages && newCount !== oldCount) {
-                    mostrarToast(`No puedes añadir ni eliminar ubicaciones mientras existan paquetes (${packagesCount}).`, 'error');
-                    return;
-                  }
-
-                  const { data: { session } } = await supabase.auth.getSession();
-                  const token = session?.access_token;
-
-                  // <<<<<< SIEMPRE con {label,codigo,orden} >>>>>>
-                  await guardarUbicaciones(
-                    {
-                      tenantId: tenant?.id,
-                      ubicaciones: sanitizeUbicaciones(ubicaciones),
-                      meta, // { cols, order }
-                    },
-                    token
-                  );
-
-                  // Refresca estado local para snapshot/dirty
-                  setUbiRows(sanitizeUbicaciones(ubicaciones));
-                  setUbiMeta({ cols: meta.cols, orden: meta.order });
-
-                  mostrarToast('Ubicaciones guardadas correctamente.', 'success');
-                } catch (e) {
-                  console.error('[ConfigPage] onSave ubicaciones:', e);
-                  mostrarToast('No se pudieron guardar las Ubicaciones.', 'error');
-                }
+              onChange={({ ubicaciones, meta }) => {
+                const sanitized = sanitizeUbicaciones(ubicaciones || []);
+                setUbiRows(sanitized);
+                const nextCols = Math.max(1, Math.min(12, parseInt(meta?.cols ?? ubiMeta.cols, 10) || ubiMeta.cols));
+                const nextOrden = (meta?.order || meta?.orden) === 'vertical' ? 'vertical' : 'horizontal';
+                setUbiMeta({ cols: nextCols, orden: nextOrden });
               }}
             />
           )}
@@ -381,7 +411,13 @@ export default function ConfigPage() {
       id: 'account',
       label: 'Cuenta',
       icon: MdPerson,
-      content: (<AccountSettings />)
+      content: (
+        <AccountSettings
+          usuario={usuario}
+          // ✅ callback ESTABLE: evita el bucle de renders
+          onDraftChange={setAccountDraft}
+        />
+      )
     }
   ];
 
@@ -391,58 +427,30 @@ export default function ConfigPage() {
 
       <div className="config__container">
         <Hero tenant={tenant} usuario={usuario} />
-
         <ConfigLayout title="Configuración" sections={sectionsSpec} active="warehouse" />
 
-        {dirty && (
-          <div className="config__status">
-            <span className="chip">Cambios sin guardar · ⌘/Ctrl+S para guardar · Esc para deshacer</span>
-          </div>
-        )}
-
-        <div className="config__footer">
-          <FooterActions
-            guardando={guardando}
-            onGuardar={handleGuardar}
-            onExport={() => {
-              const payload = deepPack();
-              const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-              const a = document.createElement('a');
-              a.href = URL.createObjectURL(blob);
-              a.download = 'configuracion-easypack.json';
-              a.click();
-              URL.revokeObjectURL(a.href);
-            }}
-            onImport={async (file) => {
-              try {
-                const text = await file.text();
-                const data = JSON.parse(text);
-                if (!data || typeof data !== 'object') throw new Error('Formato inválido');
-                if (!window.confirm('Esto reemplazará la configuración actual en edición. ¿Continuar?')) return;
-
-                if (typeof data.nombre === 'string' || typeof data.nombre_empresa === 'string') {
-                  setNombre((data.nombre ?? data.nombre_empresa) || '');
-                }
-                if (Array.isArray(data.ubiRows)) setUbiRows(sanitizeUbicaciones(data.ubiRows));
-                else if (typeof data.ubiCount === 'number') setUbiRows(rowsFromCount(data.ubiCount));
-
-                if (data.ubiMeta && typeof data.ubiMeta === 'object') {
-                  const cols = Math.max(1, Math.min(12, parseInt(data.ubiMeta.cols ?? 5, 10) || 5));
-                  const orden = (data.ubiMeta.orden || data.ubiMeta.order) === 'vertical' ? 'vertical' : 'horizontal';
-                  setUbiMeta({ cols, orden });
-                }
-
-                if (Array.isArray(data.empresas)) setEmpresas(data.empresas);
-
-                setDirty(true);
-                setSnapshot(null);
-                mostrarToast('Configuración cargada (no guardada aún).', 'success');
-              } catch {
-                mostrarToast('Archivo inválido.', 'error');
-              }
-            }}
-            onDeshacer={revertirCambios}
-          />
+        {/* Único botón de guardar centrado */}
+        <div
+          className="config__footer"
+          style={{
+            position: 'sticky',
+            bottom: 0,
+            padding: '16px 0 24px',
+            marginTop: 24,
+            display: 'flex',
+            justifyContent: 'center'
+          }}
+        >
+          <button
+            type="button"
+            onClick={handleGuardar}
+            disabled={guardando || (!dirty && !hasAccountPending)}
+            aria-busy={guardando ? 'true' : 'false'}
+            className="config__savebtn"
+            title={(dirty || hasAccountPending) ? 'Guardar cambios' : 'No hay cambios que guardar'}
+          >
+            {guardando ? 'Guardando…' : 'Guardar cambios'}
+          </button>
         </div>
       </div>
     </main>

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   AccountSettings — Ajustes de cuenta (apilado, centrado, pro)
+   AccountSettings — Ajustes de cuenta (apilado, centrado, pro y MUY responsive)
    Scope: .acct
    ========================================================================== */
 
@@ -9,14 +9,14 @@
   --text: var(--text, #0f172a);
   --surface: var(--surface, #ffffff);
   --ring: rgba(99, 91, 255, .28);
-  --brand1: #635bff; --brand2: #00d4ff;
+  --brand1: #635bff (--brand2: #00d4ff);
 
   color: var(--text);
 
   /* ===== Header limpio ===== */
   &__header{
     display:grid; grid-template-columns:1fr; gap:10px; align-items:center;
-    padding:10px 12px; border:1px solid var(--bd); border-radius:14px;
+    padding:12px; border:1px solid var(--bd); border-radius:14px;
     background:linear-gradient(180deg, rgba(2,6,23,.02), rgba(2,6,23,.04));
   }
   &__left{
@@ -31,7 +31,8 @@
   }
   &__meta{ min-width:0; display:grid; gap:2px; }
   &__title{ margin:0; font-weight:900; letter-spacing:.2px; }
-  &__email{ margin:0; color:var(--mut); display:inline-flex; align-items:center; gap:8px; }
+  &__email{ margin:0; color:var(--mut); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  &__emailText{ max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
   .chip{
     display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px;
@@ -41,7 +42,7 @@
   .chip--google{ background:#fff7ed; color:#92400e; }
   .chip--github{ background:#eef2f7; color:#111827; }
 
-  /* ===== Stack (siempre columna) ===== */
+  /* ===== Stack ===== */
   &__stack{ display:grid; gap:12px; margin-top:10px; }
 
   &__block{
@@ -51,7 +52,7 @@
   }
   &__block--sec{ align-self:start; }
 
-  .blk__head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .blk__head{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
   .blk__title{ margin:0; font-weight:900; letter-spacing:.2px; display:inline-flex; align-items:center; gap:8px; }
   .hint{ color:var(--mut); font-size:12px; }
 
@@ -59,18 +60,15 @@
 
   /* ===== Campos y geometría ===== */
   :root &{
-    --ctrlH: 44px;         /* altura uniforme */
+    --ctrlH: 44px;
     --labelSize: 13px;
     --gap: 6px;
-    --hintH: 18px;         /* reserva evita saltos */
-    --ctrlYOffset: 0px;    /* si ves 1px raro, pon -1px/1px */
+    --hintH: 18px;
+    --ctrlYOffset: 0px;
   }
 
   .form-row{
-    display:grid; grid-template-columns:1fr auto; gap:10px; align-items:end;
-  }
-  @media (max-width: 560px){
-    .form-row{ grid-template-columns:1fr; }
+    display:grid; grid-template-columns:1fr; gap:10px; align-items:end;
   }
 
   .form-col2{
@@ -140,12 +138,17 @@
   }
   .btn--primary{
     color:#fff; border-color:transparent;
-    background:linear-gradient(135deg, color-mix(in srgb, var(--brand1) 88%, #fff 12%), color-mix(in srgb, var(--brand2) 88%, #fff 12%));
+    background:linear-gradient(135deg, color-mix(in srgb, #635bff 88%, #fff 12%), color-mix(in srgb, #00d4ff 88%, #fff 12%));
     box-shadow:0 12px 28px rgba(99,91,255,.18);
     &:hover{ box-shadow:0 16px 34px rgba(99,91,255,.22); }
   }
   .btn--outline{ background:#fff; }
   .btn--full{ width:100%; justify-content:center; }
+
+  .pending{
+    font-size:12px; color:#065f46; background:#ecfdf5; border:1px solid #a7f3d0;
+    padding:8px 10px; border-radius:10px;
+  }
 
   /* ===== Note ===== */
   .note{
@@ -154,6 +157,7 @@
     background:linear-gradient(180deg, rgba(99,91,255,.06), rgba(99,91,255,.03));
     color:var(--mut);
     svg{ color:#6366f1; }
+    word-break: break-word;
   }
 
   /* ===== Skeleton ===== */
@@ -173,8 +177,12 @@
     gap: 10px;
     padding: 6px 0;
   }
+  @media (max-width: 520px){
+    .billing__row{ grid-template-columns: 1fr; }
+  }
+
   .billing__k { color: var(--ep-muted, #64748b); }
-  .billing__v { color: var(--ep-text, #0f172a); }
+  .billing__v { color: var(--ep-text, #0f172a); word-break: break-word; }
 
   .badge {
     display: inline-flex;
