@@ -8,7 +8,7 @@ const { supabase: db, supabaseAdmin, supabaseAuth } = require('../utils/supabase
 router.use(requireSuperadmin());
 
 // ---------- Helpers ----------
-const APP_BASE = (process.env.APP_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+const APP_BASE = (process.env.APP_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/,'');
 const bad = (res, code, error, http = 400, extra = {}) => res.status(http).json({ ok:false, code, error, ...extra });
 const ok  = (res, extra = {}) => res.json({ ok:true, ...extra });
 
@@ -316,51 +316,67 @@ router.post('/demo-requests/:id/decline', async (req, res) => {
     return bad(res, 'SERVER_ERROR', e.message || 'SERVER_ERROR', 500);
   }
 });
-
-// ========== ELIMINAR (hard delete) ==========
-router.delete('/demo-requests/:id', async (req, res) => {
+// === NUEVO: counters & latest-ts para demo_requests ===
+router.get('/demo-requests/counters', async (req, res) => {
   try {
-    const id = req.params.id;
+    const { since } = req.query;
+    const sinceIso = since ? new Date(since).toISOString() : null;
 
-    // Si hay FKs que impidan borrar, configura ON DELETE CASCADE en la DB
-    // o cambia a soft-delete (deleted_at). Aquí hacemos hard delete directo.
-    const { error } = await db
+    // Total pendientes
+    const { count: pending_total, error: ePending } = await db
       .from('demo_requests')
-      .delete()
-      .eq('id', id);
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
 
-    if (error) return bad(res, 'DB_ERROR', error.message);
-    return ok(res, { deleted: true });
-  } catch (e) {
-    console.error('[DELETE /admin/demo-requests/:id] Unexpected:', e);
-    return bad(res, 'SERVER_ERROR', e.message || 'SERVER_ERROR', 500);
-  }
-});
+    if (ePending) return bad(res, 'DB_ERROR', ePending.message);
 
-// ========== CONTADORES ==========
-// Devuelve: total, pending, pending_unseen, accepted, declined
-router.get('/demo-requests/counters', async (_req, res) => {
-  try {
-    const countExact = async (fn) => {
-      const { count, error } = await fn.select('id', { count: 'exact', head: true });
-      if (error) throw error;
-      return count || 0;
-    };
+    // Último created_at
+    const { data: latestRow, error: eLatest } = await db
+      .from('demo_requests')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    const total = await countExact(db.from('demo_requests'));
-    const pending = await countExact(db.from('demo_requests').eq('status', 'pending'));
-    const pending_unseen = await countExact(
-      db.from('demo_requests').eq('status', 'pending').is('reviewed_at', null)
-    );
-    const accepted = await countExact(db.from('demo_requests').eq('status', 'accepted'));
-    const declined = await countExact(db.from('demo_requests').eq('status', 'declined'));
+    if (eLatest) return bad(res, 'DB_ERROR', eLatest.message);
 
-    return ok(res, { total, pending, pending_unseen, accepted, declined });
+    const latest_created_at = latestRow?.created_at || null;
+
+    // Nuevos desde "since" (solo pendientes; si prefieres todos, quita el eq('status','pending'))
+    let new_since = 0;
+    if (sinceIso) {
+      const { count: cSince, error: eSince } = await db
+        .from('demo_requests')
+        .select('*', { count: 'exact', head: true })
+        .gt('created_at', sinceIso)
+        .eq('status', 'pending');
+
+      if (eSince) return bad(res, 'DB_ERROR', eSince.message);
+      new_since = cSince || 0;
+    }
+
+    return ok(res, { pending_total: pending_total || 0, latest_created_at, new_since });
   } catch (e) {
     console.error('[GET /admin/demo-requests/counters] Unexpected:', e);
     return bad(res, 'SERVER_ERROR', e.message || 'SERVER_ERROR', 500);
   }
 });
 
+router.get('/demo-requests/latest-ts', async (req, res) => {
+  try {
+    const { data: latestRow, error } = await db
+      .from('demo_requests')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) return bad(res, 'DB_ERROR', error.message);
+    return ok(res, { latest_created_at: latestRow?.created_at || null });
+  } catch (e) {
+    console.error('[GET /admin/demo-requests/latest-ts] Unexpected:', e);
+    return bad(res, 'SERVER_ERROR', e.message || 'SERVER_ERROR', 500);
+  }
+});
 
 module.exports = router;

@@ -6,6 +6,7 @@ import {
   getDemoRequest,
   acceptDemoRequest,
   declineDemoRequest,
+  deleteDemoRequest,       // ✅ faltaba importar
   getDemoCounters
 } from '../../services/adminService';
 import '../../styles/adminrequests.scss';
@@ -23,7 +24,6 @@ function Chip({ state }) {
 
 /* ============ UI: Toasts ============ */
 function Toast({ toast, onClose }) {
-  // auto-close
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(onClose, toast.duration ?? 2800);
@@ -45,6 +45,7 @@ function Toast({ toast, onClose }) {
 /* ============ UI: Modal genérico ============ */
 function Modal({ open, title, children, onClose, actions, variant = 'default', initialFocusRef }) {
   const dialogRef = useRef(null);
+
   // focus on open
   useEffect(() => {
     if (!open) return;
@@ -59,6 +60,13 @@ function Modal({ open, title, children, onClose, actions, variant = 'default', i
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  // prevent body scroll when modal is open
+  useEffect(() => {
+    if (!open) return;
+    document.body.classList.add('no-scroll');
+    return () => document.body.classList.remove('no-scroll');
+  }, [open]);
 
   if (!open) return null;
   return (
@@ -407,12 +415,14 @@ export default function AdminRequests() {
           ))}
         </div>
 
+        {/* Search + select */}
         <div className="ar__tools">
           <input
             className="ar__search"
             placeholder="Buscar por email, empresa o ciudad…"
             value={q}
             onChange={e => { setPage(1); setQ(e.target.value); }}
+            aria-label="Buscar"
           />
           <select
             className="ar__select"
@@ -430,7 +440,7 @@ export default function AdminRequests() {
 
       <div className="ar__content">
         {/* LISTA */}
-        <div className="ar__list">
+        <div className="ar__list" role="region" aria-label="Listado de solicitudes">
           <div className="ar__table">
             <div className="thead">
               <div>Fecha</div>
@@ -439,9 +449,18 @@ export default function AdminRequests() {
               <div>Ciudad</div>
               <div className="ta-r">Estado</div>
             </div>
+
             <div className="tbody">
               {loading ? (
-                <div className="muted p16">Cargando…</div>
+                <>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="tr" aria-hidden="true">
+                      <div className="sk-line w40" />
+                      <div className="sk-line w60" />
+                      <div className="sk-line w80" />
+                    </div>
+                  ))}
+                </>
               ) : rows.length === 0 ? (
                 <div className="muted p16">Sin solicitudes.</div>
               ) : rows.map(r => (
@@ -451,18 +470,25 @@ export default function AdminRequests() {
                   className={`tr ${selected?.id === r.id ? 'is-active' : ''}`}
                   onClick={() => onSelect(r)}
                   title="Ver detalle"
+                  aria-pressed={selected?.id === r.id}
                 >
+                  {/* Desktop cells */}
                   <div className="c">{fmt(r.created_at)}</div>
                   <div className="c ell">{r.company_name || '—'}</div>
                   <div className="c ell mono">{r.email}</div>
                   <div className="c ell">{r.city || '—'}</div>
                   <div className="c ta-r"><Chip state={r.status} /></div>
+
+                  {/* Mobile labels (aprovechadas por CSS en cards) */}
+                  <div className="c" style={{ display:'none' }}>
+                    <span className="label">Fecha</span><span className="value">{fmt(r.created_at)}</span>
+                  </div>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="ar__pager">
+          <div className="ar__pager" aria-label="Paginación">
             <button className="btn btn--ghost" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Anterior</button>
             <span>Página {page} de {totalPages || 1}</span>
             <button className="btn btn--ghost" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Siguiente</button>
@@ -470,7 +496,7 @@ export default function AdminRequests() {
         </div>
 
         {/* DETALLE */}
-        <aside className="ar__detail">
+        <aside className="ar__detail" role="region" aria-label="Detalle de la solicitud">
           {!detail ? (
             <div className="ar__placeholder">Selecciona una solicitud para ver el detalle.</div>
           ) : (

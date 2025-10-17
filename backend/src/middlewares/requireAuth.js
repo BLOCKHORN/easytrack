@@ -1,3 +1,4 @@
+// middlewares/requireAuth.js
 'use strict';
 
 const { supabase, supabaseAuth } = require('../utils/supabaseClient');
@@ -39,10 +40,16 @@ async function findTenantBySlug(slug) {
   return data || null;
 }
 
+// 🔧 Añadimos alias tenantId además de tenant_id
 function attach(req, { user = null, tenant = null } = {}) {
   if (user) req.user = user;
-  if (tenant) { req.tenant = tenant; req.tenant_id = tenant.id; }
+  if (tenant) {
+    req.tenant = tenant;
+    req.tenant_id = tenant.id;
+    req.tenantId = tenant.id;          // <—— alias para compatibilidad con rutas antiguas
+  }
 }
+
 function readSlugParam(req) {
   return req.params?.tenantSlug || req.params?.slug || null;
 }

@@ -54,23 +54,30 @@ export default function ConfigPage() {
   const [ubiMeta, setUbiMeta] = useState({ cols: 5, orden: 'horizontal' });
   const [ubiLoading, setUbiLoading] = useState(false);
 
+  // Mapa de uso por código (B1..Bn) => nº paquetes
+  const [usageByCodigo, setUsageByCodigo] = useState({});
+
   // Carriers
   const [empresas, setEmpresas] = useState([]);
   const [empresasDisponibles, setEmpresasDisponibles] = useState([]);
   const carriersRef = useRef(null);
 
-  // Borradores de Cuenta (desde AccountSettings)
+  // Borradores de Cuenta
   const [accountDraft, setAccountDraft] = useState(null);
 
-  // Paquetes → bloqueo (solo para validar al guardar)
+  // Paquetes totales (solo informativo)
   const [packagesCount, setPackagesCount] = useState(0);
 
   const [toast, setToast] = useState(null);
   const mostrarToast = (mensaje, tipo = 'success') => setToast({ mensaje, tipo });
 
-  // Snapshot + dirty (solo negocio/almacén/carriers)
+  // Snapshot + dirty
   const [snapshot, setSnapshot] = useState(null);
   const [dirty, setDirty] = useState(false);
+
+  // Refs para borrados solicitados desde Ubicaciones
+  const pendingDeletionsRef = useRef([]);
+  const forceDeleteRef = useRef(false);
 
   const INGRESOS = useMemo(
     () => Array.from({ length: 20 }, (_, i) => ((i + 1) * 0.05).toFixed(2)),
@@ -87,6 +94,8 @@ export default function ConfigPage() {
     setEmpresas(snapshot.empresas);
     setDirty(false);
     setAccountDraft(null);
+    pendingDeletionsRef.current = [];
+    forceDeleteRef.current = false;
     mostrarToast('Cambios revertidos.', 'success');
   };
 
@@ -114,12 +123,72 @@ export default function ConfigPage() {
     }
   };
 
+  // ==== CAMBIO 1/3: contar (pendientes) U (con ubicacion_label) sin doble conteo ====
   const loadPackagesCount = async (forTenantId) => {
-    const { count, error } = await supabase
+    const { count: a, error: e1 } = await supabase
       .from('packages')
       .select('*', { count: 'exact', head: true })
-      .eq('tenant_id', forTenantId);
-    if (!error) setPackagesCount(count || 0);
+      .eq('tenant_id', forTenantId)
+      .eq('estado', 'pendiente');
+
+    const { count: b, error: e2 } = await supabase
+      .from('packages')
+      .select('*', { count: 'exact', head: true })
+      .eq('tenant_id', forTenantId)
+      .not('ubicacion_label', 'is', null);
+
+    const { count: ab, error: e3 } = await supabase
+      .from('packages')
+      .select('*', { count: 'exact', head: true })
+      .eq('tenant_id', forTenantId)
+      .eq('estado', 'pendiente')
+      .not('ubicacion_label', 'is', null);
+
+    if (e1 || e2 || e3) return;
+    const unionCount = (a || 0) + (b || 0) - (ab || 0);
+    setPackagesCount(unionCount);
+  };
+
+  // ==== CAMBIO 2/3: usageByCodigo = paquetes con ubicacion_label (cualquier estado) ====
+  const loadUsageByCodigo = async (forTenantId) => {
+    const { data, error } = await supabase
+      .from('packages')
+      .select('ubicacion_label')
+      .eq('tenant_id', forTenantId)
+      .not('ubicacion_label', 'is', null);
+
+    if (error) {
+      console.warn('[ConfigPage] loadUsageByCodigo error:', error);
+      setUsageByCodigo({});
+      return;
+    }
+    const map = {};
+    (data || []).forEach(row => {
+      const code = String(row?.ubicacion_label || '').toUpperCase();
+      if (!code) return;
+      map[code] = (map[code] || 0) + 1;
+    });
+    setUsageByCodigo(map);
+  };
+
+  // ==== CAMBIO 3/3: modal → solo traer por labels con ubicacion_label ====
+  const fetchPackagesByLabels = async (tenantIdArg, labels = []) => {
+    const tId = tenantIdArg || tenant?.id;
+    if (!tId || !labels.length) return [];
+    const labelSet = labels.map(s => String(s).toUpperCase());
+
+    const { data, error } = await supabase
+      .from('packages')
+      .select('id, nombre_cliente, ubicacion_label')
+      .eq('tenant_id', tId)
+      .not('ubicacion_label', 'is', null)
+      .in('ubicacion_label', labelSet);
+
+    if (error) {
+      console.warn('[ConfigPage] fetchPackagesByLabels error:', error);
+      return [];
+    }
+    return data || [];
   };
 
   const loadAll = async (forTenantId, cancelRef) => {
@@ -149,6 +218,7 @@ export default function ConfigPage() {
     await Promise.all([
       loadUbicacionesForTenant(forTenantId),
       loadPackagesCount(forTenantId),
+      loadUsageByCodigo(forTenantId),
     ]);
   };
 
@@ -185,7 +255,7 @@ export default function ConfigPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Dirty tracking (secciones de config)
+  // Dirty tracking
   useEffect(() => {
     if (!snapshot) return;
     setDirty(!sameJSON(deepPack(), snapshot));
@@ -265,15 +335,8 @@ export default function ConfigPage() {
 
     const somethingToSave = dirty || hasAccountPending;
 
-    // Si no hay nada que guardar, ir directamente al panel
     if (!somethingToSave) {
       navigate('/dashboard');
-      return;
-    }
-
-    const countChanged = (ubiRows?.length ?? 0) !== (snapshot?.ubiRows?.length ?? 0);
-    if (hasPackages && countChanged) {
-      mostrarToast(`No puedes añadir ni eliminar ubicaciones mientras existan paquetes (${packagesCount}).`, 'error');
       return;
     }
 
@@ -285,6 +348,7 @@ export default function ConfigPage() {
       if (!tId) throw new Error('Tenant no encontrado');
 
       // 1) Config
+      let debugResp = null;
       if (dirty) {
         const { error: nameErr } = await supabase.rpc('update_tenant_name_secure', {
           p_tenant: tId, p_nombre: nombre.trim(),
@@ -295,12 +359,24 @@ export default function ConfigPage() {
         const sanitized = sanitizeUbicaciones(ubiRows);
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
-        await guardarUbicaciones(
-          { tenantId: tId, ubicaciones: sanitized, meta: { cols: ubiMeta.cols, order: ubiMeta.orden } },
+
+        const resp = await guardarUbicaciones(
+          {
+            tenantId: tId,
+            ubicaciones: sanitized,
+            meta: { cols: ubiMeta.cols, order: ubiMeta.orden },
+            deletions: pendingDeletionsRef.current,
+            forceDeletePackages: forceDeleteRef.current,
+          },
           token
         );
+        debugResp = resp?.debug || null;
 
         if (token) await guardarCarriers(carriersPayload, token, { sync: true });
+
+        // Reset flags tras guardar
+        pendingDeletionsRef.current = [];
+        forceDeleteRef.current = false;
       }
 
       // 2) Cuenta
@@ -343,9 +419,21 @@ export default function ConfigPage() {
       const newSnap = deepPack();
       setSnapshot(newSnap);
       setDirty(false);
-      mostrarToast('Configuración guardada correctamente.', 'success');
 
-      // ➜ Ir al panel tras guardar OK
+      // Mensaje de éxito específico si hubo paquetes borrados/ubicaciones archivadas
+      if (debugResp && (debugResp.packagesDeleted > 0 || debugResp.archived > 0)) {
+        const p = debugResp.packagesDeleted || 0;
+        const u = debugResp.archived || 0;
+        mostrarToast(`Guardado: ${u} ubicación${u===1?'':'es'} archivada${u===1?'':'s'} y ${p} paquete${p===1?'':'s'} eliminado${p===1?'':'s'}.`, 'success');
+      } else {
+        mostrarToast('Configuración guardada correctamente.', 'success');
+      }
+
+      // Refrescar contadores de uso tras guardar
+      if (tenant?.id) {
+        await Promise.all([loadPackagesCount(tenant.id), loadUsageByCodigo(tenant.id), loadUbicacionesForTenant(tenant.id)]);
+      }
+
       setTimeout(() => navigate('/dashboard'), 150);
     } catch (err) {
       const e = err?.error ?? err;
@@ -372,14 +460,19 @@ export default function ConfigPage() {
               initial={ubiRows}
               initialMeta={ubiMeta}
               tenantId={tenant?.id}
-              locked={hasPackages}
               lockedCount={packagesCount}
-              onChange={({ ubicaciones, meta }) => {
+              usageByCodigo={usageByCodigo}
+              fetchPackagesByLabels={fetchPackagesByLabels}
+              onChange={({ ubicaciones, meta, deletions, forceDeletePackages }) => {
                 const sanitized = sanitizeUbicaciones(ubicaciones || []);
                 setUbiRows(sanitized);
                 const nextCols = Math.max(1, Math.min(12, parseInt(meta?.cols ?? ubiMeta.cols, 10) || ubiMeta.cols));
                 const nextOrden = (meta?.order || meta?.orden) === 'vertical' ? 'vertical' : 'horizontal';
                 setUbiMeta({ cols: nextCols, orden: nextOrden });
+
+                // Guardamos la intención de borrado/force
+                pendingDeletionsRef.current = Array.isArray(deletions) ? deletions : [];
+                forceDeleteRef.current = !!forceDeletePackages;
               }}
             />
           )}
@@ -414,7 +507,6 @@ export default function ConfigPage() {
       content: (
         <AccountSettings
           usuario={usuario}
-          // ✅ callback ESTABLE: evita el bucle de renders
           onDraftChange={setAccountDraft}
         />
       )
@@ -429,7 +521,6 @@ export default function ConfigPage() {
         <Hero tenant={tenant} usuario={usuario} />
         <ConfigLayout title="Configuración" sections={sectionsSpec} active="warehouse" />
 
-        {/* Único botón de guardar centrado */}
         <div
           className="config__footer"
           style={{

@@ -1,4 +1,4 @@
-// src/routes/limits.routes.js
+// routes/limits.routes.js
 'use strict';
 
 const express = require('express');
@@ -8,24 +8,25 @@ const requireAuth = require('../middlewares/requireAuth');
 const { supabaseAdmin } = require('../utils/supabaseAdmin');
 const {
   resolveTenantId,
-  fetchSubscriptionForTenant, // lee desde v_current_subscription con service role
-  isSubscriptionActive,       // calcula active usando coalesce(period_end, trial_ends_at)
+  fetchSubscriptionForTenant,
+  isSubscriptionActive,
 } = require('../utils/subscription');
 
 const { computeEntitlements } = require('../utils/entitlements');
 
 router.get('/me', requireAuth, async (req, res) => {
   try {
-    // Fuerza respuesta JSON (evita HTML en caso de 401/402)
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
 
-    // 1) Resolver tenant id de forma robusta (slug/header/email/memberships)
-    let tenantId = req.tenantId || null;
+    // 👇 PRIMERO lo que ya resolvió el middleware
+    let tenantId = req.tenant?.id || req.tenant_id || req.tenantId || null;
+
+    // Si no lo tenemos, intenta helper genérico
     if (!tenantId) tenantId = await resolveTenantId(req);
 
+    // Fallbacks (email owner / memberships)
     if (!tenantId) {
-      // fallback por email (owner) o memberships por user_id
       const email = String(req.user?.email || '').toLowerCase().trim();
       if (email) {
         const { data: t } = await supabaseAdmin
@@ -51,7 +52,6 @@ router.get('/me', requireAuth, async (req, res) => {
       return res.status(404).json({ ok: false, error: 'TENANT_NOT_FOUND' });
     }
 
-    // 2) Cargar tenant (service role, sin RLS)
     const { data: tenant, error: tErr } = await supabaseAdmin
       .from('tenants')
       .select('id, slug, nombre_empresa, trial_active, trial_quota, trial_used, soft_blocked')
@@ -60,19 +60,15 @@ router.get('/me', requireAuth, async (req, res) => {
     if (tErr) throw tErr;
     if (!tenant) return res.status(404).json({ ok: false, error: 'TENANT_NOT_FOUND' });
 
-    // 3) Cargar suscripción vigente (vista v_current_subscription)
     const sub = await fetchSubscriptionForTenant(tenant.id);
     const subState = isSubscriptionActive(sub);
 
-    // 4) Límite de prueba
     const quota = Number(tenant.trial_quota ?? 0);
     const used  = Number(tenant.trial_used ?? 0);
     const remaining = Math.max(0, quota - used);
 
-    // 5) Entitlements coherentes con UI
     const entitlements = computeEntitlements({ tenant, subscription: sub });
 
-    // 6) Respuesta para TrialBanner.jsx
     return res.json({
       ok: true,
       tenant: {
@@ -88,7 +84,7 @@ router.get('/me', requireAuth, async (req, res) => {
         soft_blocked: !!tenant.soft_blocked,
       },
       subscription: {
-        active: subState.active,                                      // 👈 clave para ocultar banner
+        active: subState.active,
         status: sub?.status || null,
         cancel_at_period_end: !!sub?.cancel_at_period_end,
         period_end: sub?.current_period_end || sub?.trial_ends_at || null,

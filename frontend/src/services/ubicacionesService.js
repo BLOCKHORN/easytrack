@@ -1,4 +1,6 @@
 // src/services/ubicacionesService.js
+import { debugLog, isDebug } from '../utils/logger';
+
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
 /* ==============================
@@ -22,8 +24,8 @@ function asJson(text) {
 }
 
 /**
- * Firma admitida:
- *  - NUEVA: guardarUbicaciones({ tenantId, ubicaciones, meta }, token)
+ * Firmas admitidas:
+ *  - NUEVA: guardarUbicaciones({ tenantId, ubicaciones, meta, deletions?, forceDeletePackages? }, token)
  *  - ANTIGUA: guardarUbicaciones(token, tenantId, ubicaciones, meta)
  */
 function normalizePayloadAndToken(a, b, c, d) {
@@ -39,7 +41,7 @@ function normalizePayloadAndToken(a, b, c, d) {
       cols: Number.isFinite(Number(metaIn.cols)) ? Number(metaIn.cols) : 5,
       order: (metaIn.order || metaIn.orden) === 'vertical' ? 'vertical' : 'horizontal',
     };
-    return [{ tenantId, ubicaciones, meta }, token];
+    return [{ tenantId, ubicaciones, meta, deletions: [], forceDeletePackages: false }, token];
   }
 
   // Firma nueva
@@ -49,7 +51,13 @@ function normalizePayloadAndToken(a, b, c, d) {
     cols: Number.isFinite(Number(payload?.meta?.cols)) ? Number(payload.meta.cols) : 5,
     order: (payload?.meta?.order || payload?.meta?.orden) === 'vertical' ? 'vertical' : 'horizontal',
   };
-  return [{ tenantId: payload?.tenantId, ubicaciones: payload?.ubicaciones || [], meta }, token];
+  return [{
+    tenantId: payload?.tenantId,
+    ubicaciones: payload?.ubicaciones || [],
+    meta,
+    deletions: Array.isArray(payload?.deletions) ? payload.deletions : [],
+    forceDeletePackages: !!payload?.forceDeletePackages,
+  }, token];
 }
 
 /* ==============================
@@ -60,9 +68,9 @@ function normalizePayloadAndToken(a, b, c, d) {
 export async function cargarUbicaciones(token, tenantId) {
   const url = new URL(`${API}/api/ubicaciones`);
   if (tenantId) url.searchParams.set('tenant_id', tenantId);
-  url.searchParams.set('debug', '1'); // queremos ver el debug en respuesta
+  if (isDebug) url.searchParams.set('debug', '1'); // solo pedimos debug si está activo
 
-  console.log('[ubicacionesService.cargarUbicaciones] GET', url.toString());
+  debugLog('[ubicacionesService.cargarUbicaciones] GET', url.toString());
 
   const r = await fetch(url.toString(), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -72,7 +80,7 @@ export async function cargarUbicaciones(token, tenantId) {
   if (!r.ok) ensureOk(r, text);
 
   const body = asJson(text) || {};
-  console.log('[ubicacionesService.cargarUbicaciones] RES', body);
+  debugLog('[ubicacionesService.cargarUbicaciones] RES', body);
 
   const ubicaciones = Array.isArray(body?.ubicaciones)
     ? body.ubicaciones
@@ -87,7 +95,7 @@ export async function cargarUbicaciones(token, tenantId) {
   return { ubicaciones, meta, debug: body?.debug || null };
 }
 
-// POST full (estructura + meta)
+// POST full (estructura + meta + deletions/force)
 export async function guardarUbicaciones(a, b, c, d) {
   const [payload, token] = normalizePayloadAndToken(a, b, c, d);
 
@@ -101,10 +109,12 @@ export async function guardarUbicaciones(a, b, c, d) {
       orden : Number.isFinite(Number(u?.orden)) ? Number(u.orden) : i,
       activo: u?.activo ?? true,
     })),
+    deletions: Array.isArray(payload?.deletions) ? payload.deletions : [],
+    forceDeletePackages: !!payload?.forceDeletePackages,
   };
 
-  const url = `${API}/api/ubicaciones?debug=1`; // pedimos debug
-  console.log('[ubicacionesService.guardarUbicaciones] POST', url, body);
+  const url = `${API}/api/ubicaciones${isDebug ? '?debug=1' : ''}`;
+  debugLog('[ubicacionesService.guardarUbicaciones] POST', url, body);
 
   const r = await fetch(url, {
     method: 'POST',
@@ -119,7 +129,7 @@ export async function guardarUbicaciones(a, b, c, d) {
   if (!r.ok) ensureOk(r, text);
 
   const json = asJson(text) || {};
-  console.log('[ubicacionesService.guardarUbicaciones] RES', json);
+  debugLog('[ubicacionesService.guardarUbicaciones] RES', json);
 
   if (json?.ok !== true) {
     const msg = json?.message || 'No se pudieron guardar las ubicaciones.';
@@ -133,8 +143,8 @@ export async function guardarUbicaciones(a, b, c, d) {
 
 // PATCH meta (solo presentación)
 export async function patchUbicacionesMeta(token, tenantId, meta) {
-  const url = `${API}/api/ubicaciones/meta?debug=1`;
-  console.log('[ubicacionesService.patchMeta] PATCH', url, { tenant_id: tenantId, meta });
+  const url = `${API}/api/ubicaciones/meta${isDebug ? '?debug=1' : ''}`;
+  debugLog('[ubicacionesService.patchMeta] PATCH', url, { tenant_id: tenantId, meta });
 
   const r = await fetch(url, {
     method: 'PATCH',
@@ -149,7 +159,7 @@ export async function patchUbicacionesMeta(token, tenantId, meta) {
   if (!r.ok) ensureOk(r, text);
 
   const json = asJson(text) || {};
-  console.log('[ubicacionesService.patchMeta] RES', json);
+  debugLog('[ubicacionesService.patchMeta] RES', json);
 
   if (json?.ok !== true) {
     const msg = json?.message || 'No se pudo guardar la configuración visual';

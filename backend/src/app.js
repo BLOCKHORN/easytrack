@@ -27,18 +27,22 @@ const billingRoutes = require('./routes/billing.routes');
 const { stripeWebhook } = require('./routes/stripe.webhook');
 const limitsRoutes = require('./routes/limits.routes');
 const adminRoutes = require('./routes/admin.routes');
+const adminCountersRoutes = require('./routes/admin.counters.routes');
+const adminSupportRoutes = require('./routes/admin.support.routes');
 
 /* ===== NUEVAS rutas DEMO/Activación ===== */
-const demoRequestsPublic = require('./routes/public.demo.requests.routes'); // ← ESTE
+const demoRequestsPublic = require('./routes/public.demo.requests.routes');
 const adminDemoRequests  = require('./routes/admin.demo.requests.routes');
 const activationRoutes   = require('./routes/auth.activation.routes');
-const geoRoutes = require('./routes/geo.routes');
+const geoRoutes          = require('./routes/geo.routes');
+
+/* ===== NUEVA ruta SOPORTE ===== */
+const supportRoutes      = require('./routes/support.routes');
+const ticketsRoutes      = require('./routes/tickets.routes');
 
 /* ============== CORS ROBUSTO ============== */
 const envOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
+  .split(',').map(s => s.trim()).filter(Boolean);
 
 const defaultsDev = [
   process.env.FRONTEND_URL,
@@ -91,29 +95,29 @@ app.get('/.well-known/health', (_req, res) => res.json({ ok: true }));
    ========================================================= */
 const rawJson = express.raw({ type: 'application/json' });
 app.post('/billing/stripe/webhook', rawJson, stripeWebhook);
-app.post('/webhooks/stripe', rawJson, stripeWebhook);
+app.post('/webhooks/stripe',      rawJson, stripeWebhook);
 
 /* ============== Parsers JSON normales ============== */
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 /* ============== Rutas públicas (sin firewall) ============== */
-app.use('/api/auth', authRoutes);
+app.use('/api/auth',              authRoutes);
 app.use('/api/verificar-usuario', verificarUsuarioRoutes);
-app.use('/api/metrics', metricsRouter);
-
-/* NUEVO: crear solicitud de demo y activar cuenta (públicas) */
-app.use('/api', demoRequestsPublic);  // POST /api/demo/requests
-app.use('/api', activationRoutes);    // POST /api/auth/activate
+app.use('/api/metrics',           metricsRouter);
+app.use('/api',                   demoRequestsPublic);  // POST /api/demo/requests
+app.use('/api',                   activationRoutes);    // POST /api/auth/activate
 
 /* ============== Admin (Superadmin) ============== */
 app.use('/admin', adminRoutes);
+app.use('/admin', adminCountersRoutes);
 app.use('/admin', adminDemoRequests);
 app.use('/api/geo', geoRoutes);
+app.use('/admin', adminSupportRoutes);
 /* =========================================================
    Billing (Stripe) — accesible sin firewall
    ========================================================= */
-app.use('/billing', billingRoutes);
+app.use('/billing',     billingRoutes);
 app.use('/api/billing', billingRoutes);
 
 /* =========================================================
@@ -127,13 +131,12 @@ function authOnly(path, router) {
 }
 
 /* ============== Rutas protegidas (solo login) ============== */
-authOnly('/api/dashboard', dashboardRoutes);
-authOnly('/api/imagenes', imagenesRoutes);
-authOnly('/api/estantes', estantesRoutes);
-
-authOnly('/:tenantSlug/api/dashboard', dashboardRoutes);
-authOnly('/:tenantSlug/api/imagenes', imagenesRoutes);
-authOnly('/:tenantSlug/api/estantes', estantesRoutes);
+authOnly('/api/dashboard',  dashboardRoutes);
+authOnly('/api/imagenes',   imagenesRoutes);
+authOnly('/api/estantes',   estantesRoutes);
+authOnly('/:tenantSlug/api/dashboard',  dashboardRoutes);
+authOnly('/:tenantSlug/api/imagenes',   imagenesRoutes);
+authOnly('/:tenantSlug/api/estantes',   estantesRoutes);
 
 /* =========================================================
    Trial-friendly: SIN subscriptionFirewall
@@ -141,9 +144,14 @@ authOnly('/:tenantSlug/api/estantes', estantesRoutes);
 authOnly('/api/paquetes', paquetesRoutes);
 app.use('/api/ubicaciones', ubicacionesRoutes);
 authOnly('/api/area-personal', areaPersonalRoutes);
-
 authOnly('/:tenantSlug/api/paquetes', paquetesRoutes);
 authOnly('/:tenantSlug/api/area-personal', areaPersonalRoutes);
+
+/* =========================================================
+   Limits — solo login (sin subscriptionFirewall)  ✅
+   ========================================================= */
+authOnly('/api/limits', limitsRoutes);
+authOnly('/:tenantSlug/api/limits', limitsRoutes);
 
 /* =========================================================
    Tenants: protegido con firewall
@@ -151,9 +159,11 @@ authOnly('/:tenantSlug/api/area-personal', areaPersonalRoutes);
 gate('/api/tenants', tenantsRoutes);
 
 /* =========================================================
-   Límites/Estado — solo login
+   Soporte (tickets) — solo login
    ========================================================= */
-authOnly('/api/limits', limitsRoutes);
+authOnly('/api/support', supportRoutes);
+authOnly('/:tenantSlug/api/support', supportRoutes);
+app.use('/api/tickets', ticketsRoutes);
 
 /* ============== 404 ============== */
 app.use((req, res) => {
@@ -185,7 +195,6 @@ app.listen(PORT, '0.0.0.0', () => {
   if (missing.length) console.warn('⚠️ Faltan variables .env:', missing.join(', '));
 
   console.log(`🚀 API EasyTrack escuchando en http://localhost:${PORT}`);
-  if (ALLOWED_ORIGINS.length) console.log('CORS ORIGINS:', ALLOWED_ORIGINS.join(', '));
 });
 
 module.exports = app;

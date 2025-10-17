@@ -40,17 +40,18 @@ export default function NavbarAccountMenu({
   handleLogout,
 }) {
   const [open, setOpen] = useState(false)
-  const timer = useRef(null)
+  const canHoverRef = useRef(false)          // true en desktop (ratón), false en móvil (táctil)
   const menuRef = useRef(null)
+  const hoverTimer = useRef(null)
 
-  const enter = () => {
-    if (timer.current) clearTimeout(timer.current)
-    setOpen(true)
-  }
-  const leave = () => {
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => setOpen(false), 160)
-  }
+  // Detectar si el dispositivo soporta hover real (desktop) para habilitar "abre al pasar"
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)')
+    const set = () => { canHoverRef.current = mq.matches }
+    set()
+    mq.addEventListener?.('change', set)
+    return () => mq.removeEventListener?.('change', set)
+  }, [])
 
   // Cerrar por click fuera
   useEffect(() => {
@@ -58,22 +59,59 @@ export default function NavbarAccountMenu({
       if (!open) return
       if (menuRef.current && !menuRef.current.contains(e.target)) setOpen(false)
     }
-    document.addEventListener('pointerdown', onDocPointer)
-    return () => document.removeEventListener('pointerdown', onDocPointer)
+    document.addEventListener('pointerdown', onDocPointer, { passive: true })
+    return () => document.removeEventListener('pointerdown', onDocPointer, { passive: true })
   }, [open])
+
+  // Cerrar con ESC
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && open) setOpen(false) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open])
+
+  // Helpers hover (solo desktop)
+  const enter = () => {
+    if (!canHoverRef.current) return
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    setOpen(true)
+  }
+  const leave = () => {
+    if (!canHoverRef.current) return
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    hoverTimer.current = setTimeout(() => setOpen(false), 140)
+  }
+
+  // Toggle por tap/click (móvil y también válido en desktop)
+  const toggleByPointer = (e) => {
+    // Evita que el mismo tap haga bubbling al documento y lo cierre inmediatamente
+    e.preventDefault()
+    e.stopPropagation()
+    setOpen((o) => !o)
+  }
+
+  const onKeyDownTrigger = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      setOpen((o) => !o)
+    }
+  }
 
   return (
     <div
       className={`account ${open ? 'open' : ''}`}
+      ref={menuRef}
+      // Hover solo si es desktop
       onMouseEnter={enter}
       onMouseLeave={leave}
-      ref={menuRef}
     >
       <button
         className="account__trigger"
         aria-expanded={open}
         aria-haspopup="menu"
-        onClick={() => setOpen((o) => !o)}
+        // PointerUp responde al primer tap en iOS/Android sin dobles
+        onPointerUp={toggleByPointer}
+        onKeyDown={onKeyDownTrigger}
       >
         <Avatar email={userEmail} url={avatarUrl} />
         <span className="account__meta">
@@ -104,7 +142,11 @@ export default function NavbarAccountMenu({
 
         <hr />
 
-        <button onClick={handleLogout} className="account__item danger" role="menuitem">
+        <button
+          onClick={handleLogout}
+          className="account__item danger"
+          role="menuitem"
+        >
           <Icon size={18}><FaSignOutAlt /></Icon>
           <span>Cerrar sesión</span>
         </button>

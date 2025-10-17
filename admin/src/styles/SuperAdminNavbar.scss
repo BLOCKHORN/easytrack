@@ -1,6 +1,19 @@
 /* === Fuente para la marca (ajusta al de tu web oficial si quieres) === */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap');
 
+/* Helpers globales para evitar scroll lateral global */
+:root {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+}
+
+body.no-scroll {
+  overflow: hidden;
+  touch-action: none; /* iOS */
+}
+
 .sa-nav {
   --bg: rgba(14, 16, 22, 0.75);
   --border: rgba(255,255,255,0.08);
@@ -8,8 +21,6 @@
   --muted: rgba(233,237,245,0.65);
   --brand-font: 'Poppins', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
   --accent: #6ea8fe;
-  --ok: #48bb78;
-  --danger: #f56565;
 
   position: sticky;
   top: 0;
@@ -19,45 +30,50 @@
   border-bottom: 1px solid var(--border);
 
   .sa-nav__inner {
-    max-width: 1280px;
+    max-width: min(1280px, 100vw);
     margin: 0 auto;
-    padding: 10px 16px;
+    padding: calc(8px + var(--safe-t)) clamp(10px, 3vw, 16px) 8px clamp(10px, 3vw, 16px);
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
     gap: 10px;
     color: var(--text);
+    overflow: hidden; /* 🔒 evita desbordes */
   }
 
   /* Left */
   .sa-nav__left {
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 8px; min-width: 0;
   }
 
   .icon-btn {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 36px; height: 36px; border-radius: 10px;
+    width: 40px; height: 40px; border-radius: 12px;
     border: 1px solid var(--border);
     background: rgba(255,255,255,0.04);
     color: var(--text);
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
   .icon-btn:hover { background: rgba(255,255,255,0.08); }
 
   .brand {
-    display: inline-flex; align-items: center; gap: 8px;
+    display: inline-flex; align-items: center; gap: 8px; min-width: 0;
     border: 0; background: none; color: var(--text);
-    cursor: pointer; padding: 4px 6px; border-radius: 8px;
+    cursor: pointer; padding: 6px 8px; border-radius: 10px;
   }
-  .brand-dot { color: var(--accent); }
+  .brand-dot { color: var(--accent); flex: 0 0 auto; }
   .brand__name { font-family: var(--brand-font); font-weight: 700; letter-spacing: .2px; }
   .brand__sep { opacity: .45; }
   .brand__area { opacity: .9; }
+  .brand__name, .brand__sep, .brand__area { white-space: nowrap; }
 
   /* Center tabs (desktop) */
   .sa-nav__tabs {
-    display: flex; align-items: center; gap: 6px;
+    display: flex; /* ⬅️ antes estaba 'none' */
+    align-items: center; gap: 6px;
     justify-content: center;
+    min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch;
 
     .tab {
       position: relative;
@@ -65,6 +81,7 @@
       padding: 8px 12px; border-radius: 10px;
       color: var(--muted); text-decoration: none; font-weight: 600;
       border: 1px solid transparent;
+      white-space: nowrap;
     }
     .tab:hover { color: var(--text); background: rgba(255,255,255,0.04); border-color: var(--border); }
     .tab.is-active {
@@ -77,15 +94,33 @@
     }
   }
 
+  /* Burbuja en esquina para los tabs de la navbar */
+  .sa-nav__tabs .tab .badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 18px;
+    height: 18px;
+    line-height: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    box-shadow: 0 10px 24px rgba(0,0,0,.25);
+    background: #ffd666;
+    color: #111;
+    font-weight: 700;
+    font-size: 12px;
+    text-align: center;
+  }
+
   /* Right: user */
   .sa-nav__right {
     display: flex; align-items: center; gap: 8px; justify-content: flex-end;
-    position: relative;
+    position: relative; min-width: 0;
   }
 
   .userbtn {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 6px 8px; border-radius: 10px;
+    display: inline-flex; align-items: center; gap: 8px; min-width: 0;
+    padding: 8px 10px; border-radius: 999px;
     border: 1px solid var(--border);
     background: rgba(255,255,255,0.04);
     color: var(--text);
@@ -93,23 +128,24 @@
   }
   .userbtn:hover,
   .userbtn.is-open { background: rgba(255,255,255,0.08); }
-  .userbtn__avatar { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; }
-  .userbtn__email { max-width: 220px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+  .userbtn__avatar { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex: 0 0 auto; }
+  .userbtn__email { max-width: 42vw; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
 
   .sa-nav__user-menu {
-    position: absolute; top: calc(100% + 8px); right: 0;
-    min-width: 260px; padding: 10px; border-radius: 12px;
+    position: absolute; top: calc(100% + 8px); right: clamp(8px, 3vw, 16px);
+    width: min(92vw, 320px); padding: 10px; border-radius: 12px;
     border: 1px solid var(--border);
     background: rgba(18, 20, 28, 0.96); backdrop-filter: blur(8px);
     box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    overflow: hidden;
   }
   .sa-nav__user-menu hr {
     border: none; height: 1px; background: var(--border); margin: 8px 0;
   }
-  .um__email { font-size: 12px; color: var(--muted); margin: 2px 4px 8px; }
+  .um__email { font-size: 12px; color: var(--muted); margin: 2px 4px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .um__item {
     width: 100%; text-align: left; display: inline-flex; align-items: center; gap: 8px;
-    padding: 8px; border-radius: 8px; cursor: pointer;
+    padding: 10px; border-radius: 10px; cursor: pointer;
     color: var(--text); background: transparent; border: 0;
   }
   .um__item:hover { background: rgba(255,255,255,0.06); }
@@ -120,55 +156,80 @@
   .sa-nav__drawer {
     position: fixed; inset: 0; background: rgba(0,0,0,0.45);
     backdrop-filter: blur(2px); z-index: 60; display: grid; place-items: start;
+    width: 100vw; height: 100vh;
   }
   .sa-nav__drawer-card {
-    width: 88%; max-width: 420px; height: 100%; background: rgba(18, 20, 28, 0.98);
+    width: min(92vw, 420px); height: 100%; background: rgba(18, 20, 28, 0.98);
     border-right: 1px solid var(--border);
-    padding: 14px; display: grid; grid-template-rows: auto 1fr auto; gap: 12px;
+    padding: 14px; padding-top: calc(14px + var(--safe-t));
+    padding-bottom: calc(14px + var(--safe-b));
+    display: grid; grid-template-rows: auto 1fr auto; gap: 12px;
     animation: slideIn .18s ease-out;
+    overflow: hidden;
   }
   @keyframes slideIn { from { transform: translateX(-8%); opacity: .6; } to { transform: none; opacity: 1; } }
 
-  .drawer__head { display: grid; gap: 8px; }
+  .drawer__head { display: grid; gap: 8px; min-width: 0; }
   .brand--drawer { cursor: default; padding: 0; }
-  .drawer__email { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  .drawer__email { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  .drawer__nav { display: grid; gap: 6px; margin-top: 6px; }
+  .drawer__nav {
+    display: grid; gap: 8px; margin-top: 6px;
+    overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 2px;
+  }
   .drawer__link {
-    display: block; padding: 10px 12px; border-radius: 10px; color: var(--text); text-decoration: none;
+    display: block; padding: 12px 14px; border-radius: 12px; color: var(--text); text-decoration: none;
     border: 1px solid transparent; background: rgba(255,255,255,0.04);
+    position: relative; padding-right: 34px; /* sitio para la burbuja */
   }
   .drawer__link:hover { background: rgba(255,255,255,0.08); border-color: var(--border); }
 
-  .drawer__foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  .drawer__link .badge {
+    position: absolute;
+    top: 50%; right: 12px; transform: translateY(-50%);
+    min-width: 18px; line-height: 18px; height: 18px; padding: 0 6px;
+    border-radius: 999px;
+    background: #ffd666; color: #111; font-weight: 700; font-size: 12px;
+  }
+
+  .drawer__foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 8px; }
   .btn {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border);
+    min-height: 40px;
+    padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border);
     background: rgba(255,255,255,0.04); color: var(--text); cursor: pointer;
   }
   .btn:hover { background: rgba(255,255,255,0.08); }
   .btn--danger { border-color: rgba(245,101,101,.35); background: rgba(245,101,101,.10); }
   .btn--danger:hover { background: rgba(245,101,101,.18); }
+
+  /* Badges base (por si aparecen en otros lugares) */
+  .badge {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 18px;
+    text-align: center;
+    margin-left: 6px;
+    background: #eee;
+    color: #333;
+  }
 }
 
-/* Responsivo: ocultar tabs en móvil */
+.ml8 { margin-left: 8px; }
+
+/* Responsivo móvil por defecto */
 @media (max-width: 1024px) {
-  .sa-nav .sa-nav__inner { grid-template-columns: auto 1fr auto; }
-  .sa-nav .sa-nav__tabs { display: none; }
+  .sa-nav .sa-nav__tabs { display: none; }  /* en móvil ocultamos las tabs */
   .sa-nav .userbtn__email { display: none; }
 }
-.badge {
-  display: inline-block;
-  min-width: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  font-size: 12px;
-  line-height: 18px;
-  text-align: center;
-  margin-left: 6px;
-  background: #eee;
-  color: #333;
 
-  &--warn { background: #ffcc00; color: #111; }
+/* Más apretado para móviles pequeños (≤ 380px) */
+@media (max-width: 380px) {
+  .sa-nav .brand__sep,
+  .sa-nav .brand__area { display: none; }
+  .sa-nav .icon-btn { width: 38px; height: 38px; }
+  .sa-nav .sa-nav__drawer-card { width: 100vw; }
 }
-.ml8 { margin-left: 8px; }

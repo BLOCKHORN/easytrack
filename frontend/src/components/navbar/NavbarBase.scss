@@ -111,13 +111,21 @@ body.no-scroll { overflow: hidden; }
   }
 }
 
-/* =================== RESPONSIVE (base) =================== */
+/* ====== MOBILE NAVBAR HEIGHT TWEAK (override) ====== */
 @media (max-width: 1024px){
-  :root{ --page-x: 14px; }   /* antes dabas 14px */
-  .navbar{ padding-block: 10px; }
-  .navbar__divider{ display:none; }
+  .navbar{
+    /* más aire arriba/abajo y compatibilidad con notch */
+    padding-block: 14px;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
+    min-height: 58px; /* asegura carril visual más alto */
+  }
 }
+
 @media (max-width: 480px){
-  :root{ --page-x: 12px; }   /* antes dabas 12px */
-  .navbar{ padding-block: 10px; }
+  .navbar{
+    /* un pelín más en móviles pequeños */
+    padding-block: 16px;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+    min-height: 60px;
+  }
 }

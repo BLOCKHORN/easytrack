@@ -10,6 +10,7 @@ import SuperAdminLayout from './components/superadmin/SuperAdminLayout.jsx';
 import SuperAdminHome from './components/superadmin/SuperAdminHome.jsx';
 import TenantsPage from './components/superadmin/TenantsPage.jsx';
 import RequestsPage from './components/superadmin/RequestsPage.jsx';
+import AdminSupportRouter from './components/superadmin/support/AdminSupportRouter.jsx';
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -17,19 +18,16 @@ export default function App() {
 
   useEffect(() => {
     let unsub;
-
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session || null);
       if (data.session) localStorage.setItem('sb-session', JSON.stringify(data.session));
       setChecking(false);
     });
-
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => {
       setSession(s);
       if (s) localStorage.setItem('sb-session', JSON.stringify(s));
       else localStorage.removeItem('sb-session');
     });
-
     unsub = sub?.subscription?.unsubscribe;
     return () => { if (typeof unsub === 'function') unsub(); };
   }, []);
@@ -45,6 +43,8 @@ export default function App() {
           <Route path="home" element={<SuperAdminHome />} />
           <Route path="tenants" element={<TenantsPage />} />
           <Route path="requests" element={<RequestsPage />} />
+          {/* NUEVO: módulo Soporte */}
+          <Route path="support/*" element={<AdminSupportRouter />} />
         </Route>
         <Route path="*" element={<Navigate to="/superadmin/home" replace />} />
       </Routes>

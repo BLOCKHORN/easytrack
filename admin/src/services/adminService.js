@@ -20,6 +20,15 @@ function withParams(url, params = {}) {
   return u.toString();
 }
 
+/* Tablas sin scope de tenant en el frontend para no pasar tenant_id */
+const NON_SCOPED_TABLES = new Set([
+  'tenants',
+  'billing_plans',
+  'staff_users',
+  'empresas_transporte',   // global
+  'audit_config',          // global
+]);
+
 /* ============== Tenants ============== */
 export async function listTenants({ q = '', page = 1, pageSize = 20 } = {}) {
   const url = withParams(`${API}/admin/tenants`, { q, page, pageSize });
@@ -84,8 +93,16 @@ export async function listTables() {
   return r.json();
 }
 
-export async function queryTable(table, { q = '', page = 1, pageSize = 20, orderBy, orderDir } = {}) {
-  const url = withParams(`${API}/admin/data/${table}`, { q, page, pageSize, orderBy, orderDir });
+export async function queryTable(
+  table,
+  { q = '', page = 1, pageSize = 20, orderBy, orderDir, tenant_id } = {}
+) {
+  // No adjuntar tenant_id a tablas globales para evitar 500 por columnas inexistentes
+  const params = {
+    q, page, pageSize, orderBy, orderDir,
+    ...(tenant_id && !NON_SCOPED_TABLES.has(String(table)) ? { tenant_id } : {})
+  };
+  const url = withParams(`${API}/admin/data/${table}`, params);
   const r = await fetch(url, { headers: await getHeaders() });
   if (!r.ok) throw new Error('DATA_QUERY_FAILED');
   return r.json();
@@ -136,6 +153,7 @@ export async function makeImpersonateLink(email, tenant_id = null, minutes = 30)
   if (!r.ok) throw new Error('AUTH_IMPERSONATE_FAILED');
   return r.json();
 }
+
 export async function cancelSubscription(id, at_period_end = true) {
   const res = await fetch(`${API}/admin/tenants/${id}/subscription/cancel`, {
     method: 'POST',
@@ -164,6 +182,7 @@ export async function setSubscriptionDates(id, payload) {
   if (!res.ok) throw new Error('SUBSCRIPTION_SET_DATES_FAILED');
   return res.json();
 }
+
 // === DEMO REQUESTS ===
 export async function listDemoRequests({ q = '', status = '', page = 1, pageSize = 20 } = {}) {
   const url = withParams(`${API}/admin/demo-requests`, { q, status, page, pageSize });
@@ -197,6 +216,7 @@ export async function declineDemoRequest(id, { reason = '', purge = false } = {}
   if (!r.ok) throw new Error('DEMO_DECLINE_FAILED');
   return r.json();
 }
+
 export async function resendDemoRequest(id, { frontend_url } = {}) {
   const r = await fetch(`${API}/admin/demo-requests/${id}/resend`, {
     method: 'POST',

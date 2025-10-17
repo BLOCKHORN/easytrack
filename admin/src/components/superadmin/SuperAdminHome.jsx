@@ -13,6 +13,7 @@ export default function SuperAdminHome() {
   const [tenants, setTenants] = useState([]);
   const [audit, setAudit] = useState([]);
 
+  // Carga inicial de datos
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -76,10 +77,6 @@ export default function SuperAdminHome() {
           </div>
           <h1>Panel de Administración</h1>
           <p className="muted">Una vista clara de empresas, suscripciones y actividad del sistema.</p>
-          <div className="sa-hero__quick">
-            <a className="quick-link" href="/superadmin/tenants" title="Ir a gestión de tenants"><Icon name="db" /> Gestionar Tenants</a>
-            <a className="quick-link" href="/superadmin/requests" title="Ir a solicitudes"><Icon name="list" /> Revisar Solicitudes</a>
-          </div>
         </div>
         <div className="sa-hero__illus" aria-hidden="true">
           <Icon name="gauge" size={80} />
@@ -105,9 +102,13 @@ export default function SuperAdminHome() {
                  frac={stats.trial / Math.max(1, stats.total)} />
             <Kpi title="Media días restantes" icon="calendar" tone="warn" value={nf(stats.mediaRestante)} meta="Promedio hasta renovación." />
             <Kpi title="Expiradas" icon="calendar" tone="danger" value={nf(stats.expiradas)} meta="Con periodo vencido." />
-            <Kpi title="Canceladas / Fin de periodo" icon="calendar" tone="muted"
-                 value={<><span>{nf(stats.canceladosNow)}</span><span className="slash">/</span><span>{nf(stats.cancelAtPeriodEnd)}</span></>}
-                 meta="Canceladas ya / se cancelarán." />
+            <Kpi
+              title="Canceladas / Fin de periodo"
+              icon="calendar"
+              tone="muted"
+              value={<><span>{nf(stats.canceladosNow)}</span><span className="slash">/</span><span>{nf(stats.cancelAtPeriodEnd)}</span></>}
+              meta="Canceladas ya / se cancelarán."
+            />
           </>
         )}
       </section>
@@ -209,7 +210,6 @@ export default function SuperAdminHome() {
   );
 }
 
-/* ---------- Small KPI subcomponent ---------- */
 function Kpi({ title, icon, tone = 'muted', value, meta, frac }) {
   return (
     <article className={`kpi card tone-${tone}`}>

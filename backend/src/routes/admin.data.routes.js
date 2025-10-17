@@ -10,34 +10,58 @@ router.get('/tables', (_req, res) => {
   res.json({ tables: Object.keys(TABLES) });
 });
 
-// Query genérica
+// Query genérica con scope por tenant y orden seguro
 router.get('/:table', async (req, res) => {
   try {
     const { table } = req.params;
-    if (!TABLES[table]) return res.status(400).json({ error: 'TABLE_NOT_ALLOWED' });
+    const cfg = TABLES[table];
+    if (!cfg) return res.status(400).json({ error: 'TABLE_NOT_ALLOWED' });
 
-    const { q='', page=1, pageSize=20, orderBy, orderDir='desc' } = req.query;
-    const from = (Number(page)-1)*Number(pageSize);
+    const {
+      q = '',
+      page = 1,
+      pageSize = 20,
+      orderBy,
+      orderDir = 'desc',
+      tenant_id = null
+    } = req.query;
+
+    const from = (Number(page) - 1) * Number(pageSize);
     const to = from + Number(pageSize) - 1;
 
-    let qy = supabaseAdmin.from(table).select('*', { count:'exact' }).range(from, to);
-    // filtro simple: busca en columnas de texto comunes
-    if (q) {
-      // intenta en nombre/slug/email/destinatario si existen
-      const like = `%${q}%`;
-      const candidates = ['nombre','nombre_empresa','slug','email','destinatario','tracking'];
-      const cols = [];
-      for (const c of candidates) cols.push(`${c}.ilike.${like}`);
-      qy = qy.or(cols.join(','));
+    let qy = supabaseAdmin.from(table).select('*', { count: 'exact' });
+
+    // Scope por tenant SOLO si la tabla lo soporta
+    if (cfg.tenantScoped && tenant_id) {
+      const tenantCol = cfg.tenantIdCol || 'tenant_id';
+      qy = qy.eq(tenantCol, tenant_id);
     }
-    if (orderBy) qy = qy.order(orderBy, { ascending: orderDir.toLowerCase()==='asc' });
+
+    // Búsqueda q sobre columnas declaradas
+    if (q && Array.isArray(cfg.searchable) && cfg.searchable.length) {
+      const like = `%${q}%`;
+      const ors = cfg.searchable.map(c => `${c}.ilike.${like}`);
+      qy = qy.or(ors.join(','));
+    }
+
+    // Orden seguro: usa orderBy si llega, si no defaultOrder, si no pk, si no 'id'
+    const orderKey = orderBy || cfg.defaultOrder || cfg.pk || 'id';
+    const ascending = String(orderDir).toLowerCase() === 'asc';
+    qy = qy.order(orderKey, { ascending, nullsLast: true });
+
+    // Paginación
+    qy = qy.range(from, to);
 
     const { data, count, error } = await qy;
-    if (error) throw error;
-    res.json({ data, count, page:Number(page), pageSize:Number(pageSize) });
+    if (error) {
+      console.error('[admin.data.routes] Supabase error:', error);
+      throw error;
+    }
+
+    res.json({ data, count, page: Number(page), pageSize: Number(pageSize) });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error:'DATA_QUERY_FAILED' });
+    console.error('[GET /admin/data/:table] Unexpected:', e);
+    res.status(500).json({ error: 'DATA_QUERY_FAILED' });
   }
 });
 
@@ -62,8 +86,8 @@ router.patch('/:table/:id', async (req, res) => {
     if (!cfg) return res.status(400).json({ error: 'TABLE_NOT_ALLOWED' });
 
     const payload = {};
-    for (const k of cfg.modifiable) if (k in req.body) payload[k] = req.body[k];
-    if (!Object.keys(payload).length) return res.status(400).json({ error:'NO_ALLOWED_FIELDS' });
+    for (const k of (cfg.modifiable || [])) if (k in req.body) payload[k] = req.body[k];
+    if (!Object.keys(payload).length) return res.status(400).json({ error: 'NO_ALLOWED_FIELDS' });
 
     const { data, error } = await supabaseAdmin.from(table).update(payload).eq(cfg.pk, id).select().maybeSingle();
     if (error) throw error;
@@ -74,7 +98,7 @@ router.patch('/:table/:id', async (req, res) => {
       target_table: table, target_id: String(id), diff: payload, req
     });
 
-    res.json({ ok:true, row:data });
+    res.json({ ok: true, row: data });
   } catch (e) { console.error(e); res.status(500).json({ error:'DATA_PATCH_FAILED' }); }
 });
 

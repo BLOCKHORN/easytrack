@@ -35,6 +35,8 @@ import SubscriptionGate from './pages/SubscriptionGate';
 import PortalBridge from './pages/PortalBridge';
 import { supabase } from './utils/supabaseClient';
 
+import SoporteInterno from './components/support/SupportRouter'; // 🆕 soporte interno
+
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
 function ScrollWithHash() {
@@ -317,6 +319,7 @@ export default function App() {
           <Route path="almacen" element={<VerEstantes />} />
           <Route path="personal" element={<AreaPersonal />} />
           <Route path="configuracion" element={<ConfigPage />} />
+          <Route path="soporte" element={<SoporteInterno />} /> {/* 🆕 NUEVA RUTA */}
         </Route>
 
         {/* Legacy opcional */}

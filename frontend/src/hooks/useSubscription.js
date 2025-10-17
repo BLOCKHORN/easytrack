@@ -1,9 +1,11 @@
+// src/hooks/useSubscription.js
 import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { apiPath } from '../utils/apiBase';
 
 function normalizeEntitlements(src) {
   if (!src || typeof src !== 'object') return null;
+
   const status = String(src.status || src.subscription_status || '').toLowerCase();
   const untilStr = src.until_at || src.current_period_end || src.trial_end || null;
   const untilMs  = untilStr ? Date.parse(untilStr) : null;
@@ -40,46 +42,59 @@ export function useSubscription() {
 
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
       try {
-        const { data: { session} } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          if (!cancelled) setState({ loading:false, active:false, reason:'unauthenticated', entitlements:null });
+          if (!cancelled) {
+            setState({ loading: false, active: false, reason: 'unauthenticated', entitlements: null });
+          }
           return;
         }
-        // ❗ No metas 'Cache-Control' como header -> rompe el preflight CORS
+
+        // Importante: no meter 'Cache-Control' como header (preflight CORS).
         const headers = { Authorization: `Bearer ${session.access_token}` };
-        const opts = { headers, cache: 'no-store' }; // usa la opción 'cache' en vez del header
+        const opts    = { headers, cache: 'no-store' };
+        const ts      = Date.now();
 
-        const ts = Date.now();
-
+        // 1) Intento con /api/tenants/me (puede incluir entitlements)
         try {
           const r = await fetch(apiPath(`/api/tenants/me?ts=${ts}`), opts);
           if (r.ok) {
             const j = await r.json().catch(() => ({}));
             const ent = normalizeEntitlements(j?.entitlements || j);
             if (!cancelled && ent) {
-              setState({ loading:false, active:!!ent.active, reason: ent.reason || null, entitlements: ent });
+              setState({ loading: false, active: !!ent.active, reason: ent.reason || null, entitlements: ent });
               return;
             }
           }
-        } catch {}
+        } catch {
+          // silencioso: fallback abajo
+        }
 
+        // 2) Fallback: /api/limits/me (tu endpoint de límites/suscripción)
         try {
           const r2 = await fetch(apiPath(`/api/limits/me?ts=${ts}`), opts);
           if (r2.ok) {
             const j2 = await r2.json().catch(() => ({}));
             const ent2 = normalizeEntitlements(j2?.entitlements || j2);
             if (!cancelled && ent2) {
-              setState({ loading:false, active:!!ent2.active, reason: ent2.reason || null, entitlements: ent2 });
+              setState({ loading: false, active: !!ent2.active, reason: ent2.reason || null, entitlements: ent2 });
               return;
             }
           }
-        } catch {}
+        } catch {
+          // silencioso
+        }
 
-        if (!cancelled) setState({ loading:false, active:false, reason:'inactive', entitlements:null });
+        if (!cancelled) {
+          setState({ loading: false, active: false, reason: 'inactive', entitlements: null });
+        }
       } catch {
-        if (!cancelled) setState({ loading:false, active:false, reason:'inactive', entitlements:null });
+        if (!cancelled) {
+          setState({ loading: false, active: false, reason: 'inactive', entitlements: null });
+        }
       }
     })();
 

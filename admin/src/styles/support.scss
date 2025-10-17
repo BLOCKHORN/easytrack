@@ -1,0 +1,382 @@
+/* ===========================================================
+   Superadmin — Soporte (global)
+   -----------------------------------------------------------
+   - Tabla de tickets (AdminTicketsTable)
+   - Detalle de ticket + chat (AdminTicketDetail)
+   - Input de mensajes (MessageInput)
+   - Badges, botones y utilidades
+   =========================================================== */
+
+/* ---------- Paleta & helpers ---------- */
+$bg:        #0f172a;    // slate-900
+$bg-elev:   #111827;    // gray-900
+$bg-card:   #0b1323;    // navy-ish
+$muted:     #9ca3af;    // gray-400
+$line:      #1f2937;    // gray-800
+$white:     #e5e7eb;    // gray-200
+$txt:       #e5e7eb;
+
+$primary:   #7c3aed;    // violet-600
+$primary-2: #8b5cf6;    // violet-500
+$ok:        #10b981;    // emerald-500
+$warn:      #f59e0b;    // amber-500
+$info:      #60a5fa;    // blue-400
+$danger:    #ef4444;    // red-500
+$mut:       #6b7280;    // gray-500
+
+:root {
+  --sa-bg:       #{$bg};
+  --sa-card:     #{$bg-card};
+  --sa-elev:     #{$bg-elev};
+  --sa-line:     #{$line};
+  --sa-text:     #{$txt};
+  --sa-muted:    #{$muted};
+  --sa-primary:  #{$primary};
+  --sa-primary2: #{$primary-2};
+  --sa-ok:       #{$ok};
+  --sa-warn:     #{$warn};
+  --sa-info:     #{$info};
+  --sa-danger:   #{$danger};
+}
+
+* { box-sizing: border-box; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.ell  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grow { flex: 1; }
+
+/* ---------- Botones & badges reutilizables ---------- */
+.btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: var(--sa-elev);
+  color: var(--sa-text);
+  padding: .55rem .9rem;
+  border-radius: .6rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: .15s ease;
+  line-height: 1.1;
+
+  &:hover { background: #0a0f1d; border-color: var(--sa-line); }
+  &:focus { outline: 2px solid color-mix(in oklab, var(--sa-primary) 40%, transparent); outline-offset: 2px; }
+  &:disabled { opacity: .55; cursor: not-allowed; }
+
+  &--primary {
+    background: linear-gradient(180deg, var(--sa-primary2), var(--sa-primary));
+    border-color: rgba(0,0,0,.25);
+    color: #fff;
+    &:hover { filter: brightness(1.05); }
+  }
+  &--muted { background: #0a0f1d; color: var(--sa-muted); border-color: var(--sa-line); }
+  &--danger { background: color-mix(in oklab, var(--sa-danger) 30%, transparent); border-color: #3b0b0b; color: #fff;
+              &:hover { background: color-mix(in oklab, var(--sa-danger) 45%, transparent); } }
+  &--sm { padding: .45rem .7rem; font-size: .9rem; border-radius: .5rem; }
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .78rem;
+  font-weight: 700;
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  border: 1px solid var(--sa-line);
+  background: var(--sa-elev);
+  color: var(--sa-text);
+
+  &--ok    { background: color-mix(in oklab, var(--sa-ok) 28%, transparent);    border-color: #083a2a; }
+  &--warn  { background: color-mix(in oklab, var(--sa-warn) 28%, transparent);  border-color: #3b2a07; }
+  &--info  { background: color-mix(in oklab, var(--sa-info) 28%, transparent);  border-color: #0b2a3b; }
+  &--muted { background: #0a0f1d; color: var(--sa-muted); }
+}
+
+/* ===========================================================
+   LISTA DE TICKETS
+   =========================================================== */
+.admin-tickets {
+  color: var(--sa-text);
+
+  .admin-tickets__hdr {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: .6rem 0 1.2rem 0;
+
+    h2 { font-size: 1.6rem; margin: 0 1rem 0 0; }
+
+    .filters {
+      display: flex; gap: .6rem; align-items: center;
+      input, select {
+        background: var(--sa-elev);
+        border: 1px solid var(--sa-line);
+        color: var(--sa-text);
+        border-radius: .55rem;
+        padding: .5rem .7rem;
+        min-width: 12rem;
+        &:focus { outline: 2px solid color-mix(in oklab, var(--sa-primary) 35%, transparent); }
+      }
+      input { width: clamp(180px, 28vw, 340px); }
+    }
+  }
+
+  .table {
+    width: 100%;
+    background: var(--sa-card);
+    border: 1px solid var(--sa-line);
+    border-radius: .9rem;
+    overflow: hidden;
+
+    .thead, .row {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr 1.4fr .9fr .8fr 1.2fr .7fr;
+      gap: .6rem;
+      padding: .75rem 1rem;
+    }
+    .thead {
+      position: sticky; top: 0;
+      z-index: 1;
+      background: #0c1426;
+      border-bottom: 1px solid var(--sa-line);
+      color: var(--sa-muted);
+      font-size: .85rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .tbody {
+      display: block;
+      .row {
+        border-top: 1px solid var(--sa-line);
+        align-items: center;
+        &:hover { background: #0d162a; }
+      }
+    }
+  }
+
+  .pager {
+    margin-top: .9rem;
+    display: flex; align-items: center; gap: .8rem; color: var(--sa-muted);
+    button { @extend .btn; @extend .btn--sm; }
+  }
+
+  /* Skeleton simple */
+  .row.is-skeleton {
+    .sk { display: block; height: 12px; border-radius: 8px; background: #0e1a30; animation: pulse 1.4s ease-in-out infinite; }
+    .w40 { width: 40%; } .w60 { width: 60%; } .w80 { width: 80%; }
+  }
+}
+
+@keyframes pulse {
+  0%,100% { opacity: .55; } 50% { opacity: 1; }
+}
+
+/* ---------- Responsive tabla ---------- */
+@media (max-width: 1024px) {
+  .admin-tickets .table {
+    .thead { display: none; }
+    .tbody {
+      .row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: .35rem;
+        padding: .85rem 1rem;
+        border-bottom: 1px solid var(--sa-line);
+
+        > div { display: flex; justify-content: space-between; gap: .75rem; }
+        > div::before {
+          color: var(--sa-muted);
+          font-size: .82rem;
+          content: attr(data-label);
+        }
+      }
+    }
+  }
+}
+
+/* ===========================================================
+   DETALLE DE TICKET + CHAT
+   =========================================================== */
+.admin-ticket {
+  color: var(--sa-text);
+
+  .topbar {
+    display: flex; align-items: center; gap: .8rem;
+    background: var(--sa-card);
+    border: 1px solid var(--sa-line);
+    border-radius: .9rem;
+    padding: .65rem .8rem;
+    margin-bottom: .9rem;
+
+    .meta {
+      display: inline-flex; flex-wrap: wrap; align-items: center; gap: .6rem;
+      .sep { width: 1px; height: 18px; background: var(--sa-line); display: inline-block; margin: 0 .4rem; }
+      select {
+        background: var(--sa-elev);
+        border: 1px solid var(--sa-line);
+        color: var(--sa-text);
+        border-radius: .55rem; padding: .45rem .6rem;
+      }
+    }
+  }
+
+  .skeleton {
+    height: 220px;
+    border-radius: .9rem;
+    border: 1px solid var(--sa-line);
+    background: linear-gradient(90deg, #0e172b, #0c1426, #0e172b);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ---------- Chat ---------- */
+.admin-ticket .chat {
+  height: min(58vh, 640px);
+  overflow: auto;
+  background: var(--sa-card);
+  border: 1px solid var(--sa-line);
+  border-radius: .9rem;
+  padding: .8rem;
+  scroll-behavior: smooth;
+
+  /* scroll suave y discreto */
+  &::-webkit-scrollbar { height: 10px; width: 10px; }
+  &::-webkit-scrollbar-thumb { background: #1a2540; border-radius: 10px; }
+}
+
+.a-msg {
+  background: #0d162a;
+  border: 1px solid var(--sa-line);
+  border-radius: .8rem;
+  padding: .65rem .75rem;
+  margin: .65rem 0;
+
+  &--agent { background: #0b1323; border-color: #18305a; }
+
+  .a-msg__hdr {
+    display: flex; align-items: baseline; gap: .6rem; margin-bottom: .35rem;
+    .who { font-weight: 700; }
+    time { font-size: .85rem; color: var(--sa-muted); }
+  }
+  .a-msg__txt { margin: .2rem 0 .35rem; line-height: 1.45; }
+
+  .a-msg__files {
+    display: flex; flex-wrap: wrap; gap: .4rem;
+    .file {
+      display: inline-flex; align-items: center; gap: .45rem;
+      background: #0a1120;
+      border: 1px solid var(--sa-line);
+      border-radius: .55rem;
+      padding: .25rem .5rem;
+      text-decoration: none;
+      color: var(--sa-text);
+      &:hover { background: #0a0f1d; }
+      .file__name { max-width: 220px; @extend .ell; }
+      .file__meta { font-size: .78rem; color: var(--sa-muted); }
+    }
+  }
+}
+
+/* ===========================================================
+   INPUT DE MENSAJES
+   =========================================================== */
+.msgbox {
+  margin-top: .9rem;
+  background: var(--sa-card);
+  border: 1px solid var(--sa-line);
+  border-radius: .9rem;
+  padding: .7rem .75rem;
+
+  textarea {
+    width: 100%;
+    min-height: 86px;
+    resize: vertical;
+    background: var(--sa-elev);
+    border: 1px solid var(--sa-line);
+    color: var(--sa-text);
+    border-radius: .6rem;
+    padding: .6rem .7rem;
+    line-height: 1.4;
+    &:focus { outline: 2px solid color-mix(in oklab, var(--sa-primary) 35%, transparent); }
+  }
+
+  .msgbox__files {
+    display: flex; flex-wrap: wrap; gap: .4rem; margin: .55rem 0 .35rem;
+    .chip {
+      display: inline-flex; align-items: center; gap: .45rem;
+      background: #0a1120; border: 1px solid var(--sa-line);
+      border-radius: 999px; padding: .25rem .55rem; color: var(--sa-text);
+      .name { max-width: 200px; @extend .ell; }
+      button {
+        appearance: none; border: 0; background: transparent; color: var(--sa-muted);
+        font-size: 1.05rem; padding: 0 .1rem; cursor: pointer;
+        &:hover { color: #fff; }
+      }
+    }
+  }
+
+  .msgbox__actions {
+    display: flex; align-items: center; gap: .6rem; margin-top: .4rem;
+    .btn { border-radius: .55rem; }
+  }
+}
+
+/* ===========================================================
+   Ajustes responsive generales
+   =========================================================== */
+@media (max-width: 720px) {
+  .admin-ticket .topbar { flex-wrap: wrap; gap: .6rem;
+    .meta { width: 100%; justify-content: flex-start; }
+    .grow { display: none; }
+  }
+  .msgbox textarea { min-height: 96px; }
+}
+
+/* ===========================================================
+   Utilidades variopintas
+   =========================================================== */
+.card {
+  background: var(--sa-card);
+  border: 1px solid var(--sa-line);
+  color: var(--sa-text);
+  border-radius: .9rem;
+  padding: .9rem 1rem;
+}
+/* src/styles/support.scss (añade al final) */
+.admin-support {
+  .tickets-table tr.is-new {
+    position: relative;
+    animation: row-glow 1.2s ease-in-out infinite;
+  }
+  .tickets-table tr.is-new::after {
+    content: 'Nuevo';
+    position: absolute;
+    left: 8px; top: 8px;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #22c55e;
+    color: #051018;
+    font-weight: 700;
+  }
+
+  .ticket-thread .msg.is-new .msg-body {
+    box-shadow: 0 0 0 2px rgba(34,197,94,.45), 0 6px 18px rgba(34,197,94,.20);
+    animation: msg-pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes row-glow {
+    0%,100% { box-shadow: inset 0 0 0 0 rgba(34,197,94,0); }
+    50%     { box-shadow: inset 0 0 0 999px rgba(34,197,94,.08); }
+  }
+  @keyframes msg-pulse {
+    0%,100% { transform: translateZ(0) scale(1); }
+    50%     { transform: translateZ(0) scale(1.01); }
+  }
+}
