@@ -1,5 +1,4 @@
-import { Link } from 'react-router-dom'
-import { FaLock, FaArrowRight } from 'react-icons/fa'
+import { FaLock } from 'react-icons/fa'
 import NavbarAccountMenu from './NavbarAccountMenu'
 
 export default function NavbarActions({
@@ -15,49 +14,53 @@ export default function NavbarActions({
   goConfig,
   handleLogout,
 }) {
-  const panelHref = slug ? `/${slug}/dashboard` : '/dashboard';
+  // skeleton mientras carga auth
+  if (checking) {
+    return (
+      <div className="navbar__actions" aria-hidden="true">
+        <div className="skel skel--btn" />
+        <div className="skel skel--chip" />
+      </div>
+    )
+  }
 
+  // SIN sesión → CTA + Login (sin hamburguesa)
+  if (!isLoggedIn) {
+    return (
+      <div className="navbar__actions" role="group" aria-label="Acciones">
+        <button
+          className="navbar__cta"
+          onClick={openRegister}
+          type="button"
+        >
+          Solicitar DEMO
+        </button>
+
+        <button
+          className="navbar__login"
+          onClick={openLogin}
+          type="button"
+          aria-label="Iniciar sesión"
+        >
+          <FaLock aria-hidden="true" />
+          <span className="label">Login</span>
+        </button>
+      </div>
+    )
+  }
+
+  // CON sesión → chip de cuenta
   return (
-    <div className="navbar__actions" aria-label="Acciones de usuario">
-      {checking ? (
-        <div className="navbar__skeleton" aria-hidden>
-          <div className="skel skel--btn" />
-          <div className="skel skel--btn skel--primary" />
-        </div>
-      ) : !isLoggedIn ? (
-        <>
-          <button className="navbar__link" onClick={openLogin}>
-            <FaLock aria-hidden="true" />
-            <span>Login</span>
-          </button>
-          <Link to="/registro" className="btn btn-primary">Solicitar DEMO</Link>
-        </>
-      ) : (
-        <>
-          {/* Botón pro */}
-          <Link
-            className="btn nav-btn-pro btn--enter"
-            to={panelHref}
-            title="Ir al panel"
-          >
-            <span className="btn__label">Ir al panel</span>
-            <FaArrowRight className="btn__icon" aria-hidden="true" />
-          </Link>
-
-          {/* Separador a la DERECHA del botón */}
-          <span className="nav-sep" aria-hidden="true" />
-
-          <NavbarAccountMenu
-            avatarUrl={avatarUrl}
-            userEmail={userEmail}
-            displayName={displayName}
-            nombreEmpresa={nombreEmpresa}
-            goConfig={goConfig}
-            handleLogout={handleLogout}
-            slug={slug}
-          />
-        </>
-      )}
+    <div className="navbar__actions" role="group" aria-label="Cuenta">
+      <NavbarAccountMenu
+        avatarUrl={avatarUrl}
+        userEmail={userEmail}
+        displayName={displayName}
+        nombreEmpresa={nombreEmpresa}
+        goConfig={goConfig}
+        handleLogout={handleLogout}
+        slug={slug}
+      />
     </div>
   )
 }

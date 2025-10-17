@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { FaHome } from 'react-icons/fa'
 import { useModal } from '../../context/ModalContext'
 import NavbarBrand from './NavbarBrand'
 import NavbarMenus from './NavbarMenus'
 import NavbarActions from './NavbarActions'
-import NavbarMobile from './NavbarMobile'
 import useNavbarAuth from './useNavbarAuth'
 
-// estilos (como el landing: base + parciales por componente)
 import './NavbarBase.scss'
 import './NavbarBrand.scss'
 import './NavbarMenus.scss'
@@ -20,16 +19,9 @@ export default function Navbar() {
   const location = useLocation()
   const { openLogin, openRegister } = useModal()
 
-  // estado UI
-  const [mobileOpen, setMobileOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const homeBtnRef = useRef(null)
 
-  // refs para control de foco en móvil
-  const hamburgerRef = useRef(null)
-  const mobileCloseRef = useRef(null)
-  const mobileRootRef = useRef(null)
-
-  // auth + tenant
   const {
     checking,
     isLoggedIn,
@@ -42,7 +34,7 @@ export default function Navbar() {
     goConfig,
   } = useNavbarAuth(navigate)
 
-  // scroll suave a #hash si ya estamos en "/"
+  // hash scrolling para el landing
   const NAV_OFFSET = 80
   const scrollToId = (hash) => {
     const id = (hash || '').replace('#', '')
@@ -55,32 +47,9 @@ export default function Navbar() {
   const handleHashClick = (e, hash) => {
     if (location.pathname === '/' && hash) {
       e.preventDefault()
-      if (mobileOpen) closeMobile()
       requestAnimationFrame(() => scrollToId(hash))
     }
   }
-
-  // efectos
-  useEffect(() => {
-    setMobileOpen(false)
-  }, [location.pathname])
-
-  // 🚫 Quitar "inert" (causa taps perdidos / doble tap en iOS)
-  useEffect(() => {
-    document.body.classList.toggle('no-scroll', mobileOpen)
-    return () => document.body.classList.remove('no-scroll')
-  }, [mobileOpen])
-
-  // 👉 mover el foco al botón cerrar cuando se abra (sin rAF + sin inert)
-  useEffect(() => {
-    if (mobileOpen) {
-      // pequeño delay para asegurar que está montado
-      const t = setTimeout(() => {
-        try { mobileCloseRef.current?.focus({ preventScroll: true }) } catch {}
-      }, 0)
-      return () => clearTimeout(t)
-    }
-  }, [mobileOpen])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 6)
@@ -89,30 +58,12 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape' && mobileOpen) closeMobile() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [mobileOpen])
-
-  // móvil: open/close con foco correcto
-  const openMobile = () => {
-    setMobileOpen(true)
-  }
-  const closeMobile = () => {
-    // devuelve foco a la hamburguesa sin forzar scroll
-    requestAnimationFrame(() => {
-      try { hamburgerRef.current?.focus({ preventScroll: true }) } catch {}
-      setMobileOpen(false)
-    })
+  const goDashboard = (e) => {
+    e?.preventDefault?.()
+    e?.stopPropagation?.()
+    navigate(slug ? `/${slug}/dashboard` : '/dashboard')
   }
 
-  // 💡 Mostrar hamburguesa solo si aporta algo:
-  // - si NO está logueado (CTA de demo/login), sirve
-  // - si está logueado pero no tienes más navegación móvil que no esté ya en el chip de cuenta → la ocultamos
-  const showHamburger = !isLoggedIn // ajusta si añades enlaces del landing en el panel
-
-  // ocultar navbar en rutas concretas
   if (location.pathname === '/email-confirmado') return null
 
   return (
@@ -121,55 +72,39 @@ export default function Navbar() {
 
       <div className="navbar__spacer" />
 
-      {/* Menú simplificado: solo enlaces directos */}
       <NavbarMenus handleHashClick={handleHashClick} />
 
+
+      {/* derecha: casita (si hay sesión) + chip/perfil/cta */}
+      <div className="navbar__right">
+        {isLoggedIn && (
+          <button
+            ref={homeBtnRef}
+            className="navbar__homebtn"
+            onClick={goDashboard}
+            aria-label="Ir al panel"
+            title="Ir al panel"
+            type="button"
+          >
+            <FaHome aria-hidden="true" />
+          </button>
+        )}
       <span className="navbar__divider" aria-hidden="true">|</span>
 
-      <NavbarActions
-        checking={checking}
-        isLoggedIn={isLoggedIn}
-        openLogin={openLogin}
-        openRegister={openRegister}
-        slug={slug}
-        avatarUrl={avatarUrl}
-        userEmail={userEmail}
-        displayName={displayName}
-        nombreEmpresa={nombreEmpresa}
-        goConfig={goConfig}
-        handleLogout={handleLogout}
-      />
-
-      {/* HAMBURGUESA (móvil) */}
-      {showHamburger && (
-        <button
-          ref={hamburgerRef}
-          id="navbarHamburger"
-          className={`navbar__hamburger ${mobileOpen ? 'active' : ''}`}
-          // usar pointerup para evitar “ghost click”/doble tap en iOS
-          onPointerUp={mobileOpen ? closeMobile : openMobile}
-          aria-label="Abrir menú"
-          aria-expanded={mobileOpen}
-          aria-controls="mobileMenu"
-        >
-          <span /><span /><span />
-        </button>
-      )}
-
-      <NavbarMobile
-        id="mobileMenu"
-        refRoot={mobileRootRef}
-        refClose={mobileCloseRef}
-        open={mobileOpen}
-        onClose={closeMobile}
-        checking={checking}
-        isLoggedIn={isLoggedIn}
-        openLogin={openLogin}
-        openRegister={openRegister}
-        slug={slug}
-        handleLogout={handleLogout}
-        handleHashClick={handleHashClick}
-      />
+        <NavbarActions
+          checking={checking}
+          isLoggedIn={isLoggedIn}
+          openLogin={openLogin}
+          openRegister={openRegister}
+          slug={slug}
+          avatarUrl={avatarUrl}
+          userEmail={userEmail}
+          displayName={displayName}
+          nombreEmpresa={nombreEmpresa}
+          goConfig={goConfig}
+          handleLogout={handleLogout}
+        />
+      </div>
     </nav>
   )
 }

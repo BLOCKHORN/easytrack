@@ -129,3 +129,33 @@ body.no-scroll { overflow: hidden; }
     min-height: 60px;
   }
 }
+/* Botón casita (a la IZQUIERDA del chip de perfil) */
+.navbar {
+  .navbar__homebtn{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:40px; height:40px; border-radius:12px;
+    margin-left: 0;           /* pegado al divisor */
+    margin-right: 8px;        /* separación con el chip/acciones */
+    background: var(--nav-surface, #14161b);
+    border:1px solid var(--nav-border, rgba(255,255,255,.12));
+    color: #e5e7eb;           /* color del icono mediante currentColor */
+    cursor:pointer;
+    transition: background .18s, border-color .18s, transform .18s;
+
+    /* asegurar que el icono se ve aunque haya estilos globales agresivos */
+    svg{
+      width:18px; height:18px;
+      color: inherit !important;
+      fill: currentColor !important;
+      flex: 0 0 18px;
+    }
+
+    &:hover{ background:#151922; border-color: rgba(255,255,255,.18); }
+    &:active{ transform: translateY(1px); }
+    &:focus-visible{ outline:2px solid #3b82f6; outline-offset:2px; }
+  }
+
+  @media (max-width: 480px){
+    .navbar__homebtn{ width:36px; height:36px; border-radius:10px; }
+  }
+}

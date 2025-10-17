@@ -1,56 +1,61 @@
-  /* =================== ACCIONES DERECHA =================== */
+/* =================== ACCIONES DERECHA =================== */
 .navbar__actions{
-  display:flex; align-items:center; gap: 10px; min-width: 0;
+  display:flex; align-items:center; gap:10px; min-width:0;
 
-  .navbar__link{
-    display:inline-flex; align-items:center; gap:8px;
-    padding: 9px 12px; border-radius: 12px;
-    font-weight: 700; font-size:.95rem;
-    color:#e5e7eb; background: transparent; border:1px solid var(--nav-border);
-    transition: background var(--tr), color var(--tr), border var(--tr);
-    white-space: nowrap;
-    &:hover{ background: rgba(255,255,255,.06); color:#fff; border-color: rgba(255,255,255,.18); }
-    &.block{ width:100%; justify-content:center; }
-  }
-
+  /* CTA principal */
   .navbar__cta{
-    position:relative; padding: 10px 16px; border-radius: 12px; border:0;
+    padding:10px 16px; border:0; border-radius:12px;
     font-weight:800; font-size:.95rem; letter-spacing:.2px; cursor:pointer;
     color:#0b1120; background:#fff;
-    transition: transform var(--tr), box-shadow var(--tr), opacity var(--tr);
+    transition: transform .18s, box-shadow .18s, opacity .18s;
     box-shadow: 0 8px 30px rgba(96,165,250,.15);
     white-space: nowrap;
     &:hover{ transform: translateY(-1px); box-shadow: 0 12px 36px rgba(96,165,250,.25); }
-    &.block{ width:100%; }
+    &:focus-visible{ outline:2px solid #3b82f6; outline-offset:2px; }
   }
 
-  .btn{
-    position:relative;
-    display:inline-flex; align-items:center; justify-content:center;
-    padding: 10px 16px; border-radius: 12px; font-weight:800;
-    color:#e5e7eb; background: var(--nav-surface);
-    border:1px solid var(--nav-border);
-    transition: background var(--tr), border var(--tr), transform var(--tr);
-    white-space: nowrap;
+  /* Login (ghost / outline) */
+  .navbar__login{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:9px 12px; border-radius:12px; white-space:nowrap;
+    background:transparent;
+    border:1px solid rgba(255,255,255,.18);
+    color:#e5e7eb; font-weight:700; font-size:.95rem;
+    transition: background .18s, border-color .18s, color .18s;
+    cursor:pointer;
 
-    &::before{
-      content:""; position:absolute; inset:0; border-radius: 12px; padding:1px;
-      background: linear-gradient(120deg, var(--acc-1), var(--acc-2), var(--acc-3));
-      -webkit-mask:
-        linear-gradient(#000 0 0) content-box,
-        linear-gradient(#000 0 0);
-      -webkit-mask-composite: xor; mask-composite: exclude;
-      opacity:.45; transition: opacity var(--tr);
-      pointer-events:none;
+    svg{ width:14px; height:14px; opacity:.9; flex: 0 0 14px; }
+    &:hover{ background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.28); }
+    &:focus-visible{ outline:2px solid #3b82f6; outline-offset:2px; }
+  }
+}
+
+/* ===== Responsive refinado (evita que desaparezca el Login) ===== */
+@media (max-width: 640px){
+  .navbar__actions{
+    gap:8px;
+
+    .navbar__cta{ padding:9px 14px; font-size:.92rem; }
+    .navbar__login{ padding:8px 10px; font-size:.92rem; }
+  }
+}
+
+/* Muy pequeño: mantenemos ambos, pero compactos */
+@media (max-width: 420px){
+  .navbar__actions{
+    gap:6px;
+
+    .navbar__cta{ padding:8px 12px; font-size:.9rem; }
+    .navbar__login{ padding:7px 10px; font-size:.88rem; }
+
+    /* Si aún falta espacio, permite que el label del Login se oculte antes de romper layout */
+    .navbar__login .label{
+      display:inline-block;
     }
-    &:hover{ background:#1a1d23; border-color: rgba(255,255,255,.18); }
-    &:hover::before{ opacity:.9; }
-    &.block{ width:100%; }
   }
-  .btn--enter{ border-radius: 12px; }
 }
 
-/* en móviles muy pequeños, oculta el enlace "Login" para priorizar CTA/chip */
-@media (max-width: 480px){
-  .navbar__actions .navbar__link{ display:none; }
-}
+/* Skeletons (opcional) */
+.skel{ background: rgba(255,255,255,.08); border-radius:12px; }
+.skel--btn{ width:120px; height:36px; }
+.skel--chip{ width:140px; height:36px; }

@@ -16,6 +16,17 @@ export default function NavbarMobile({
   handleLogout,
   handleHashClick,
 }) {
+  // ----- Swipe-to-close -----
+  const panelRef = useRef(null)
+  const localRootRef = useRef(null)
+  const rootEl = refRoot ?? localRootRef
+  const startX = useRef(0)
+  const dragDX = useRef(0)
+  const [dragging, setDragging] = useState(false)
+
+  // ⛑ Anti “tap de apertura cierra”: el backdrop se arma tras 250ms
+  const [armed, setArmed] = useState(false)
+
   // Cerrar con ESC
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && open) onClose?.() }
@@ -23,11 +34,23 @@ export default function NavbarMobile({
     return () => document.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  // ----- Swipe-to-close -----
-  const panelRef = useRef(null)
-  const startX = useRef(0)
-  const dragDX = useRef(0)
-  const [dragging, setDragging] = useState(false)
+  // Armar/desarmar backdrop + scroll lock + hidden
+  useEffect(() => {
+    const root = rootEl.current
+    if (!root) return
+    if (!open) root.setAttribute('hidden', '')
+    else root.removeAttribute('hidden')
+
+    document.body.classList.toggle('no-scroll', open)
+
+    if (open) {
+      setArmed(false)
+      const t = setTimeout(() => setArmed(true), 250)
+      return () => clearTimeout(t)
+    } else {
+      setArmed(false)
+    }
+  }, [open, rootEl])
 
   const resetDrag = () => {
     dragDX.current = 0
@@ -41,10 +64,9 @@ export default function NavbarMobile({
 
   const onTouchStart = (e) => {
     if (!open) return
-    // sólo si empezamos muy cerca del borde derecho (mejor gesto)
     const vw = window.innerWidth || 0
     const x0 = e.touches?.[0]?.clientX ?? 0
-    if (vw - x0 > 48 && !panelRef.current?.contains(e.target)) return // ignora si no viene del panel ni desde borde
+    if (vw - x0 > 48 && !panelRef.current?.contains(e.target)) return
     setDragging(true)
     startX.current = x0
     dragDX.current = 0
@@ -53,10 +75,10 @@ export default function NavbarMobile({
   const onTouchMove = (e) => {
     if (!dragging) return
     const x = e.touches?.[0]?.clientX ?? 0
-    const dx = Math.max(0, x - startX.current) // sólo hacia derecha
+    const dx = Math.max(0, x - startX.current)
     dragDX.current = dx
     if (panelRef.current) {
-      const damped = Math.min(dx, 320) // límite visual
+      const damped = Math.min(dx, 320)
       const progress = Math.min(1, damped / 320)
       panelRef.current.style.transform = `translateX(${damped}px)`
       panelRef.current.style.opacity = String(1 - progress * 0.35)
@@ -66,7 +88,7 @@ export default function NavbarMobile({
   const onTouchEnd = () => {
     if (!dragging) return
     const dx = dragDX.current
-    const shouldClose = dx > 80 // umbral
+    const shouldClose = dx > 80
     if (shouldClose) {
       if (panelRef.current) {
         panelRef.current.style.transition = 'transform .16s ease-out, opacity .16s ease-out'
@@ -88,15 +110,24 @@ export default function NavbarMobile({
   return (
     <div
       id={id}
-      ref={refRoot}
+      ref={rootEl}
       className={`navbar__mobile ${open ? 'open' : ''}`}
       aria-hidden={!open}
     >
-      <button
-        className="navbar__mobile-backdrop"
-        aria-label="Cerrar menú"
-        onClick={onClose}
-      />
+      {/* Backdrop (se arma después de 250ms para ignorar el click sintetizado del tap de apertura) */}
+      {open && (
+        <button
+          className="navbar__mobile-backdrop"
+          aria-label="Cerrar menú"
+          onClick={(e) => {
+            // si aún no está armado, ignorar este tap
+            if (!armed) { e.preventDefault(); e.stopPropagation(); return }
+            onClose?.()
+          }}
+          style={{ pointerEvents: armed ? 'auto' : 'none' }}
+        />
+      )}
+
       <aside
         ref={panelRef}
         className={`navbar__mobile-panel ${dragging ? 'is-dragging' : ''}`}
@@ -126,8 +157,7 @@ export default function NavbarMobile({
         {/* Contenido scrollable */}
         <div className="navbar__mobile-content">
           <nav className="mobile-section" aria-label="Navegación">
-            {/* Ejemplo de links internos con scroll suave si ya estás en "/" */}
-            {/*
+            {/* 
             <button
               className="mobile-link"
               onClick={(e) => { handleHashClick?.(e, '#features'); onClose?.() }}
