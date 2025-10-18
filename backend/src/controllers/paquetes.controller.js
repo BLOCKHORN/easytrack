@@ -49,6 +49,18 @@ async function getEmpresaId(tenantId, nombre) {
   return data?.id || null;
 }
 
+// NUEVO: obtener tarifa para empresa_id (para rellenar ingreso_generado en la entrega)
+async function getTarifaPorEmpresaId(empresaId) {
+  if (!empresaId) return 0;
+  const { data, error } = await supabase
+    .from('empresas_transporte_tenant')
+    .select('ingreso_por_entrega')
+    .eq('id', empresaId)
+    .maybeSingle();
+  if (error) throw error;
+  return Number(data?.ingreso_por_entrega || 0);
+}
+
 async function resolveUbiIdByLabel(tenantId, label) {
   const lbl = up(label);
   const { data, error } = await supabase
@@ -199,17 +211,42 @@ async function entregarPaquete(req, res) {
     if (!id) return res.status(400).json({ error: 'Falta id' });
     if (!tenantId) return res.status(400).json({ error: 'Falta tenantId' });
 
-    const { data, error } = await supabase
+    // Traemos el paquete para conocer empresa_id e ingreso actual
+    const { data: pkg, error: e1 } = await supabase
       .from('packages')
-      .update({ entregado: true, fecha_entregado: new Date().toISOString() })
+      .select('id, empresa_id, ingreso_generado, entregado, fecha_entregado')
       .eq('id', id)
       .eq('tenant_id', tenantId)
-      .select('id,entregado,fecha_entregado')
+      .maybeSingle();
+    if (e1) return res.status(500).json({ error: e1.message });
+    if (!pkg) return res.status(404).json({ error: 'No encontrado para este tenant' });
+
+    // Si el ingreso está vacío/0, lo calculamos con la tarifa de la empresa
+    let ingreso = Number(pkg.ingreso_generado || 0);
+    if (!ingreso || ingreso <= 0) {
+      const tarifa = await getTarifaPorEmpresaId(pkg.empresa_id);
+      ingreso = Number(tarifa || 0);
+    }
+
+    const patch = {
+      entregado: true,
+      ingreso_generado: ingreso,
+      fecha_entregado: pkg.fecha_entregado ? pkg.fecha_entregado : new Date().toISOString(),
+    };
+
+    const { data, error: e2 } = await supabase
+      .from('packages')
+      .update(patch)
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+      .select(`
+        id, tenant_id, nombre_cliente, empresa_transporte, empresa_id,
+        fecha_llegada, entregado, fecha_entregado, ingreso_generado,
+        ubicacion_id, ubicacion_label
+      `)
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
-    if (!data) return res.status(404).json({ error: 'No encontrado para este tenant' });
-
+    if (e2) return res.status(500).json({ error: e2.message });
     return res.json({ paquete: data });
   } catch (err) {
     console.error('[packages.entregar] err:', err);

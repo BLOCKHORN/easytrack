@@ -219,3 +219,43 @@
 /* Que el scroll lo lleve la ventana, no el contenedor */
 .configuracion,
 .configuracion .config__container { overflow: visible !important; }
+/* ===== Estabilidad de scroll en Configuración ===== */
+.configuracion {
+  /* Scroll suave para interacciones (no afecta a “saltos”) */
+  scroll-behavior: smooth;
+}
+
+.config__container {
+  /* Cada sección respeta el header fijo (ajusta 72px a tu altura real) */
+  [data-section] {
+    scroll-margin-top: 72px;
+  }
+}
+
+/* Evita que el navegador “reancle” el viewport cuando cambie contenido arriba */
+#pin {
+  overflow-anchor: none;
+}
+
+/* Botones del sidebar si fueran <a> globales que heredan estilos de links */
+.config-scope__sidebar button,
+.config-scope__sidebar a[role="button"] {
+  appearance: none;
+  border: 1px solid var(--nav-border, rgba(255,255,255,.1));
+  background: var(--nav-panel, #111216);
+  color: var(--nav-txt, #e5e7eb);
+  padding: 10px 12px;
+  border-radius: 10px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* (Opcional) si tu Layout pinta .config__nav con anchors, evita estilos que “empujen” */
+.config__nav a {
+  text-decoration: none;
+  line-height: 1;
+}
+/* Import Wizard (scope muy suave) */
+.import-wizard .btn { cursor: pointer; transition: transform .12s; }
+.import-wizard .btn:active { transform: translateY(1px); }

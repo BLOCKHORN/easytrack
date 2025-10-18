@@ -332,6 +332,7 @@ export default function VerEstantes() {
                               <div className={`cliente ${revealed ? "" : "blurred"}`}>
                                 {highlight(p?.nombre_cliente || "—", q)}
                               </div>
+
                               <div className="meta">
                                 <span
                                   className="pill pill--carrier"
@@ -344,10 +345,12 @@ export default function VerEstantes() {
                                 </span>
                                 <span className="pill estado warn">Pendiente</span>
                               </div>
+
                               <div className="row-actions">
                                 <button
                                   type="button"
                                   className="icon-btn"
+                                  aria-label={revealed ? "Ocultar nombre" : "Mostrar nombre"}
                                   title={revealed ? "Ocultar nombre" : "Mostrar nombre"}
                                   onClick={() => toggleRevealOne(p.id)}
                                 >
@@ -356,6 +359,7 @@ export default function VerEstantes() {
                                 <button
                                   type="button"
                                   className="icon-btn danger"
+                                  aria-label="Eliminar paquete"
                                   title="Eliminar paquete"
                                   onClick={() => onDeletePkg(p.id)}
                                 >

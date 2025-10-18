@@ -237,7 +237,7 @@ export default function BuscarPaquete() {
         const mapU = new Map(ubis.map(u => [u.id, u.label]));
         setUbiIdToLabel(mapU);
 
-        // Normalizar ubicación visible de cada paquete (sin baldas)
+        // Normalizar
         const list = (paquetesAPI || []).map(p => {
           const label =
             (p.ubicacion_label && String(p.ubicacion_label).toUpperCase()) ||
@@ -430,99 +430,12 @@ export default function BuscarPaquete() {
     }
   };
 
-  /* ===== Acciones masivas ===== */
-  // IDs seleccionados que están pendientes (no entregados)
-  const selectedPendingIds = useMemo(() => {
-    const set = new Set(selectedIds);
-    return paquetes.filter(p => set.has(p.id) && !p.entregado).map(p => p.id);
-  }, [selectedIds, paquetes]);
-
-  const entregarSeleccionados = async () => {
-    const ids = selectedPendingIds;
-    if (ids.length === 0) {
-      showToast("No hay seleccionados pendientes por entregar", "info");
-      return;
-    }
-
-    const snapshot = paquetes;
-    const idsSet = new Set(ids);
-
-    // Optimista: marcamos como entregados en UI
-    setPaquetes(prev => prev.map(p => idsSet.has(p.id) ? { ...p, entregado: true } : p));
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error("Sesión no encontrada");
-
-      const results = await Promise.allSettled(ids.map(id => entregarPaqueteBackend(id, token)));
-
-      const failed = results
-        .map((r, i) => ({ r, id: ids[i] }))
-        .filter(x => x.r.status === "rejected")
-        .map(x => x.id);
-
-      if (failed.length === 0) {
-        showToast(`Entregados ${ids.length} paquete(s)`, "success");
-      } else {
-        // Revertimos únicamente los fallidos
-        const failedSet = new Set(failed);
-        setPaquetes(prev => prev.map(p => failedSet.has(p.id) ? { ...p, entregado: false } : p));
-        showToast(`Entregados ${ids.length - failed.length}. Fallaron ${failed.length}.`, "error");
-      }
-    } catch (e) {
-      // Revertimos todo
-      setPaquetes(snapshot);
-      showToast("No se pudo completar la entrega masiva", "error");
-    }
-  };
-
-  const eliminarSeleccionados = async () => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-    setConfirmBulk(false);
-
-    const snapshot = paquetes;
-    setPaquetes(prev => prev.filter(p => !selectedIds.has(p.id)));
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error("Sesión no encontrada");
-
-      const results = await Promise.allSettled(
-        ids.map(id => eliminarPaqueteBackend(id, token))
-      );
-
-      const rejected = results
-        .map((r, i) => ({ r, id: ids[i] }))
-        .filter(x => x.r.status === "rejected")
-        .map(x => x.id);
-
-      if (rejected.length === 0) {
-        showToast(`Eliminados ${ids.length} paquetes`, "success");
-        clearSelection();
-      } else {
-        const failedSet = new Set(rejected);
-        const failedRows = snapshot.filter(p => failedSet.has(p.id));
-        setPaquetes(prev => [...prev, ...failedRows].sort((a,b)=> new Date(b.fecha_llegada) - new Date(a.fecha_llegada)));
-        const okIds = ids.filter(id => !failedSet.has(id));
-        setSelectedIds(new Set(rejected)); // dejamos seleccionados los que fallaron
-        showToast(`Eliminados ${okIds.length}. Fallaron ${rejected.length}.`, "error");
-      }
-    } catch (e) {
-      setPaquetes(snapshot);
-      showToast("No se pudo completar la eliminación masiva", "error");
-    }
-  };
-
   /* ===== Varios ===== */
   const formatearFecha = (iso) =>
     new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
 
   const limpiarBusqueda = () => { setBusqueda(""); };
 
-  // KPIs (sobre filtros actuales excepto estado)
   const filtradosAllForKpi = useMemo(() => {
     return paquetes
       .filter(p => companiaFiltro === "todos" || p.compania === companiaFiltro)
@@ -558,7 +471,6 @@ export default function BuscarPaquete() {
   };
 
   const onSearchKeyDown = (e) => { if (e.key === "Escape") limpiarBusqueda(); };
-
   const loc = (p) => p.ubicacion_label || "—";
 
   /* ===== Selección: helpers derivados ===== */
@@ -566,6 +478,11 @@ export default function BuscarPaquete() {
   const filtradosIds = filtrados.map(p => p.id);
   const allPageSelected = paginados.length > 0 && paginados.every(p => selectedIds.has(p.id));
   const anySelected = selectedIds.size > 0;
+
+  const selectedPendingIds = useMemo(() => {
+    const set = new Set(selectedIds);
+    return paquetes.filter(p => set.has(p.id) && !p.entregado).map(p => p.id);
+  }, [selectedIds, paquetes]);
   const selectedPendingCount = selectedPendingIds.length;
 
   const toggleSelectAllPage = () => {
@@ -573,6 +490,84 @@ export default function BuscarPaquete() {
       deselectPage(paginadosIds);
     } else {
       selectPage(paginadosIds);
+    }
+  };
+
+  /* ====== Acciones MASIVAS ====== */
+  const entregarSeleccionados = async () => {
+    const ids = selectedPendingIds;
+    if (ids.length === 0) return;
+
+    // Optimista
+    setPaquetes(prev => prev.map(p => ids.includes(p.id) ? { ...p, entregado: true } : p));
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Sesión no encontrada");
+
+      const fails = [];
+      for (const id of ids) {
+        try {
+          await entregarPaqueteBackend(id, token);
+        } catch {
+          fails.push(id);
+        }
+      }
+
+      if (fails.length) {
+        // revertir solo los fallidos
+        setPaquetes(prev => prev.map(p => fails.includes(p.id) ? { ...p, entregado: false } : p));
+        showToast(`Algunos no se pudieron entregar (${fails.length}).`, "error");
+      } else {
+        showToast(`Entregados ${ids.length} paquete(s).`, "success");
+      }
+      // mantenemos selección, o la vaciamos; más cómodo vaciar:
+      clearSelection();
+    } catch (e) {
+      // revertir todo
+      setPaquetes(prev => prev.map(p => ids.includes(p.id) ? { ...p, entregado: false } : p));
+      showToast("Error al entregar seleccionados.", "error");
+    }
+  };
+
+  const eliminarSeleccionados = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    const snapshot = paquetes;
+    // Optimista: quitar ya
+    setPaquetes(prev => prev.filter(p => !ids.includes(p.id)));
+    setConfirmBulk(false);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Sesión no encontrada");
+
+      const fails = [];
+      for (const id of ids) {
+        try {
+          await eliminarPaqueteBackend(id, token);
+        } catch {
+          fails.push(id);
+        }
+      }
+
+      if (fails.length) {
+        // Restaurar los fallidos del snapshot
+        const failedSet = new Set(fails);
+        const restore = snapshot.filter(p => failedSet.has(p.id));
+        setPaquetes(prev => [...prev, ...restore].sort((a,b)=> (new Date(b.fecha_llegada)) - (new Date(a.fecha_llegada))));
+        showToast(`No se pudieron eliminar ${fails.length} paquete(s).`, "error");
+      } else {
+        showToast(`Eliminados ${ids.length} paquete(s).`, "success");
+      }
+      clearSelection();
+    } catch (e) {
+      // Revertir todo si algo gordo falla
+      setPaquetes(snapshot);
+      showToast("Error al eliminar seleccionados.", "error");
     }
   };
 
@@ -681,24 +676,19 @@ export default function BuscarPaquete() {
         </div>
       )}
 
-      {/* Barra de selección (con acciones masivas) */}
+      {/* Barra de selección */}
       {anySelected && (
         <div className="selection-bar" role="region" aria-label="Selección">
           <div className="selection-info">
             <FaCheckSquare /> {selectedIds.size} seleccionados
           </div>
           <div className="selection-actions">
-            {/* Entregar seleccionados (solo pendientes) */}
             <button
               className="btn"
               onClick={entregarSeleccionados}
               disabled={selectedPendingCount === 0}
               title={selectedPendingCount === 0 ? "No hay seleccionados pendientes" : `Entregar ${selectedPendingCount} pendiente(s)`}
-              style={{
-                backgroundColor: "var(--ok)",
-                color: "#fff",
-                border: 0
-              }}
+              style={{ backgroundColor: "var(--ok)", color: "#fff", border: 0 }}
             >
               <FaCheck style={{ marginRight: 6 }} />
               Entregar seleccionados ({selectedPendingCount})
@@ -753,6 +743,7 @@ export default function BuscarPaquete() {
       {!cargando && !error && paginados.length > 0 && (
         <>
           <div className="tabla-wrapper" role="region" aria-label="Resultados">
+            {/* ===== Tabla desktop ===== */}
             <table className="tabla-paquetes">
               <colgroup>
                 <col style={{ width: "44px" }} />
@@ -815,7 +806,10 @@ export default function BuscarPaquete() {
                         <span className="ubi">{loc(p)}</span>
                       </td>
 
-                      <td data-label="Fecha">{formatearFecha(p.fecha_llegada)}</td>
+                      <td data-label="Fecha">
+                        <span className="date-pill">{formatearFecha(p.fecha_llegada)}</span>
+                      </td>
+
                       <td data-label="Estado">
                         <span className={`badge-estado ${p.entregado ? "entregado" : "pendiente"}`}>
                           {p.entregado ? "Entregado" : "Pendiente"}
@@ -832,8 +826,22 @@ export default function BuscarPaquete() {
                           {revealed ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
                         </button>
 
-                        <button className="icono editar" title="Editar" aria-label={`Editar paquete de ${p.nombre_cliente}`} onClick={() => abrirModalEdicion(p)}>
+                        <button
+                          className="icono editar"
+                          title="Editar"
+                          aria-label={`Editar paquete de ${p.nombre_cliente}`}
+                          onClick={() => abrirModalEdicion(p)}
+                        >
                           <FaEdit size={16} />
+                        </button>
+
+                        <button
+                          className="icono eliminar"
+                          title="Eliminar (uno)"
+                          aria-label={`Eliminar paquete de ${p.nombre_cliente}`}
+                          onClick={() => solicitarEliminar(p)}
+                        >
+                          <FaTrashAlt size={16} />
                         </button>
 
                         {!p.entregado && (
@@ -842,15 +850,11 @@ export default function BuscarPaquete() {
                             title="Marcar entregado"
                             aria-label={`Marcar entregado el paquete de ${p.nombre_cliente}`}
                             onClick={() => marcarEntregado(p.id)}
-                            style={{ backgroundColor: "#16a34a", color: "#fff", border: "none", padding: "6px 10px", borderRadius: "8px", fontWeight: 600, cursor: "pointer" }}
                           >
+                            <FaCheck style={{ marginRight: 6 }} />
                             Entregar
                           </button>
                         )}
-
-                        <button className="icono eliminar" title="Eliminar (uno)" aria-label={`Eliminar paquete de ${p.nombre_cliente}`} onClick={() => solicitarEliminar(p)}>
-                          <FaTrashAlt size={16} />
-                        </button>
                       </td>
                     </tr>
                   );
@@ -858,50 +862,15 @@ export default function BuscarPaquete() {
               </tbody>
             </table>
 
-            {/* Acciones bajo tabla para selección por página / filtrados */}
-            <div className="selection-foot">
-              <button className="btn-ghost" onClick={toggleSelectAllPage}>
-                {allPageSelected ? "Quitar selección de esta página" : `Seleccionar los ${paginadosIds.length} de esta página`}
-              </button>
-
-              {selectedIds.size < filtradosIds.length && (
-                <button className="btn-ghost" onClick={() => selectAllFiltered(filtradosIds)}>
-                  Seleccionar todos los {filtradosIds.length} filtrados
-                </button>
-              )}
-
-              {anySelected && (
-                <>
-                  <button
-                    className="btn"
-                    onClick={entregarSeleccionados}
-                    disabled={selectedPendingCount === 0}
-                    title={selectedPendingCount === 0 ? "No hay seleccionados pendientes" : `Entregar ${selectedPendingCount} pendiente(s)`}
-                    style={{
-                      backgroundColor: "var(--ok)",
-                      color: "#fff",
-                      border: 0
-                    }}
-                  >
-                    <FaCheck style={{ marginRight: 6 }} />
-                    Entregar seleccionados ({selectedPendingCount})
-                  </button>
-
-                  <button className="btn btn--danger" onClick={() => setConfirmBulk(true)}>
-                    <FaTrashAlt style={{ marginRight: 6 }} />
-                    Eliminar seleccionados
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Tarjetas móvil */}
+            {/* ===== Cards móvil ===== */}
             <div className="cards-m" aria-label="Resultados (móvil)">
               {paginados.map(p => {
                 const revealed = revealAll || revealedSet.has(p.id);
                 const checked = isSelected(p.id);
+
                 return (
                   <article key={p.id} className={`card ${checked ? "row-selected" : ""}`}>
+                    {/* ---- ARRIBA: seleccionar + ojo + editar + eliminar (en fila) ---- */}
                     <header className="card__head">
                       <button
                         className={`sel-toggle ${checked ? "on" : ""}`}
@@ -911,37 +880,74 @@ export default function BuscarPaquete() {
                       >
                         {checked ? <FaCheckSquare /> : <FaRegSquare />}
                       </button>
-                      <h4 className={`card__title ${revealed ? "" : "blurred"}`}>{p.nombre_cliente}</h4>
+
                       <div className="card__head-actions">
-                        <button className="btn-icon" onClick={() => toggleRevealOne(p.id)} title={revealed ? "Ocultar nombre" : "Mostrar nombre"}>
+                        <button
+                          className="btn-icon"
+                          onClick={() => toggleRevealOne(p.id)}
+                          title={revealed ? "Ocultar nombre" : "Mostrar nombre"}
+                          aria-label={revealed ? `Ocultar nombre de ${p.nombre_cliente}` : `Mostrar nombre de ${p.nombre_cliente}`}
+                        >
                           {revealed ? <FaEyeSlash /> : <FaEye />}
                         </button>
-                        <span className={`badge-estado ${p.entregado ? "entregado" : "pendiente"}`}>
-                          {p.entregado ? "Entregado" : "Pendiente"}
-                        </span>
+
+                        <button
+                          className="btn-ghost sm"
+                          onClick={() => abrirModalEdicion(p)}
+                          title="Editar"
+                          aria-label={`Editar paquete de ${p.nombre_cliente}`}
+                        >
+                          <FaEdit /> <span>Editar</span>
+                        </button>
+
+                        <button
+                          className="btn-ghost sm danger"
+                          onClick={() => solicitarEliminar(p)}
+                          title="Eliminar"
+                          aria-label={`Eliminar paquete de ${p.nombre_cliente}`}
+                        >
+                          <FaTrashAlt /> <span>Eliminar</span>
+                        </button>
                       </div>
                     </header>
+
+                    {/* ---- CONTENIDO ---- */}
+                    <div className="card__row">
+                      <span className="label">Cliente</span>
+                      <span className={`client-chip ${revealed ? "" : "blurred"}`}>
+                        {busqueda ? highlightApprox(p.nombre_cliente, busqueda) : p.nombre_cliente}
+                      </span>
+                    </div>
+
                     <div className="card__row">
                       <span className="label">Compañía</span>
                       {p.compania ? <span className="comp-text">{p.compania}</span> : <span className="muted">—</span>}
                     </div>
+
                     <div className="card__row">
                       <span className="label">Ubicación</span>
                       <span className="ubi">{loc(p)}</span>
                     </div>
+
                     <div className="card__row">
                       <span className="label">Fecha</span>
-                      <span>{formatearFecha(p.fecha_llegada)}</span>
+                      <div className="inline-date-state">
+                        <span className="date-strong">{formatearFecha(p.fecha_llegada)}</span>
+                        <span className={`badge-estado ${p.entregado ? "entregado" : "pendiente"}`}>
+                          {p.entregado ? "Entregado" : "Pendiente"}
+                        </span>
+                      </div>
                     </div>
-                    <footer className="card__actions">
-                      <button className="btn btn--ghost" onClick={() => abrirModalEdicion(p)}><FaEdit /> Editar</button>
-                      {!p.entregado && (
-                        <button className="btn" onClick={() => marcarEntregado(p.id)} style={{ backgroundColor: "#16a34a", color: "#fff", border: "none", padding: "8px 10px", borderRadius: "10px", fontWeight: 600 }}>
+
+                    {/* ---- ABAJO: botón ENTREGAR a ancho completo ---- */}
+                    {!p.entregado && (
+                      <footer className="card__footer">
+                        <button className="btn btn--primary full" onClick={() => marcarEntregado(p.id)}>
+                          <FaCheck style={{ marginRight: 6 }} />
                           Entregar
                         </button>
-                      )}
-                      <button className="btn btn--danger-ghost" onClick={() => solicitarEliminar(p)}><FaTrashAlt /> Eliminar</button>
-                    </footer>
+                      </footer>
+                    )}
                   </article>
                 );
               })}
@@ -1021,7 +1027,7 @@ export default function BuscarPaquete() {
             </p>
             <div className="bp-confirm__actions">
               <button className="btn btn--muted" onClick={() => setConfirmState({ open: false, payload: null })}>Cancelar</button>
-              <button className="btn btn--danger" onClick={confirmarEliminar}>Eliminar</button>
+              <button className="btn btn--danger" onClick={confirmarEliminar}><FaTrashAlt /> Eliminar</button>
             </div>
           </div>
         </div>

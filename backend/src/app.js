@@ -29,6 +29,7 @@ const limitsRoutes = require('./routes/limits.routes');
 const adminRoutes = require('./routes/admin.routes');
 const adminCountersRoutes = require('./routes/admin.counters.routes');
 const adminSupportRoutes = require('./routes/admin.support.routes');
+const importRoutes = require('./routes/import.routes');
 
 /* ===== NUEVAS rutas DEMO/Activación ===== */
 const demoRequestsPublic = require('./routes/public.demo.requests.routes');
@@ -146,6 +147,8 @@ app.use('/api/ubicaciones', ubicacionesRoutes);
 authOnly('/api/area-personal', areaPersonalRoutes);
 authOnly('/:tenantSlug/api/paquetes', paquetesRoutes);
 authOnly('/:tenantSlug/api/area-personal', areaPersonalRoutes);
+authOnly('/api/import', importRoutes);
+authOnly('/:tenantSlug/api/import', importRoutes);
 
 /* =========================================================
    Limits — solo login (sin subscriptionFirewall)  ✅

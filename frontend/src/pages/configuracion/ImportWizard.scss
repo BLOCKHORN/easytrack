@@ -1,0 +1,144 @@
+/* ===========================
+   Import Wizard (scoped)
+   =========================== */
+
+.import-wizard{
+  --iw-bg: var(--nav-panel, #111318);
+  --iw-surface: var(--nav-surface, #14161b);
+  --iw-border: var(--nav-border, rgba(255,255,255,.10));
+  --iw-text: var(--nav-txt, #e5e7eb);
+  --iw-muted: var(--nav-txt-2, #cbd5e1);
+  --iw-accent: var(--acc-2, #34d399);
+  --iw-accent-2: var(--acc-1, #60a5fa);
+
+  background: var(--iw-bg) !important;
+  border: 1px solid var(--iw-border) !important;
+  border-radius: 14px !important;
+  padding: 16px !important;
+  color: var(--iw-text) !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+
+  h3{
+    margin: 0 0 6px 0 !important;
+    font-weight: 650 !important;
+    letter-spacing: .2px;
+    color: var(--iw-text) !important;
+  }
+
+  small{ color: color-mix(in oklab, var(--iw-text) 65%, black) !important; }
+
+  p{ color: var(--iw-muted) !important; }
+
+  textarea{
+    width: 100% !important;
+    background: #0c0d10 !important;
+    color: var(--iw-text) !important;
+    border: 1px solid var(--iw-border) !important;
+    border-radius: 12px !important;
+    padding: 12px 14px !important;
+    line-height: 1.35 !important;
+    outline: none !important;
+    box-shadow: inset 0 0 0 999px transparent;
+    transition: border-color .15s, box-shadow .15s;
+    &:focus{
+      border-color: color-mix(in oklab, var(--iw-accent) 50%, white) !important;
+      box-shadow: 0 0 0 3px rgba(52,211,153,.18);
+    }
+  }
+
+  /* Botones */
+  .btn{
+    cursor: pointer;
+    border-radius: 12px !important;
+    padding: 10px 14px !important;
+    border: 1px solid var(--iw-border) !important;
+    background: var(--iw-surface) !important;
+    color: var(--iw-text) !important;
+    transition: transform .12s, background .12s, border-color .12s, opacity .12s;
+    &:hover{ background: color-mix(in oklab, var(--iw-surface) 70%, white) !important; }
+    &:active{ transform: translateY(1px); }
+    &:disabled{ opacity: .5; cursor: not-allowed; }
+  }
+  .btn--primary{
+    background: var(--iw-accent) !important;
+    color: #0b110e !important;
+    border-color: color-mix(in oklab, var(--iw-accent) 60%, black) !important;
+    font-weight: 700;
+  }
+  .btn--ghost{
+    background: transparent !important;
+  }
+
+  /* Contenedor de tabla con scroll suave y sombras */
+  .iw-table-wrap{
+    max-height: 280px;
+    overflow: auto;
+    border: 1px solid var(--iw-border);
+    border-radius: 12px;
+    background: #0f1116;
+    /* scrollbars */
+    scrollbar-color: rgba(255,255,255,.25) transparent;
+    scrollbar-width: thin;
+    &::-webkit-scrollbar{ height: 8px; width: 8px; }
+    &::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.25); border-radius: 8px; }
+  }
+
+  table{
+    width: 100%;
+    border-collapse: collapse;
+
+    thead tr{
+      position: sticky; top: 0;
+      background: #151922 !important;
+      box-shadow: 0 1px 0 rgba(255,255,255,.06);
+    }
+
+    th, td{
+      padding: 10px 12px !important;
+      color: var(--iw-text) !important;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    tbody tr{
+      background: transparent;
+      transition: background .12s, transform .06s;
+      &:nth-child(odd){ background: rgba(255,255,255,.02); }
+      &:hover{ background: rgba(96,165,250,.08); }
+    }
+
+    /* Confianza como pill */
+    td.iw-conf{
+      font-variant-numeric: tabular-nums;
+      > .pill{
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(52,211,153,.18);
+        border: 1px solid rgba(52,211,153,.35);
+        color: #b8f3dc;
+        font-weight: 600;
+      }
+    }
+  }
+
+  /* Pie de acciones */
+  .iw-actions{
+    display: flex; gap: 12px; margin-top: 12px;
+    .spacer{ flex: 1; }
+  }
+
+  /* Responsivo */
+  @media (max-width: 720px){
+    padding: 12px !important;
+    table th, table td{ padding: 8px 10px !important; }
+    .iw-table-wrap{ max-height: 240px; }
+  }
+}
+
+/* === Overrides contra inline-styles del JSX === */
+.import-wizard table thead tr{ background: #151922 !important; }
+.import-wizard table tbody td,
+.import-wizard table thead th{ color: #e5e7eb !important; }
+.import-wizard .btn.btn--primary{ background: var(--iw-accent) !important; color:#0b110e !important; }

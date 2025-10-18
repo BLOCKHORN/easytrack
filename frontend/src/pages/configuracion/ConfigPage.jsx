@@ -11,6 +11,8 @@ import Ubicaciones from './Ubicaciones';
 import CarriersCard from './CarriersCard';
 import Skeleton from './Skeleton';
 import AccountSettings, { applyEmailDraft, applyPasswordDraft } from './AccountSettings';
+import PinCard from './PinCard'; // <<< PIN
+import ImportWizard from './ImportWizard'; // <<< NUEVO
 
 import ConfigLayout from './ConfigLayout';
 import './ConfigBase.scss';
@@ -99,7 +101,14 @@ export default function ConfigPage() {
     mostrarToast('Cambios revertidos.', 'success');
   };
 
-  /* ---------- LOAD ---------- */
+  /* ---------- Estabilidad de scroll ---------- */
+  useEffect(() => {
+    // Evita que el navegador “recoloque” el scroll en cambios de hash o navegación
+    const prev = window.history.scrollRestoration;
+    try { window.history.scrollRestoration = 'manual'; } catch {}
+    return () => { try { window.history.scrollRestoration = prev || 'auto'; } catch {} };
+  }, []);
+
   const loadUbicacionesForTenant = async (tId) => {
     setUbiLoading(true);
     try {
@@ -123,33 +132,35 @@ export default function ConfigPage() {
     }
   };
 
-  // ==== CAMBIO 1/3: contar (pendientes) U (con ubicacion_label) sin doble conteo ====
+  // ==== Contadores y usos ====
   const loadPackagesCount = async (forTenantId) => {
-    const { count: a, error: e1 } = await supabase
+    const { count: a, error: errA } = await supabase
       .from('packages')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact' })
       .eq('tenant_id', forTenantId)
-      .eq('estado', 'pendiente');
+      .eq('entregado', false);
 
-    const { count: b, error: e2 } = await supabase
+    const { count: b, error: errB } = await supabase
       .from('packages')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact' })
       .eq('tenant_id', forTenantId)
       .not('ubicacion_label', 'is', null);
 
-    const { count: ab, error: e3 } = await supabase
+    const { count: ab, error: errAB } = await supabase
       .from('packages')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact' })
       .eq('tenant_id', forTenantId)
-      .eq('estado', 'pendiente')
+      .eq('entregado', false)
       .not('ubicacion_label', 'is', null);
 
-    if (e1 || e2 || e3) return;
+    if (errA || errB || errAB) {
+      console.warn('[ConfigPage] loadPackagesCount errors:', errA || errB || errAB);
+      return;
+    }
     const unionCount = (a || 0) + (b || 0) - (ab || 0);
     setPackagesCount(unionCount);
   };
 
-  // ==== CAMBIO 2/3: usageByCodigo = paquetes con ubicacion_label (cualquier estado) ====
   const loadUsageByCodigo = async (forTenantId) => {
     const { data, error } = await supabase
       .from('packages')
@@ -162,8 +173,9 @@ export default function ConfigPage() {
       setUsageByCodigo({});
       return;
     }
+
     const map = {};
-    (data || []).forEach(row => {
+    (data || []).forEach((row) => {
       const code = String(row?.ubicacion_label || '').toUpperCase();
       if (!code) return;
       map[code] = (map[code] || 0) + 1;
@@ -171,11 +183,10 @@ export default function ConfigPage() {
     setUsageByCodigo(map);
   };
 
-  // ==== CAMBIO 3/3: modal → solo traer por labels con ubicacion_label ====
   const fetchPackagesByLabels = async (tenantIdArg, labels = []) => {
     const tId = tenantIdArg || tenant?.id;
     if (!tId || !labels.length) return [];
-    const labelSet = labels.map(s => String(s).toUpperCase());
+    const labelSet = labels.map((s) => String(s).toUpperCase());
 
     const { data, error } = await supabase
       .from('packages')
@@ -420,7 +431,6 @@ export default function ConfigPage() {
       setSnapshot(newSnap);
       setDirty(false);
 
-      // Mensaje de éxito específico si hubo paquetes borrados/ubicaciones archivadas
       if (debugResp && (debugResp.packagesDeleted > 0 || debugResp.archived > 0)) {
         const p = debugResp.packagesDeleted || 0;
         const u = debugResp.archived || 0;
@@ -429,7 +439,6 @@ export default function ConfigPage() {
         mostrarToast('Configuración guardada correctamente.', 'success');
       }
 
-      // Refrescar contadores de uso tras guardar
       if (tenant?.id) {
         await Promise.all([loadPackagesCount(tenant.id), loadUsageByCodigo(tenant.id), loadUbicacionesForTenant(tenant.id)]);
       }
@@ -451,7 +460,7 @@ export default function ConfigPage() {
       label: 'Almacén',
       icon: MdTune,
       content: (
-        <section className="config__grid">
+        <section id="warehouse" className="config__grid" data-section>
           <IdentityCard nombre={nombre} setNombre={setNombre} usuario={usuario} />
           {ubiLoading ? (
             <Skeleton />
@@ -469,8 +478,6 @@ export default function ConfigPage() {
                 const nextCols = Math.max(1, Math.min(12, parseInt(meta?.cols ?? ubiMeta.cols, 10) || ubiMeta.cols));
                 const nextOrden = (meta?.order || meta?.orden) === 'vertical' ? 'vertical' : 'horizontal';
                 setUbiMeta({ cols: nextCols, orden: nextOrden });
-
-                // Guardamos la intención de borrado/force
                 pendingDeletionsRef.current = Array.isArray(deletions) ? deletions : [];
                 forceDeleteRef.current = !!forceDeletePackages;
               }}
@@ -480,11 +487,33 @@ export default function ConfigPage() {
       )
     },
     {
+  id: 'import',
+  label: 'Importar inventario',
+  icon: MdTune, // o un icono mejor si lo tienes
+  content: (
+    <section id="import" data-section>
+      <ImportWizard
+        onToast={(m,t) => setToast({ mensaje: m, tipo: t || 'success' })}
+        onDone={() => {
+          // refrescar contadores tras importación
+          if (tenant?.id) {
+            Promise.all([
+              loadPackagesCount(tenant.id),
+              loadUsageByCodigo(tenant.id)
+            ]).catch(()=>{});
+          }
+        }}
+      />
+    </section>
+  )
+},
+
+    {
       id: 'carriers',
       label: 'Empresas de transporte',
       icon: MdLocalShipping,
       content: (
-        <div ref={carriersRef} style={{ display: 'contents' }}>
+        <section id="carriers" data-section ref={carriersRef} style={{ display: 'contents' }}>
           <CarriersCard
             empresas={empresas}
             empresasDisponibles={empresasDisponibles}
@@ -497,7 +526,21 @@ export default function ConfigPage() {
               }
             }}
           />
-        </div>
+        </section>
+      )
+    },
+    // ===== PIN =====
+    {
+      id: 'pin',
+      label: 'PIN de acceso',
+      icon: MdPerson,
+      content: (
+        <section id="pin" data-section>
+          <PinCard
+            tenantId={tenant?.id}
+            onToast={(m,t) => setToast({ mensaje: m, tipo: t || 'success' })}
+          />
+        </section>
       )
     },
     {
@@ -505,10 +548,12 @@ export default function ConfigPage() {
       label: 'Cuenta',
       icon: MdPerson,
       content: (
-        <AccountSettings
-          usuario={usuario}
-          onDraftChange={setAccountDraft}
-        />
+        <section id="account" data-section>
+          <AccountSettings
+            usuario={usuario}
+            onDraftChange={setAccountDraft}
+          />
+        </section>
       )
     }
   ];

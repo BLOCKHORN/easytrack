@@ -1,0 +1,153 @@
+/* ===========================================================
+   PinCard — bloque "PIN de acceso" (tema claro)
+   - Se integra con el look de EasyTrack (cards claras)
+   - Usa variables si existen, con fallbacks
+   =========================================================== */
+
+:root{
+  /* Tokens con fallback claro */
+  --et-surface: var(--et-surface-light, #ffffff);
+  --et-panel:   var(--et-panel-light, #ffffff);
+  --et-border:  var(--et-border-light, rgba(0,0,0,.08));
+  --et-text:    var(--et-text-light, #0f172a);
+  --et-muted:   var(--et-muted-light, #475569);
+  --et-accent:  var(--acc-1, #6366f1);
+  --et-ok:      var(--acc-2, #16a34a);
+  --et-warn:    #b45309;
+  --et-danger:  #dc2626;
+  --et-shadow:  0 8px 24px rgba(15, 23, 42, .06);
+}
+
+.pin-card{
+  background: var(--et-panel);
+  border: 1px solid var(--et-border);
+  border-radius: 16px;
+  padding: clamp(16px, 2vw, 20px);
+  color: var(--et-text);
+  display: grid;
+  gap: 14px;
+  box-shadow: var(--et-shadow);
+  transition: border-color .18s ease, box-shadow .18s ease;
+
+  &:hover{
+    border-color: color-mix(in oklab, var(--et-border) 70%, #64748b 30%);
+    box-shadow: 0 10px 28px rgba(15, 23, 42, .08);
+  }
+
+  &__header{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+
+    .pc-title{
+      display:flex; flex-direction:column; gap:4px;
+      h3{ margin:0; font-size: clamp(16px, 1.6vw, 18px); font-weight: 700; }
+      .subtitle{ color: var(--et-muted); font-size: 13.5px; }
+      .small{ font-size: 12.5px; }
+    }
+
+    .status-badge{
+      align-self:flex-start;
+      font-size: 12px; letter-spacing:.2px;
+      padding: 6px 10px; border-radius: 999px;
+      border: 1px solid var(--et-border);
+      background: #f8fafc;
+      color: var(--et-muted);
+      &--ok{
+        color: var(--et-ok);
+        border-color: color-mix(in oklab, var(--et-ok) 28%, var(--et-border) 72%);
+        background: color-mix(in oklab, #f0fdf4 70%, white 30%);
+      }
+    }
+  }
+
+  &__body{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(12px, 1.6vw, 16px);
+
+    label{
+      display:flex; flex-direction:column; gap:6px;
+      font-size: 14px; color: var(--et-muted);
+
+      input{
+        height: 44px;
+        background: #ffffff;
+        border:1px solid var(--et-border);
+        border-radius: 12px;
+        padding: 10px 12px;
+        color: var(--et-text);
+        outline: none;
+        transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+
+        &::placeholder{ color: color-mix(in oklab, var(--et-muted) 70%, #94a3b8 30%); }
+
+        &:focus{
+          border-color: color-mix(in oklab, var(--et-accent) 36%, var(--et-border) 64%);
+          box-shadow: 0 0 0 3px color-mix(in oklab, var(--et-accent) 20%, transparent 80%);
+          background: #ffffff;
+        }
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 900px){
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__footer{
+    display:flex; align-items:center; justify-content:flex-end; gap:10px;
+    margin-top: 2px;
+
+    .pc-btn{
+      --btn-bg: #ffffff;
+      --btn-br: var(--et-border);
+      --btn-tx: var(--et-text);
+
+      display:inline-flex; align-items:center; justify-content:center; gap:10px;
+      height: 42px;
+      padding: 0 14px;
+      border-radius: 12px;
+      border: 1px solid var(--btn-br);
+      background: var(--btn-bg);
+      color: var(--btn-tx);
+      font-weight: 600; cursor: pointer;
+      transition: transform .08s ease, background .18s ease, border-color .18s ease, filter .18s ease;
+
+      &:active{ transform: translateY(1px); }
+      &[disabled]{ opacity:.6; cursor:not-allowed; }
+
+      &--primary{
+        --btn-bg: var(--et-accent);
+        --btn-br: color-mix(in oklab, var(--et-accent) 70%, #1f2937 30%);
+        --btn-tx: white;
+        &:hover{ filter: brightness(1.05); }
+      }
+
+      &--ghost{
+        &:hover{
+          border-color: color-mix(in oklab, var(--et-border) 50%, #64748b 50%);
+          background: #f8fafc;
+        }
+      }
+
+      &--danger{
+        --btn-bg: color-mix(in oklab, var(--et-danger) 12%, #ffffff 88%);
+        --btn-br: color-mix(in oklab, var(--et-danger) 40%, var(--et-border) 60%);
+        &:hover{ filter: brightness(1.02); }
+      }
+    }
+  }
+
+  &__help{
+    margin-top: -4px;
+    color: var(--et-muted);
+    font-size: 12.5px;
+  }
+}
+
+/* Si va dentro de un grid de Config, se adapta */
+.config__grid .pin-card{
+  @media (min-width: 1200px){
+    padding: 18px 18px 16px;
+  }
+}

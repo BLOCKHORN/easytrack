@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import {
-  FaEuroSign, FaChartBar, FaChartLine, FaTruck, FaClock, FaUserTie, FaBuilding,
+  FaEuroSign, FaChartBar, FaChartLine, FaTruck, FaClock, FaBuilding,
   FaArrowUp, FaArrowDown, FaCalendarAlt, FaPercentage, FaPen, FaCheck, FaTimes,
   FaHistory, FaSave
 } from "react-icons/fa";
@@ -21,6 +21,10 @@ import {
   getFinanceSettings, updateFinanceSettings
 } from "../services/areaPersonalService";
 import "../styles/AreaPersonal.scss";
+
+// === NUEVO: Gate de PIN (overlay, sin romper hooks)
+import { ensureTenantResolved } from "../utils/ensureTenant";
+import PinGate from "../components/PinGate";
 
 /* ===== helpers fechas (LOCAL) ===== */
 const isYYYYMMDD = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s);
@@ -42,6 +46,9 @@ const inLastNDays = (dateLike, n) => {
   const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - (n - 1));
   return d >= start && d <= end;
 };
+const endOfMonth = (y, m /* 0..11 */) => new Date(y, m + 1, 0);
+const startOfMonth = (y, m) => new Date(y, m, 1);
+const ymKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 
 const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#a855f7", "#84cc16", "#f97316"];
 
@@ -49,12 +56,25 @@ export default function AreaPersonal() {
   const location = useLocation();
   const apiBase = useMemo(() => buildAreaApiBase(location.pathname), [location.pathname]);
 
+  // === NUEVO: Tenant + control de acceso (no romper hooks)
+  const [tenantId, setTenantId] = useState(null);
+  const [pinOK, setPinOK] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { tenant } = await ensureTenantResolved();
+        setTenantId(tenant?.id || null);
+      } catch { /* noop */ }
+    })();
+  }, []);
+  const canLoad = pinOK; // hasta que no esté OK, no se lanzan cargas
+
   // Tabs
   const [tab, setTab] = useState("actual"); // "actual" | "historico"
 
   // Estado "actual"
   const [resumen, setResumen] = useState(null);
-  const [mensual, setMensual] = useState([]);
+  const [mensualSrv, setMensualSrv] = useState([]); // /mensual del backend (fallback)
   const [porEmpresa, setPorEmpresa] = useState([]);
   const [topClientes, setTopClientes] = useState([]);
   const [ultimasEntregas, setUltimasEntregas] = useState([]);
@@ -64,7 +84,7 @@ export default function AreaPersonal() {
   const [error, setError] = useState(null);
 
   // Objetivo anual (sincronizado servidor)
-  const [goalServer, setGoalServer] = useState(null); // número o null
+  const [goalServer, setGoalServer] = useState(null);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalDraft, setGoalDraft] = useState("");
 
@@ -84,8 +104,9 @@ export default function AreaPersonal() {
     return data;
   };
 
-  /* ---------- Carga "actual" ---------- */
+  /* ---------- Carga "actual" (solo si canLoad) ---------- */
   useEffect(() => {
+    if (!canLoad) return;
     let cancel = false;
     (async () => {
       try {
@@ -107,7 +128,10 @@ export default function AreaPersonal() {
         if (firstErr) throw firstErr;
 
         setResumen(d1?.resumen || null);
-        setMensual(Array.isArray(d2?.mensual) ? d2.mensual : []);
+
+        const mensualList = Array.isArray(d2?.mensual) ? d2.mensual : [];
+        setMensualSrv(mensualList);
+
         setPorEmpresa(Array.isArray(d3?.porEmpresa) ? d3.porEmpresa : []);
         setTopClientes(Array.isArray(d4?.topClientes) ? d4.topClientes : []);
 
@@ -127,10 +151,11 @@ export default function AreaPersonal() {
       }
     })();
     return () => { cancel = true; };
-  }, [apiBase]);
+  }, [apiBase, canLoad]);
 
-  /* ---------- Carga objetivo anual desde servidor ---------- */
+  /* ---------- Carga objetivo anual desde servidor (tras PIN OK) ---------- */
   useEffect(() => {
+    if (!canLoad) return;
     (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -139,12 +164,12 @@ export default function AreaPersonal() {
         const value = Number(settings?.goal_annual_eur || 0);
         setGoalServer(value > 0 ? value : null);
       } catch {
-        /* silencio: usamos heurística si no hay ajuste */
+        /* silencio */
       }
     })();
-  }, [apiBase]);
+  }, [apiBase, canLoad]);
 
-  /* ---------- Carga snapshots ---------- */
+  /* ---------- Carga snapshots (tras PIN OK) ---------- */
   const reloadSnapshots = async () => {
     setLoadingSnap(true);
     try {
@@ -161,22 +186,67 @@ export default function AreaPersonal() {
       setLoadingSnap(false);
     }
   };
-  useEffect(() => { reloadSnapshots(); }, []); // eslint-disable-line
+  useEffect(() => { if (canLoad) reloadSnapshots(); }, [canLoad]); // eslint-disable-line
 
-  /* ---------- Derivados "actual" ---------- */
-  const mensualSorted = useMemo(() => {
-    const parseM = (m) => { const t = Date.parse(String(m).replace(/[/.]/g, "-") + "-01"); return Number.isFinite(t) ? t : 0; };
-    return [...mensual].sort((a, b) => parseM(a.mes) - parseM(b.mes));
-  }, [mensual]);
-
-  const ingresosMesActual = Number(mensualSorted.at(-1)?.total_ingresos || 0);
-  const ingresosMesPrevio = Number(mensualSorted.at(-2)?.total_ingresos || 0);
-  const deltaMoM = ingresosMesPrevio ? ((ingresosMesActual - ingresosMesPrevio) / ingresosMesPrevio) * 100 : 0;
-
+  /* ---------- Derivados base ---------- */
   const diarioSorted = useMemo(
     () => [...diario].sort((a, b) => toLocalDate(a.fecha) - toLocalDate(b.fecha)),
     [diario]
   );
+
+  // Serie mensual por meses naturales RECONSTRUIDA desde el diario:
+  const mensualFromDiario = useMemo(() => {
+    if (!diarioSorted.length) return [];
+    const map = new Map(); // 'YYYY-MM' -> { mes, total_ingresos, total_entregas, end }
+    for (const d of diarioSorted) {
+      const dt = toLocalDate(d.fecha);
+      if (isNaN(dt)) continue;
+      const key = ymKey(dt);
+      const rec = map.get(key) || {
+        mes: key,
+        total_ingresos: 0,
+        total_entregas: 0,
+        end: endOfMonth(dt.getFullYear(), dt.getMonth()),
+      };
+      rec.total_ingresos += Number(d.ingresos || 0);
+      rec.total_entregas += Number(d.entregas || 0);
+      map.set(key, rec);
+    }
+    return Array.from(map.values()).sort((a, b) => a.end - b.end);
+  }, [diarioSorted]);
+
+  // Fallback a lo que mande el backend si no hay /diario
+  const mensualSeries = useMemo(() => {
+    if (mensualFromDiario.length) return mensualFromDiario;
+    const parseM = (m) => { const t = Date.parse(String(m).replace(/[/.]/g, "-") + "-01"); return Number.isFinite(t) ? t : 0; };
+    return [...mensualSrv]
+      .map(m => ({
+        mes: m.mes ?? m.month ?? m.fecha ?? "",
+        total_ingresos: Number(m.total_ingresos ?? m.total ?? 0),
+        total_entregas: Number(m.total_entregas ?? 0),
+        end: (() => {
+          const ts = parseM(m.mes ?? m.month ?? m.fecha ?? "");
+          if (!ts) return new Date(0);
+          const dt = new Date(ts);
+          return endOfMonth(dt.getFullYear(), dt.getMonth());
+        })()
+      }))
+      .sort((a, b) => a.end - b.end);
+  }, [mensualFromDiario, mensualSrv]);
+
+  /* ---------- KPIs basados en meses naturales ---------- */
+  const ingresosMesActual = Number(mensualSeries.at(-1)?.total_ingresos || 0);
+  const ingresosMesPrevio = Number(mensualSeries.at(-2)?.total_ingresos || 0);
+  const deltaMoM = ingresosMesPrevio ? ((ingresosMesActual - ingresosMesPrevio) / ingresosMesPrevio) * 100 : 0;
+
+  // Rango de visualización: 1º → último día del mes en curso
+  const now = new Date();
+  const rangeStartThisMonth = startOfMonth(now.getFullYear(), now.getMonth());
+  const rangeEndThisMonth = endOfMonth(now.getFullYear(), now.getMonth());
+  const rangeStartStr = localYMD(rangeStartThisMonth);
+  const rangeEndStr = localYMD(rangeEndThisMonth);
+
+  // Últimos 30 días (rolling)
   const lastNDays = (n) => diarioSorted.filter(d => inLastNDays(d.fecha, n));
   const sumIngresos = (arr) => arr.reduce((a, c) => a + Number(c.ingresos || 0), 0);
   const sumEntregas = (arr) => arr.reduce((a, c) => a + Number(c.entregas || 0), 0);
@@ -188,10 +258,15 @@ export default function AreaPersonal() {
   const ingresosHoy = useMemo(() => {
     const d = diarioSorted.find(x => localYMD(x.fecha) === todayYMD);
     if (d) return Number(d.ingresos || 0);
-    return ultimasEntregas
-      .filter(p => localYMD(p.fecha_llegada || p.created_at) === todayYMD)
+    // Fallback: últimas ENTREGAS (si falta en diario)
+    return (ultimasEntregas || [])
+      .filter(p => p.entregado && (
+        (p.fecha_entregado && localYMD(p.fecha_entregado) === todayYMD) ||
+        (!p.fecha_entregado && p.fecha_llegada && localYMD(p.fecha_llegada) === todayYMD)
+      ))
       .reduce((a, p) => a + Number(p.ingreso_generado || 0), 0);
   }, [diarioSorted, ultimasEntregas, todayYMD]);
+
   const ingresos7d = useMemo(() => sumIngresos(lastNDays(7)), [diarioSorted]);
 
   const ticketMedioTotal = useMemo(() => {
@@ -199,25 +274,26 @@ export default function AreaPersonal() {
     const totE = Number(resumen?.total_entregas || 0);
     return totE ? (totI / totE) : 0;
   }, [resumen]);
+
   const ticketMedio30d = useMemo(() => {
     const e = entregas30d || 0;
     return e ? (ingresos30d / e) : 0;
   }, [ingresos30d, entregas30d]);
 
-  // objetivo anual (prioriza servidor; si no hay, heurística 110% últimos 12 meses)
+  // objetivo anual
   const objetivoAnual = useMemo(() => {
     if (goalServer && goalServer > 0) return goalServer;
     if (Number(resumen?.objetivo_anual) > 0) return Number(resumen.objetivo_anual);
-    const sum12 = mensualSorted.slice(-12).reduce((a, c) => a + Number(c.total_ingresos || 0), 0);
+    const sum12 = mensualSeries.slice(-12).reduce((a, c) => a + Number(c.total_ingresos || 0), 0);
     return Math.max(0, sum12 * 1.1);
-  }, [goalServer, resumen, mensualSorted]);
+  }, [goalServer, resumen, mensualSeries]);
 
   const facturacionYTD = useMemo(() => {
     const y = new Date().getFullYear();
-    return mensualSorted
+    return mensualSeries
       .filter(m => String(m.mes).slice(0, 4) === String(y))
       .reduce((a, c) => a + Number(c.total_ingresos || 0), 0);
-  }, [mensualSorted]);
+  }, [mensualSeries]);
   const progresoObjetivo = objetivoAnual > 0 ? Math.min(100, Math.round((facturacionYTD / objetivoAnual) * 100)) : 0;
 
   const totalEmpresas = porEmpresa.reduce((a, c) => a + Number(c.total || 0), 0);
@@ -263,7 +339,7 @@ export default function AreaPersonal() {
     return <span className={`delta ${up ? "up" : "down"}`}><Icon /> {Math.abs(value).toFixed(1)}%</span>;
   };
 
-  /* ---------- Derivados "histórico" ---------- */
+  /* ---------- Histórico ---------- */
   const snapshotsSorted = useMemo(
     () => [...snapshots].sort((a, b) => new Date(a.taken_at) - new Date(b.taken_at)),
     [snapshots]
@@ -308,19 +384,19 @@ export default function AreaPersonal() {
     }
   };
 
-  if (loading) return <div className="loading-skeleton">Cargando datos…</div>;
-  if (error) {
-    return (
-      <div id="ap-personal" className="ap">
-        <div className="error-block">
-          <h3>No se pudieron cargar las estadísticas</h3>
-        </div>
-      </div>
-    );
-  }
+  // === UI principal ===
+  const showGate = tenantId && !pinOK;
 
   return (
-    <div id="ap-personal" className="ap">
+    <div id="ap-personal" className="ap" aria-busy={showGate ? 'true' : 'false'}>
+      {showGate && (
+        <PinGate
+          tenantId={tenantId}
+          onGranted={() => setPinOK(true)}
+          onError={() => setPinOK(true)} // si falla verificación no bloqueamos
+        />
+      )}
+
       <h2 className="titulo-area"><FaChartBar /> Área personal · Finanzas</h2>
 
       <div className="ap-tabs">
@@ -328,16 +404,27 @@ export default function AreaPersonal() {
         <button className={tab === "historico" ? "active" : ""} onClick={() => setTab("historico")}><FaHistory /> Histórico</button>
       </div>
 
-      {tab === "actual" ? (
+      {!canLoad ? (
+        <div className="loading-skeleton">Validando PIN…</div>
+      ) : loading ? (
+        <div className="loading-skeleton">Cargando datos…</div>
+      ) : error ? (
+        <div className="error-block">
+          <h3>No se pudieron cargar las estadísticas</h3>
+        </div>
+      ) : (
         <>
           {/* KPIs */}
           <section className="kpi-grid">
+            {/* === TOTAL FACTURADO (MES ACTUAL) === */}
             <article className="kpi">
               <div className="kpi__icon"><FaEuroSign /></div>
               <div className="kpi__meta">
-                <h4>Total facturado</h4>
-                <div className="kpi__value">{formatEUR(resumen?.total_ingresos || 0)}</div>
-                <div className="kpi__sub"><FaClock /> {resumen?.primera_entrega?.slice(0, 10) || "—"} → {resumen?.ultima_entrega?.slice(0, 10) || "—"}</div>
+                <h4>Total facturado (mes)</h4>
+                <div className="kpi__value">{formatEUR(ingresosMesActual)}</div>
+                <div className="kpi__sub">
+                  <FaClock /> {rangeStartStr} → {rangeEndStr}
+                </div>
               </div>
             </article>
 
@@ -409,7 +496,7 @@ export default function AreaPersonal() {
             </div>
             <div className="objetivo__actions">
               {!editingGoal ? (
-                <button className="btn-ghost" onClick={startGoalEdit}><FaPen /> Establecer objetivo</button>
+                <button className="btn-ghost" onClick={() => { setGoalDraft(String(objetivoAnual || "")); setEditingGoal(true); }}><FaPen /> Establecer objetivo</button>
               ) : (
                 <div className="edit-buttons">
                   <button className="btn-primary" onClick={saveGoal}><FaCheck /> Guardar</button>
@@ -424,7 +511,7 @@ export default function AreaPersonal() {
             <div className="chart-card">
               <header>Ingresos y entregas (mensual)</header>
               <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={mensualSorted}>
+                <AreaChart data={mensualSeries}>
                   <defs>
                     <linearGradient id="igr" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#6366f1" stopOpacity={0.6} />
@@ -529,7 +616,9 @@ export default function AreaPersonal() {
           </section>
 
         </>
-      ) : (
+      )}
+
+      {tab === "historico" && canLoad && !loading && !error && (
         <section className="historico">
           <div className="historico__toolbar">
             <div className="filters">

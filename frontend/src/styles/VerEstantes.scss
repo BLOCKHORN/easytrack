@@ -1,6 +1,5 @@
 /* ==========================================================================
-   VerEstantes.scss — Responsive real (sin cortes), respeta meta.cols en desktop
-   y apila en móvil. Sin scrolls internos. Visores colapsables con max-height.
+   VerEstantes.scss — Simetría total y responsive sin cortes
    ========================================================================== */
 
 .ver-estantes {
@@ -29,17 +28,27 @@
   --control-h:   44px;
   --gap:         12px;
 
+  /* controles de card/acciones (para simetría) */
+  --card-pad:    12px; /* padding base del card */
+  --actions-w:   96px; /* colchón derecho reservado a acciones */
+  --action-btn:  34px; /* tamaño de cada icon-btn */
+
   color: var(--text);
   background: var(--surface);
   padding: clamp(16px, 2vw, 28px);
-  /* evita que la bottom bar de móvil tape contenido */
   padding-bottom: clamp(24px, env(safe-area-inset-bottom) + 72px, 96px);
 
-  /* Fijamos min-width:0 en descendientes para evitar desbordes por grid */
   &,
   *,
   *::before,
   *::after { min-width: 0; box-sizing: border-box; }
+
+  /* Oculta posibles FABs heredados */
+  .fab-delete,
+  .delete-fab,
+  .btn-delete-fixed,
+  .floating-delete,
+  .paquete-delete-fab { display: none !important; }
 
   /* ===== CABECERA ===== */
   .titulo-bar {
@@ -84,11 +93,9 @@
       grid-template-columns: 1fr auto auto auto;
       gap: 12px; align-items: center;
 
-      /* Tablet: agrupamos acciones en 2 columnas */
       @media (max-width: 1024px) {
         grid-template-columns: 1fr auto auto;
       }
-      /* Móvil: una columna en pila limpia */
       @media (max-width: 640px) {
         grid-template-columns: 1fr;
         gap: 10px;
@@ -152,11 +159,9 @@
     background: var(--surface-2); color: var(--muted);
   }
 
-  /* ===== CONTENEDOR ===== */
+  /* ===== GRID ===== */
   .fit-wrapper { width: 100%; overflow: visible; }
 
-  /* ===== GRID =====
-     Desktop respeta meta.cols; tablet reduce a 2; móvil apila 1. */
   .lanes-matrix {
     --cols: 1;
     margin-top: 14px;
@@ -209,7 +214,7 @@
     .lane-head .lane-qty b { font-size: 16px; }
   }
 
-  /* ==== visor colapsable (sin scrolls internos) ==== */
+  /* ==== visor colapsable ==== */
   .lane-visor {
     overflow: hidden;
     padding: 0 14px 12px;
@@ -218,7 +223,7 @@
     transition: max-height .28s ease, opacity .18s ease;
   }
   .lane-cell.open .lane-visor {
-    max-height: 3000px; /* crece; no hay scroll interno */
+    max-height: 3000px;
     opacity: 1;
   }
   @media (max-width: 640px) {
@@ -226,12 +231,32 @@
   }
 
   /* ===== LISTA DE PAQUETES ===== */
-  .lista-paquetes { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
-  .lista-paquetes .paquete { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); padding: 10px 12px; display: grid; gap: 8px; transition: border-color .15s, background .15s, box-shadow .15s; }
-  .lista-paquetes .paquete:hover { border-color: #d5e3ff; background: #fbfdff; box-shadow: 0 10px 24px rgba(13,34,79,.06); }
+  .lista-paquetes {
+    --actions-w: var(--actions-w);
+    margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 10px;
+  }
+
+  .lista-paquetes .paquete {
+    position: relative;                 /* anclaje acciones */
+    overflow: hidden;                   /* respeta radios sin sobresalir */
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    padding: var(--card-pad) calc(var(--actions-w) + var(--card-pad)) var(--card-pad) var(--card-pad);
+    display: grid;
+    gap: 8px;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+  }
+  .lista-paquetes .paquete:hover {
+    border-color: #d5e3ff; background: #fbfdff; box-shadow: 0 10px 24px rgba(13,34,79,.06);
+  }
+
+  @media (max-width: 1024px) {
+    :root & { --actions-w: 88px; --action-btn: 32px; }
+  }
   @media (max-width: 640px) {
+    :root & { --actions-w: 80px; --action-btn: 30px; --card-pad: 10px; }
     .lista-paquetes { gap: 8px; }
-    .lista-paquetes .paquete { padding: 10px; }
   }
 
   .lista-paquetes .cliente { font-weight: 900; color: var(--elev); word-break: break-word; }
@@ -243,8 +268,29 @@
   .pill--carrier { --comp: var(--brand); --comp-rgba: var(--brand-rgba); background: var(--comp-rgba); border-color: color-mix(in srgb, var(--comp) 36%, #fff); color: color-mix(in srgb, var(--comp) 88%, #000); }
   .pill--carrier .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--comp); box-shadow: 0 0 0 2px color-mix(in srgb, var(--comp) 40%, #fff); }
 
-  .row-actions { display: inline-flex; gap: 8px; margin-top: 2px; }
-  .icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--elev); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: background .15s, color .15s, transform .05s, box-shadow .15s, border-color .15s; }
+  /* Acciones — SIEMPRE dentro y con margen simétrico */
+  .row-actions {
+    position: absolute;
+    inset-block-start: 12px;
+    inset-inline-end: 12px;
+    display: inline-flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin: 0;
+    z-index: 1;
+    pointer-events: auto;
+  }
+  .icon-btn {
+    width: var(--action-btn);
+    height: var(--action-btn);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--elev);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background .15s, color .15s, transform .05s, box-shadow .15s, border-color .15s;
+  }
   .icon-btn > svg { width: 18px; height: 18px; color: currentColor !important; fill: currentColor !important; stroke: currentColor !important; pointer-events: none; }
   .icon-btn:hover { background: var(--surface-3); border-color: #d5e3ff; }
   .icon-btn:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--brand-ring); }
