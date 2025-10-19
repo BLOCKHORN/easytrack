@@ -14,6 +14,7 @@
     "@doncicuto/es-provinces": "^1.0.1",
     "@radix-ui/react-select": "^2.2.5",
     "@supabase/supabase-js": "^2.52.1",
+    "@zxing/browser": "^0.1.5",
     "animejs": "^3.2.2",
     "axios": "^1.11.0",
     "country-state-city": "^3.2.1",
@@ -30,7 +31,8 @@
     "react-router-dom": "^7.7.1",
     "react-toastify": "^11.0.5",
     "recharts": "^3.1.0",
-    "spain-cities": "^1.0.6"
+    "spain-cities": "^1.0.6",
+    "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",

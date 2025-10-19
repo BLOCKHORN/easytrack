@@ -5,6 +5,8 @@ import { getTenantIdOrThrow } from '../utils/tenant';
 import { crearPaqueteBackend, obtenerPaquetesBackend } from '../services/paquetesService';
 import { cargarUbicaciones } from '../services/ubicacionesService';
 import { FaBoxOpen, FaLightbulb, FaCheckCircle, FaCube, FaLayerGroup, FaPlus, FaTimes } from 'react-icons/fa';
+import ScanEtiquetaModal from '../components/ScanEtiquetaModal';
+
 import '../styles/AnadirPaquete.scss';
 
 /* ===== utils ===== */
@@ -135,6 +137,9 @@ export default function AnadirPaquete({ modoRapido = false }) {
   const [companias, setCompanias] = useState([]);
   const [compania, setCompania]   = useState('');
   const [cliente, setCliente]     = useState('');
+
+  // Escáner
+  const [isScanOpen, setIsScanOpen] = useState(false);
 
   // Tabs
   const [activeTab, setActiveTab] = useState('single'); // 'single' | 'multi'
@@ -565,9 +570,10 @@ export default function AnadirPaquete({ modoRapido = false }) {
         try {
           const creado = await crearPaqueteBackend(payload, token);
           if (creado?.id) {
-            setPaquetes(prev => prev.map(p =>
-              p.id === temp.id ? { ...p, id: creado.id, balda_id: creado.balda_id ?? p.balda_id } : p
-            ));
+setPaquetes(prev => prev.map(p =>
+  p.id === temp.id ? { ...p, id: creado.id, balda_id: creado.balda_id ?? p.balda_id } : p
+));
+
           }
         } catch (err) {
           console.error('[AñadirPaquete] Error al guardar uno de los múltiples', err);
@@ -580,7 +586,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
       setUltimoGuardado(commonSlot || null);
       setTimeout(() => setExito(false), 1800);
 
-      // Reset nombres (mantiene configuración)
       setMultiNames(Array.from({length: multiCount}, ()=> ''));
     } catch (err) {
       console.error('[AñadirPaquete] Error múltiple', err);
@@ -603,6 +608,18 @@ export default function AnadirPaquete({ modoRapido = false }) {
     if (slot) setSlotSel(slot);
     playChime(220);
   }, [sugCliente, setLeadingName, pickForClient]);
+
+  // ===== Scan handler =====
+  function handleScanResult({ nombre, empresa }) {
+    if (nombre) setLeadingName(nombre);
+    if (empresa) {
+      const N = (s='') => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+      const hit = companias.find(c => N(c) === N(empresa)) ||
+                  companias.find(c => N(empresa).includes(N(c)) || N(c).includes(N(empresa)));
+      setCompania(hit || empresa);
+    }
+    setIsScanOpen(false);
+  }
 
   // ===== Render =====
   return (
@@ -646,6 +663,19 @@ export default function AnadirPaquete({ modoRapido = false }) {
           <section className="panel datos" aria-labelledby="panel-single">
             <h2 id="panel-single">Datos del paquete</h2>
             <p className="hint">Completa el cliente, la empresa y confirma la ubicación.</p>
+
+            {/* Botón de escaneo */}
+            <div className="fila" style={{ alignItems:'flex-end', gap:12 }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setIsScanOpen(true)}
+                title="Abrir cámara para leer etiqueta"
+                style={{ marginBottom: 8 }}
+              >
+                📷 Escanear etiqueta
+              </button>
+            </div>
 
             <div className="fila">
               <div className="campo">
@@ -731,7 +761,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
               <div className="row">
                 <label className="multi-label">¿Cuántos paquetes vas a añadir?</label>
                 <div className="multi-controls">
-                  {/* === NUEVO: selector 1..20 en lugar del input numérico === */}
                   <select
                     className="multi-select"
                     value={multiCount}
@@ -772,7 +801,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
               </div>
             </div>
 
-            {/* === Chips de Sugerencia / Seleccionado también en MULTI === */}
             <div className="bloque-central" style={{ marginTop: 10 }}>
               <div className="chips xl">
                 <span className={`chip chip--hint square ${suggestionPulse ? 'pulse-constant glow-strong' : ''}`}>
@@ -789,7 +817,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
               </div>
             </div>
 
-            {/* === Grid de nombres (con sugerencias para el PRIMERO) === */}
             <div className="multi-grid">
               {Array.from({length: multiCount}).map((_,i)=>(
                 <div key={i} className="multi-item">
@@ -814,7 +841,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
                     aria-describedby={i===0 ? "multi-0-hint multi-0-suggestion" : undefined}
                   />
 
-                  {/* Sugerencia fuzzy SOLO bajo el PRIMER input */}
                   {i===0 && sugCliente && toUpperVis(leadingName) !== toUpperVis(sugCliente.name) && (
                     <div id="multi-0-suggestion" className="sugerencia-cliente" style={{ marginTop: 6 }}>
                       <button
@@ -828,7 +854,6 @@ export default function AnadirPaquete({ modoRapido = false }) {
                     </div>
                   )}
 
-                  {/* Hint → proponer misma balda */}
                   {i===0 && matchInfo?.label && (
                     <em id="multi-0-hint" className="match-hint" style={{ marginTop: 4 }}>
                       Hay otro paquete pendiente de este cliente en <strong className="pulse-constant glow-strong">{matchInfo.label}</strong>. 
@@ -950,6 +975,14 @@ export default function AnadirPaquete({ modoRapido = false }) {
           </div>
         </div>
       )}
+
+      {/* Modal Escáner */}
+      <ScanEtiquetaModal
+        open={isScanOpen}
+        onClose={() => setIsScanOpen(false)}
+        onResult={handleScanResult}
+        tenantCompanies={companias}
+      />
     </div>
   );
 }
