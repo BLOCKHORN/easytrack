@@ -199,37 +199,36 @@ function preprocessToOffscreen(srcCanvas, { strong=false } = {}) {
 }
 
 /* =========================================
-   Carga por <script> global (CDN) — robusto a bundlers
+   Carga LOCAL por <script> (sin salir a Internet)
 ========================================= */
-function ensureTesseractScript(timeoutMs = 10000) {
+function ensureLocalTesseract(timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     if (window.Tesseract && window.Tesseract.createWorker) return resolve(window.Tesseract);
-    const existing = document.querySelector('script[data-tess="1"]');
+    const existing = document.querySelector('script[data-tess-local="1"]');
     if (existing) {
       const t0 = performance.now();
       const check = () => {
         if (window.Tesseract && window.Tesseract.createWorker) resolve(window.Tesseract);
-        else if (performance.now() - t0 > timeoutMs) reject(new Error('Timeout cargando Tesseract'));
+        else if (performance.now() - t0 > timeoutMs) reject(new Error('Timeout cargando Tesseract local'));
         else setTimeout(check, 120);
       };
       return check();
     }
     const s = document.createElement('script');
-    s.src = 'https://unpkg.com/tesseract.js@5.0.4/dist/tesseract.min.js';
+    s.src = '/tesseract/tesseract.min.js'; // ← LOCAL
     s.async = true;
     s.defer = true;
-    s.setAttribute('data-tess','1');
+    s.setAttribute('data-tess-local','1');
     s.onload = () => {
       if (window.Tesseract && window.Tesseract.createWorker) resolve(window.Tesseract);
-      else reject(new Error('Tesseract global no disponible tras onload'));
+      else reject(new Error('Tesseract local no disponible tras onload'));
     };
-    s.onerror = () => reject(new Error('Fallo cargando script Tesseract'));
+    s.onerror = () => reject(new Error('Fallo cargando script Tesseract local'));
     document.head.appendChild(s);
 
-    // Fallback por timeout
     setTimeout(() => {
       if (!(window.Tesseract && window.Tesseract.createWorker)) {
-        reject(new Error('Timeout cargando Tesseract'));
+        reject(new Error('Timeout cargando Tesseract local'));
       }
     }, timeoutMs + 500);
   });
@@ -263,7 +262,7 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
       setErrorMsg('');
       try {
         await startCam();
-        await loadOCR();
+        await loadOCRLocal();
         loop();
       } catch(e){
         console.error(e);
@@ -275,17 +274,16 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  /* ---------- OCR: worker global (sin import dinámico) ---------- */
-  async function loadOCR() {
+  /* ---------- OCR: worker local ---------- */
+  async function loadOCRLocal() {
     if (workerRef.current) { setOcrReady(true); return; }
-    const T = await ensureTesseractScript(10000); // espera al global
-    const CDN = 'https://unpkg.com/tesseract.js@5.0.4/dist';
-    const LANGS = 'https://tessdata.projectnaptha.com/4.0.0_fast';
+    const T = await ensureLocalTesseract(10000); // global local
 
     const worker = await T.createWorker({
-      workerPath: `${CDN}/worker.min.js`,
-      corePath  : `${CDN}/tesseract-core.wasm.js`,
-      langPath  : LANGS,
+      // TODO: todos locales:
+      workerPath: '/tesseract/worker.min.js',
+      corePath  : '/tesseract/tesseract-core.wasm.js',
+      langPath  : '/tesseract/lang', // carpeta local con *.traineddata.gz
       logger    : null,
     });
 
@@ -331,7 +329,6 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
     const ctx = c.getContext('2d', { willReadFrequently:true });
     ctx.drawImage(v, 0, 0, c.width, c.height);
 
-    // OCR cada ~1100 ms
     const now = performance.now();
     if (!ocrReady || now - lastOcrTsRef.current < 1100) return;
     lastOcrTsRef.current = now;
@@ -458,7 +455,7 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
           <div className="fields">
             {status==='error' && !!errorMsg && (
               <div className="errorbox">
-                {errorMsg}. Comprueba conexión y CSP (permite unpkg.com y projectnaptha.com).
+                {errorMsg}. Asegúrate de haber ejecutado <code>npm run prepare:tess</code> y que los ficheros existen en <code>/public/tesseract</code>.
               </div>
             )}
 
