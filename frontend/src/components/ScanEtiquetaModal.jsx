@@ -9,7 +9,6 @@ const norm = (s='') =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 
 function buildCompanyMatcher(tenantCompanies = []) {
-  // Variantes comunes; puedes extender si lo necesitáis
   const COMMON = {
     'correos': ['correos'],
     'correos express': ['correos express','correosexpress','correos-express','correos_express','cte','cte express'],
@@ -57,7 +56,7 @@ function buildCompanyMatcher(tenantCompanies = []) {
     map.set(k, o);
     const variants = COMMON[k] || COMMON[o.toLowerCase()] || [];
     for (const v of variants) map.set(norm(v), o);
-    map.set(k.replace(/\s+/g,''), o); // versión sin espacios
+    map.set(k.replace(/\s+/g,''), o);
   }
 
   return (text='') => {
@@ -108,7 +107,6 @@ function guessNameFromOCR(text='') {
    Preprocesado (ROI + filtro + Otsu + morfología)
 ========================================= */
 function getAimRoiRect(w, h) {
-  // Debe coincidir con el borde visual (.aim { inset:12% 18% })
   const top = Math.round(h * 0.12);
   const bottom = Math.round(h * 0.12);
   const left = Math.round(w * 0.18);
@@ -138,7 +136,7 @@ function preprocessToOffscreen(srcCanvas, { strong=false } = {}) {
   const { width: W, height: H } = srcCanvas;
   if (!W || !H) return null;
   const roi = getAimRoiRect(W, H);
-  const scale = strong ? 2.2 : 1.8; // zoom un poco mayor en “strong”
+  const scale = strong ? 2.2 : 1.8;
   const ow = Math.max(1, Math.round(roi.w * scale));
   const oh = Math.max(1, Math.round(roi.h * scale));
 
@@ -154,7 +152,7 @@ function preprocessToOffscreen(srcCanvas, { strong=false } = {}) {
   const d = img.data;
   const idx = (x,y)=> (y*ow + x)*4;
 
-  // 1) Filtro mediana 3x3
+  // 1) Mediana 3x3
   const copy = new Uint8ClampedArray(d);
   for (let y=1;y<oh-1;y++){
     for (let x=1;x<ow-1;x++){
@@ -180,7 +178,7 @@ function preprocessToOffscreen(srcCanvas, { strong=false } = {}) {
     d[i]=d[i+1]=d[i+2]=v;
   }
 
-  // 3) Morfología suave (dilatación 1 iter) para boli fino
+  // 3) Dilatación 1 iter
   const src = new Uint8ClampedArray(d);
   for (let y=1;y<oh-1;y++){
     for (let x=1;x<ow-1;x++){
@@ -201,6 +199,43 @@ function preprocessToOffscreen(srcCanvas, { strong=false } = {}) {
 }
 
 /* =========================================
+   Carga por <script> global (CDN) — robusto a bundlers
+========================================= */
+function ensureTesseractScript(timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    if (window.Tesseract && window.Tesseract.createWorker) return resolve(window.Tesseract);
+    const existing = document.querySelector('script[data-tess="1"]');
+    if (existing) {
+      const t0 = performance.now();
+      const check = () => {
+        if (window.Tesseract && window.Tesseract.createWorker) resolve(window.Tesseract);
+        else if (performance.now() - t0 > timeoutMs) reject(new Error('Timeout cargando Tesseract'));
+        else setTimeout(check, 120);
+      };
+      return check();
+    }
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/tesseract.js@5.0.4/dist/tesseract.min.js';
+    s.async = true;
+    s.defer = true;
+    s.setAttribute('data-tess','1');
+    s.onload = () => {
+      if (window.Tesseract && window.Tesseract.createWorker) resolve(window.Tesseract);
+      else reject(new Error('Tesseract global no disponible tras onload'));
+    };
+    s.onerror = () => reject(new Error('Fallo cargando script Tesseract'));
+    document.head.appendChild(s);
+
+    // Fallback por timeout
+    setTimeout(() => {
+      if (!(window.Tesseract && window.Tesseract.createWorker)) {
+        reject(new Error('Timeout cargando Tesseract'));
+      }
+    }, timeoutMs + 500);
+  });
+}
+
+/* =========================================
    Componente principal
 ========================================= */
 export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompanies=[] }) {
@@ -209,67 +244,68 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
 
   const [ocrReady, setOcrReady] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('idle'); // idle|scanning|no-text|found
+  const [status, setStatus] = useState('idle'); // idle|scanning|no-text|found|error
   const [rawPreview, setRawPreview] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const lastOcrTsRef = useRef(0);
   const stableRef = useRef({ nombre: '', empresa: '', nombreHits: 0, empresaHits: 0 });
+  const workerRef = useRef(null);
 
   const matcher = useMemo(() => buildCompanyMatcher(tenantCompanies), [tenantCompanies]);
 
   useEffect(() => {
     if (!open) return;
     (async () => {
-      try { await startCam(); await loadOCR(); loop(); } catch(e){ console.error(e); }
+      setErrorMsg('');
+      try {
+        await startCam();
+        await loadOCR();
+        loop();
+      } catch(e){
+        console.error(e);
+        setStatus('error');
+        setErrorMsg(e?.message || 'No se pudo iniciar el OCR');
+      }
     })();
     return () => { stopLoop(); stopCam(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  /* ---------- OCR con rutas CDN y secuencia “ortodoxa” ---------- */
+  /* ---------- OCR: worker global (sin import dinámico) ---------- */
   async function loadOCR() {
+    if (workerRef.current) { setOcrReady(true); return; }
+    const T = await ensureTesseractScript(10000); // espera al global
+    const CDN = 'https://unpkg.com/tesseract.js@5.0.4/dist';
+    const LANGS = 'https://tessdata.projectnaptha.com/4.0.0_fast';
+
+    const worker = await T.createWorker({
+      workerPath: `${CDN}/worker.min.js`,
+      corePath  : `${CDN}/tesseract-core.wasm.js`,
+      langPath  : LANGS,
+      logger    : null,
+    });
+
+    await worker.load();
+    await worker.loadLanguage('spa+eng');
+    await worker.initialize('spa+eng');
     try {
-      if (window.__ET_OCRW) { setOcrReady(true); return; }
-
-      const T = await import('tesseract.js');
-      const { createWorker } = T;
-
-      const CDN = 'https://unpkg.com/tesseract.js@5.0.4/dist';
-      const LANGS = 'https://tessdata.projectnaptha.com/4.0.0_fast';
-
-      const worker = await createWorker({
-        workerPath: `${CDN}/worker.min.js`,
-        corePath  : `${CDN}/tesseract-core.wasm.js`,
-        langPath  : LANGS,
-        logger    : null,
+      await worker.setParameters({
+        preserve_interword_spaces: '1',
+        tessedit_pageseg_mode: '6',
       });
-
-      await worker.load();
-      await worker.loadLanguage('spa+eng');
-      await worker.initialize('spa+eng');
-
-      // Parámetros seguros; si fallan, seguimos
-      try {
-        await worker.setParameters({
-          preserve_interword_spaces: '1',
-          tessedit_pageseg_mode: '6',
-        });
-      } catch {}
-
-      window.__ET_OCRW = worker;
-      setOcrReady(true);
-    } catch (e) {
-      console.warn('OCR no disponible', e);
-    }
+    } catch {}
+    workerRef.current = worker;
+    setOcrReady(true);
   }
 
   /* ---------- Cámara ---------- */
   async function startCam() {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' }, audio: false
+      video: { facingMode: { ideal: 'environment' } }, audio: false
     });
     const v = videoRef.current;
     if (v) { v.srcObject = stream; await v.play(); }
@@ -295,9 +331,9 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
     const ctx = c.getContext('2d', { willReadFrequently:true });
     ctx.drawImage(v, 0, 0, c.width, c.height);
 
-    // OCR cada ~900 ms
+    // OCR cada ~1100 ms
     const now = performance.now();
-    if (!ocrReady || now - lastOcrTsRef.current < 900) return;
+    if (!ocrReady || now - lastOcrTsRef.current < 1100) return;
     lastOcrTsRef.current = now;
 
     setStatus('scanning');
@@ -319,12 +355,11 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
 
     for (let i=0;i<3;i++){
       ctx.drawImage(v, 0, 0, c.width, c.height);
-      const res = await doOCR(c, { strong: i!==0, updateStatus:false }); // dos variantes de preproc
+      const res = await doOCR(c, { strong: i!==0, updateStatus:false });
       if (res) results.push(res);
-      await new Promise(r=>setTimeout(r, 120));
+      await new Promise(r=>setTimeout(r, 140));
     }
 
-    // voto mayoritario
     const vote = (arr) => {
       const cnt = new Map();
       for (const s of arr) if (s) cnt.set(s, (cnt.get(s)||0)+1);
@@ -344,16 +379,17 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
     setBusy(false);
   }
 
-  /* ---------- OCR core (usa ImageData → evita k.map crash) ---------- */
+  /* ---------- OCR core (usa ImageData) ---------- */
   async function doOCR(srcCanvas, { strong=false, updateStatus=false } = {}) {
     try {
       const pre = preprocessToOffscreen(srcCanvas, { strong }) || srcCanvas;
-      const worker = window.__ET_OCRW;
+      const w = workerRef.current;
+      if (!w) throw new Error('Worker OCR no inicializado');
 
       const pctx = pre.getContext('2d', { willReadFrequently:true });
       const idata = pctx.getImageData(0, 0, pre.width, pre.height);
 
-      const { data } = await worker.recognize(idata);
+      const { data } = await w.recognize(idata);
       const text = (data?.text || '').trim();
       if (text) setRawPreview(text);
 
@@ -370,13 +406,14 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
         nombre: guessNameFromOCR(text || ''),
         empresa: matcher(text || '')
       };
-    } catch {
+    } catch (e) {
+      console.warn('OCR frame fallido', e);
       if (updateStatus) setStatus('no-text');
       return null;
     }
   }
 
-  /* ---------- Acumuladores (estabilidad temporal) ---------- */
+  /* ---------- Acumuladores ---------- */
   function accumulateName(nom) {
     const S = stableRef.current;
     if (nom === S.nombre) S.nombreHits++; else { S.nombre = nom; S.nombreHits = 1; }
@@ -391,7 +428,6 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
   /* ---------- Cierre y confirmación ---------- */
   function handleClose(){ stopLoop(); stopCam(); onClose?.(); }
   function handleConfirm(){
-    // ✅ permite confirmar aunque no se haya detectado nada (el padre decide)
     setBusy(true);
     try { onResult?.({ nombre, empresa: empresa || '' }); handleClose(); }
     finally { setBusy(false); }
@@ -415,10 +451,17 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
               {status==='found' && 'Detectado ✔️'}
               {status==='no-text' && 'No se encontró texto'}
               {status==='idle' && (ocrReady ? 'Listo' : 'Cargando OCR…')}
+              {status==='error' && 'Error OCR'}
             </div>
           </div>
 
           <div className="fields">
+            {status==='error' && !!errorMsg && (
+              <div className="errorbox">
+                {errorMsg}. Comprueba conexión y CSP (permite unpkg.com y projectnaptha.com).
+              </div>
+            )}
+
             <label className="lbl">Empresa detectada</label>
             <input className="input" value={empresa} onChange={e=>setEmpresa(e.target.value)} placeholder="—" />
 
