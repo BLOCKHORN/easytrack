@@ -1,10 +1,10 @@
 // src/components/ScanEtiquetaModal.jsx
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BrowserMultiFormatReader } from '@zxing/browser';
+import { DecodeHintType, BarcodeFormat } from '@zxing/library';
 import '../styles/ScanEtiquetaModal.scss';
 
-/* =========================================
-   Helpers de normalización y heurísticas
-========================================= */
+/* ================== Helpers de parsing ================== */
 const norm = (s='') =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 
@@ -62,16 +62,30 @@ function buildCompanyMatcher(tenantCompanies = []) {
   return (text='') => {
     const T = norm(text);
     if (!T) return '';
-    for (const [k, val] of map.entries()) {
-      if (k && T.includes(k)) return val;
-    }
+    for (const [k, val] of map.entries()) if (k && T.includes(k)) return val;
     return '';
   };
 }
 
+function tryParseKV(raw='') {
+  // Acepta JSON, pares "clave: valor", y "key=value"
+  const t = raw.trim();
+  try {
+    const obj = JSON.parse(t);
+    if (obj && typeof obj === 'object') return obj;
+  } catch {}
+  const out = {};
+  const lines = t.split(/[\r\n;]+/).map(s=>s.trim()).filter(Boolean);
+  for (const ln of lines) {
+    const m = ln.match(/^\s*([A-Za-z_][\w \-\.]*)\s*[:=]\s*(.+?)\s*$/);
+    if (m) out[m[1].toLowerCase().trim()] = m[2].trim();
+  }
+  return out;
+}
+
 function isLikelyAddressOrCode(l='') {
-  return /\b(c\/|calle|avda|avenida|plaza|piso|puerta|cp|c\.p\.|nº|num\.?|cod.*postal|espa[ñn]a|spain|provincia|localidad)\b/i.test(l)
-    || /(\d{3,}[-\s]?\d{3,}|\bES\d{3,}|\b\d{5}\b)/i.test(l)
+  return /\b(c\/|calle|avda|avenida|plaza|piso|puerta|cp|c\.p\.|nº|num\.?|cod.*postal|espa[ñn]a|spain|provincia|localidad|via|street|st\.?)\b/i.test(l)
+    || /(\b\d{5}\b|\bES\d{3,}\b|[A-Z]{2}\d{6,})/.test(l)
     || /^[\W_]+$/.test(l);
 }
 
@@ -90,352 +104,164 @@ function scoreHumanName(line='') {
   return score;
 }
 
-function guessNameFromOCR(text='') {
-  const lines = String(text).split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-  if (!lines.length) return '';
-  for (let i=0;i<lines.length;i++){
-    if (/^(destinatario|attn|para|cliente)\b[:\- ]?/i.test(lines[i])) {
-      const next = lines[i+1]?.trim();
-      if (next && !isLikelyAddressOrCode(next) && next.length >= 3) return next.toUpperCase();
+function extractFieldsFromPayload(text, matchCompany) {
+  // 1) K/V directo
+  const kv = tryParseKV(text);
+  let nombre = '';
+  let empresa = '';
+
+  const keysNombre = ['nombre','cliente','destinatario','name','receiver','to','attn'];
+  for (const k of keysNombre) {
+    if (kv[k]) { nombre = String(kv[k]).toUpperCase(); break; }
+  }
+  const keysEmpresa = ['empresa','carrier','company','courier','transportista'];
+  for (const k of keysEmpresa) {
+    if (kv[k]) { empresa = String(kv[k]); break; }
+  }
+
+  // 2) Heurísticas por líneas
+  if (!nombre || !empresa) {
+    const lines = String(text).split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    if (!empresa) empresa = matchCompany(text) || '';
+    if (!nombre) {
+      const best = lines.map(l => ({ l, s: scoreHumanName(l) })).sort((a,b)=> b.s - a.s)[0];
+      if (best?.s>0) nombre = best.l.toUpperCase();
     }
   }
-  const best = lines.map(l => ({ l, s: scoreHumanName(l) })).sort((a,b)=> b.s - a.s)[0];
-  return (best?.s>0 ? best.l : '').toUpperCase();
-}
 
-/* =========================================
-   Preprocesado (ROI + filtro + Otsu + morfología)
-========================================= */
-function getAimRoiRect(w, h) {
-  const top = Math.round(h * 0.12);
-  const bottom = Math.round(h * 0.12);
-  const left = Math.round(w * 0.18);
-  const right = Math.round(w * 0.18);
-  return { x: left, y: top, w: w - left - right, h: h - top - bottom };
-}
-
-function otsuThreshold(gray) {
-  const hist = new Array(256).fill(0);
-  for (let i=0;i<gray.length;i+=4) hist[gray[i]]++;
-  const total = gray.length/4;
-  let sum=0; for (let t=0;t<256;t++) sum += t * hist[t];
-  let sumB=0, wB=0, wF=0, varMax=0, threshold=127;
-  for (let t=0;t<256;t++){
-    wB += hist[t]; if (wB===0) continue;
-    wF = total - wB; if (wF===0) break;
-    sumB += t * hist[t];
-    const mB = sumB / wB;
-    const mF = (sum - sumB) / wF;
-    const between = wB * wF * (mB - mF) * (mB - mF);
-    if (between > varMax) { varMax = between; threshold = t; }
-  }
-  return threshold;
-}
-
-function preprocessToOffscreen(srcCanvas, { strong=false } = {}) {
-  const { width: W, height: H } = srcCanvas;
-  if (!W || !H) return null;
-  const roi = getAimRoiRect(W, H);
-  const scale = strong ? 2.2 : 1.8;
-  const ow = Math.max(1, Math.round(roi.w * scale));
-  const oh = Math.max(1, Math.round(roi.h * scale));
-
-  const off = document.createElement('canvas');
-  off.width = ow; off.height = oh;
-
-  const sctx = srcCanvas.getContext('2d');
-  const octx = off.getContext('2d', { willReadFrequently:true });
-  octx.imageSmoothingEnabled = true;
-  octx.drawImage(srcCanvas, roi.x, roi.y, roi.w, roi.h, 0, 0, ow, oh);
-
-  let img = octx.getImageData(0,0,ow,oh);
-  const d = img.data;
-  const idx = (x,y)=> (y*ow + x)*4;
-
-  // 1) Mediana 3x3
-  const copy = new Uint8ClampedArray(d);
-  for (let y=1;y<oh-1;y++){
-    for (let x=1;x<ow-1;x++){
-      const arr=[];
-      for (let j=-1;j<=1;j++){
-        for (let i=-1;i<=1;i++){
-          const k = idx(x+i,y+j);
-          const g = copy[k]*0.299 + copy[k+1]*0.587 + copy[k+2]*0.114;
-          arr.push(g);
-        }
+  // 3) Extra por separadores (pipes, comas)
+  if ((!nombre || !empresa) && (/\|/.test(text) || /,/.test(text))) {
+    const parts = text.split(/[|,]+/).map(s=>s.trim()).filter(Boolean);
+    if (!empresa) {
+      for (const p of parts) {
+        const hit = matchCompany(p);
+        if (hit) { empresa = hit; break; }
       }
-      arr.sort((a,b)=>a-b);
-      const m = arr[4];
-      const k2 = idx(x,y);
-      d[k2]=d[k2+1]=d[k2+2]=m;
+    }
+    if (!nombre) {
+      const best = parts.map(l => ({ l, s: scoreHumanName(l) })).sort((a,b)=> b.s - a.s)[0];
+      if (best?.s>0) nombre = best.l.toUpperCase();
     }
   }
 
-  // 2) Otsu
-  const thr = otsuThreshold(d);
-  for (let i=0;i<d.length;i+=4){
-    const v = d[i] > thr ? 255 : 0;
-    d[i]=d[i+1]=d[i+2]=v;
-  }
-
-  // 3) Dilatación 1 iter
-  const src = new Uint8ClampedArray(d);
-  for (let y=1;y<oh-1;y++){
-    for (let x=1;x<ow-1;x++){
-      let maxN=0;
-      for (let j=-1;j<=1;j++){
-        for (let i=-1;i<=1;i++){
-          const k = idx(x+i,y+j);
-          maxN = Math.max(maxN, src[k]);
-        }
-      }
-      const k2 = idx(x,y);
-      d[k2]=d[k2+1]=d[k2+2]=maxN;
-    }
-  }
-
-  octx.putImageData(img,0,0);
-  return off;
+  return { nombre: (nombre||'').toUpperCase(), empresa };
 }
 
-/* =========================================
-   Carga LOCAL por <script> (sin salir a Internet)
-========================================= */
-function ensureLocalTesseract(timeoutMs = 10000) {
-  return new Promise((resolve, reject) => {
-    if (window.Tesseract && window.Tesseract.createWorker) return resolve(window.Tesseract);
-    const existing = document.querySelector('script[data-tess-local="1"]');
-    if (existing) {
-      const t0 = performance.now();
-      const check = () => {
-        if (window.Tesseract && window.Tesseract.createWorker) resolve(window.Tesseract);
-        else if (performance.now() - t0 > timeoutMs) reject(new Error('Timeout cargando Tesseract local'));
-        else setTimeout(check, 120);
-      };
-      return check();
-    }
-    const s = document.createElement('script');
-    s.src = '/tesseract/tesseract.min.js'; // ← LOCAL
-    s.async = true;
-    s.defer = true;
-    s.setAttribute('data-tess-local','1');
-    s.onload = () => {
-      if (window.Tesseract && window.Tesseract.createWorker) resolve(window.Tesseract);
-      else reject(new Error('Tesseract local no disponible tras onload'));
-    };
-    s.onerror = () => reject(new Error('Fallo cargando script Tesseract local'));
-    document.head.appendChild(s);
-
-    setTimeout(() => {
-      if (!(window.Tesseract && window.Tesseract.createWorker)) {
-        reject(new Error('Timeout cargando Tesseract local'));
-      }
-    }, timeoutMs + 500);
-  });
-}
-
-/* =========================================
-   Componente principal
-========================================= */
+/* ================== Componente ================== */
 export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompanies=[] }) {
   const [empresa, setEmpresa] = useState('');
   const [nombre, setNombre]   = useState('');
 
-  const [ocrReady, setOcrReady] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('idle'); // idle|scanning|no-text|found|error
-  const [rawPreview, setRawPreview] = useState('');
+  const [status, setStatus] = useState('idle'); // idle|scanning|found|no-text|error
   const [errorMsg, setErrorMsg] = useState('');
+  const [rawPreview, setRawPreview] = useState('');
 
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const rafRef = useRef(null);
-  const lastOcrTsRef = useRef(0);
-  const stableRef = useRef({ nombre: '', empresa: '', nombreHits: 0, empresaHits: 0 });
-  const workerRef = useRef(null);
+  const readerRef = useRef(null);
+  const stopFnRef = useRef(null);
+  const lastTextRef = useRef('');
 
-  const matcher = useMemo(() => buildCompanyMatcher(tenantCompanies), [tenantCompanies]);
+  const matchCompany = useMemo(() => buildCompanyMatcher(tenantCompanies), [tenantCompanies]);
 
   useEffect(() => {
     if (!open) return;
     (async () => {
       setErrorMsg('');
+      setStatus('idle');
       try {
-        await startCam();
-        await loadOCRLocal();
-        loop();
-      } catch(e){
-        console.error(e);
+        await startScan();
+      } catch (e) {
+        console.error('[ZXing] start error', e);
         setStatus('error');
-        setErrorMsg(e?.message || 'No se pudo iniciar el OCR');
+        setErrorMsg(e?.message || 'No se pudo iniciar la cámara');
       }
     })();
-    return () => { stopLoop(); stopCam(); };
+    return () => stopScan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  /* ---------- OCR: worker local ---------- */
-  async function loadOCRLocal() {
-    if (workerRef.current) { setOcrReady(true); return; }
-    const T = await ensureLocalTesseract(10000); // global local
+  async function startScan() {
+    const hints = new Map();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.QR_CODE,
+      BarcodeFormat.DATA_MATRIX,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.PDF_417,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.ITF
+    ]);
 
-    const worker = await T.createWorker({
-      // TODO: todos locales:
-      workerPath: '/tesseract/worker.min.js',
-      corePath  : '/tesseract/tesseract-core.wasm.js',
-      langPath  : '/tesseract/lang', // carpeta local con *.traineddata.gz
-      logger    : null,
-    });
+    const reader = new BrowserMultiFormatReader(hints);
+    readerRef.current = reader;
 
-    await worker.load();
-    await worker.loadLanguage('spa+eng');
-    await worker.initialize('spa+eng');
-    try {
-      await worker.setParameters({
-        preserve_interword_spaces: '1',
-        tessedit_pageseg_mode: '6',
-      });
-    } catch {}
-    workerRef.current = worker;
-    setOcrReady(true);
-  }
-
-  /* ---------- Cámara ---------- */
-  async function startCam() {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' } }, audio: false
-    });
-    const v = videoRef.current;
-    if (v) { v.srcObject = stream; await v.play(); }
-  }
-  function stopCam() {
-    const v = videoRef.current;
-    if (v && v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
-  }
-
-  /* ---------- Bucle “live” con ritmo suave ---------- */
-  function stopLoop(){ if (rafRef.current) cancelAnimationFrame(rafRef.current); rafRef.current=null; }
-  function loop(){
-    stopLoop();
-    const tick = async () => { await readAndDetectLive(); rafRef.current = requestAnimationFrame(tick); };
-    rafRef.current = requestAnimationFrame(tick);
-  }
-
-  async function readAndDetectLive() {
-    const v = videoRef.current, c = canvasRef.current;
-    if (!v || !c || !v.videoWidth) return;
-
-    c.width = v.videoWidth; c.height = v.videoHeight;
-    const ctx = c.getContext('2d', { willReadFrequently:true });
-    ctx.drawImage(v, 0, 0, c.width, c.height);
-
-    const now = performance.now();
-    if (!ocrReady || now - lastOcrTsRef.current < 1100) return;
-    lastOcrTsRef.current = now;
-
-    setStatus('scanning');
-    await doOCR(c, { updateStatus: true });
-  }
-
-  /* ---------- Ráfaga “Capturar” (3 tomas) ---------- */
-  async function doBurstCapture() {
-    if (!ocrReady) return;
-    setBusy(true);
-    setStatus('scanning');
-
-    const v = videoRef.current, c = canvasRef.current;
-    if (!v || !c || !v.videoWidth) { setBusy(false); return; }
-    c.width = v.videoWidth; c.height = v.videoHeight;
-
-    const ctx = c.getContext('2d', { willReadFrequently:true });
-    const results = [];
-
-    for (let i=0;i<3;i++){
-      ctx.drawImage(v, 0, 0, c.width, c.height);
-      const res = await doOCR(c, { strong: i!==0, updateStatus:false });
-      if (res) results.push(res);
-      await new Promise(r=>setTimeout(r, 140));
+    // Elegimos la cámara trasera si está disponible
+    const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+    let deviceId = undefined;
+    if (devices && devices.length) {
+      const back = devices.find((d) => /back|trase|rear|environment/i.test((d.label || '')));
+      deviceId = (back || devices[0]).deviceId;
     }
 
-    const vote = (arr) => {
-      const cnt = new Map();
-      for (const s of arr) if (s) cnt.set(s, (cnt.get(s)||0)+1);
-      let best=''; let bestN=0;
-      for (const [k,v] of cnt.entries()){ if (v>bestN){ best=k; bestN=v; } }
-      return best;
-    };
-    const names = results.map(r => r.nombre).filter(Boolean);
-    const comps = results.map(r => r.empresa).filter(Boolean);
+    setStatus('scanning');
 
-    const n = vote(names) || nombre;
-    const e = vote(comps) || empresa;
+    // decodeFromVideoDevice gestiona stream & callbacks
+    const cleanup = await reader.decodeFromVideoDevice(
+      deviceId || null,
+      videoRef.current,
+      (result, err) => {
+        if (result) {
+          const text = result.getText ? result.getText() : String(result.text || '');
+          if (!text || text === lastTextRef.current) return;
+          lastTextRef.current = text;
+          handleDecodedText(text);
+        } else if (err) {
+          // errores de “no encontrado” son normales durante el escaneo continuo
+        }
+      }
+    );
+
+    // Guardamos la función de parada
+    stopFnRef.current = () => {
+      try { cleanup?.stop(); } catch {}
+      try { reader?.reset(); } catch {}
+    };
+  }
+
+  function stopScan() {
+    try { stopFnRef.current?.(); } catch {}
+    stopFnRef.current = null;
+    try { readerRef.current?.reset(); } catch {}
+    readerRef.current = null;
+  }
+
+  function handleDecodedText(text) {
+    setRawPreview(text);
+    const { nombre: n, empresa: e } = extractFieldsFromPayload(text, matchCompany);
+
     if (n) setNombre(n.toUpperCase());
     if (e) setEmpresa(e);
 
-    setStatus(n || e ? 'found' : 'no-text');
-    setBusy(false);
+    setStatus((n || e) ? 'found' : 'no-text');
   }
 
-  /* ---------- OCR core (usa ImageData) ---------- */
-  async function doOCR(srcCanvas, { strong=false, updateStatus=false } = {}) {
-    try {
-      const pre = preprocessToOffscreen(srcCanvas, { strong }) || srcCanvas;
-      const w = workerRef.current;
-      if (!w) throw new Error('Worker OCR no inicializado');
-
-      const pctx = pre.getContext('2d', { willReadFrequently:true });
-      const idata = pctx.getImageData(0, 0, pre.width, pre.height);
-
-      const { data } = await w.recognize(idata);
-      const text = (data?.text || '').trim();
-      if (text) setRawPreview(text);
-
-      let found = false;
-      if (text) {
-        const nom = guessNameFromOCR(text);
-        const hitC = matcher(text);
-        if (nom && nom.length >= 3) { accumulateName(nom); found = true; }
-        if (hitC) { accumulateCompany(hitC); found = true; }
-      }
-      if (updateStatus) setStatus(found ? 'found' : 'no-text');
-
-      return {
-        nombre: guessNameFromOCR(text || ''),
-        empresa: matcher(text || '')
-      };
-    } catch (e) {
-      console.warn('OCR frame fallido', e);
-      if (updateStatus) setStatus('no-text');
-      return null;
-    }
+  function handleClose() {
+    stopScan();
+    onClose?.();
   }
 
-  /* ---------- Acumuladores ---------- */
-  function accumulateName(nom) {
-    const S = stableRef.current;
-    if (nom === S.nombre) S.nombreHits++; else { S.nombre = nom; S.nombreHits = 1; }
-    if (S.nombreHits >= 2) setNombre(S.nombre.toUpperCase());
-  }
-  function accumulateCompany(emp) {
-    const S = stableRef.current;
-    if (emp === S.empresa) S.empresaHits++; else { S.empresa = emp; S.empresaHits = 1; }
-    if (S.empresaHits >= 2) setEmpresa(S.empresa);
+  function handleConfirm() {
+    const payload = { nombre: (nombre||'').toUpperCase(), empresa: empresa || '' };
+    onResult?.(payload);
+    handleClose();
   }
 
-  /* ---------- Cierre y confirmación ---------- */
-  function handleClose(){ stopLoop(); stopCam(); onClose?.(); }
-  function handleConfirm(){
-    setBusy(true);
-    try { onResult?.({ nombre, empresa: empresa || '' }); handleClose(); }
-    finally { setBusy(false); }
-  }
-
-  if (!open) return null;
-  return (
+  return !open ? null : (
     <div className="scan-modal" role="dialog" aria-modal="true">
       <div className="scan-card">
         <header className="scan-header">
-          <h3>Escanear etiqueta</h3>
+          <h3>Escanear etiqueta (QR / DataMatrix / Cód. barras)</h3>
           <button className="btn btn--ghost" onClick={handleClose} aria-label="Cerrar">✕</button>
         </header>
 
@@ -444,19 +270,17 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
             <video ref={videoRef} playsInline muted />
             <div className="aim" />
             <div className="scan-status">
-              {status==='scanning' && 'Buscando texto…'}
-              {status==='found' && 'Detectado ✔️'}
-              {status==='no-text' && 'No se encontró texto'}
-              {status==='idle' && (ocrReady ? 'Listo' : 'Cargando OCR…')}
-              {status==='error' && 'Error OCR'}
+              {status==='scanning' && 'Escaneando…'}
+              {status==='found' && 'Código leído ✔️'}
+              {status==='no-text' && 'Código leído pero sin datos útiles'}
+              {status==='idle' && 'Listo'}
+              {status==='error' && 'Error de cámara'}
             </div>
           </div>
 
           <div className="fields">
             {status==='error' && !!errorMsg && (
-              <div className="errorbox">
-                {errorMsg}. Asegúrate de haber ejecutado <code>npm run prepare:tess</code> y que los ficheros existen en <code>/public/tesseract</code>.
-              </div>
+              <div className="errorbox">{errorMsg}</div>
             )}
 
             <label className="lbl">Empresa detectada</label>
@@ -466,15 +290,15 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
             <input className="input" value={nombre} onChange={e=>setNombre(e.target.value.toUpperCase())} placeholder="—" />
 
             <div className="rawbox">
-              <div className="rawbox-title">Texto detectado (preview)</div>
+              <div className="rawbox-title">Contenido decodificado</div>
               <pre className="raw">{rawPreview || '—'}</pre>
             </div>
 
             <div className="actions-inline">
-              <button className="btn" type="button" onClick={doBurstCapture} disabled={!ocrReady || busy}>
-                {busy ? 'Procesando…' : '📸 Capturar (ráfaga)'}
-              </button>
-              <small className="help">Coloca el texto dentro del recuadro. Capturar hace 3 tomas y combina resultados.</small>
+              <small className="help">
+                Apunta al QR/DataMatrix o al código de barras de la etiqueta. Si el contenido incluye nombre y empresa,
+                se rellenarán automáticamente. Puedes editar manualmente si hace falta.
+              </small>
             </div>
           </div>
         </div>
@@ -482,13 +306,11 @@ export default function ScanEtiquetaModal({ open, onClose, onResult, tenantCompa
         <footer className="scan-foot">
           <button className="btn btn--ghost" onClick={handleClose}>Cancelar</button>
           <div style={{ flex:1 }} />
-          <button className="btn btn--primary" onClick={handleConfirm} disabled={busy}>
-            {busy ? 'Confirmando…' : 'Usar estos datos'}
+          <button className="btn btn--primary" onClick={handleConfirm}>
+            Usar estos datos
           </button>
         </footer>
       </div>
-
-      <canvas ref={canvasRef} style={{ display:'none' }} />
     </div>
   );
 }

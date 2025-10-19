@@ -7,15 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "prepare:tess": "node scripts/prepare-tesseract-assets.cjs"
-  },
+    "preview": "vite preview"  },
   "dependencies": {
     "@doncicuto/es-municipalities": "^1.0.0",
     "@doncicuto/es-provinces": "^1.0.1",
     "@radix-ui/react-select": "^2.2.5",
     "@supabase/supabase-js": "^2.52.1",
     "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
     "animejs": "^3.2.2",
     "axios": "^1.11.0",
     "country-state-city": "^3.2.1",
