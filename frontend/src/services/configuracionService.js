@@ -5,7 +5,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3001').repla
 const API_URL  = `${API_BASE}/api`;
 
 /**
- * Guardar empresas de transporte del tenant.
+ * Guardar empresas de transporte del tenant (vía backend).
  */
 export async function guardarCarriers(carriersPayload, token, { sync = true } = {}) {
   const res = await fetch(`${API_URL}/estantes/carriers`, {
@@ -18,4 +18,21 @@ export async function guardarCarriers(carriersPayload, token, { sync = true } = 
   return out;
 }
 
-// (sin funciones legacy de estantes)
+/**
+ * Cargar empresas de transporte configuradas para el tenant (lectura directa Supabase).
+ * Devuelve: [{ id, tenant_id, nombre, ingreso_por_entrega, activo, color, notas }]
+ */
+export async function cargarCarriers({ tenantId }) {
+  const { data, error } = await supabase
+    .from('empresas_transporte_tenant')
+    .select('id, tenant_id, nombre, ingreso_por_entrega, activo, color, notas')
+    .eq('tenant_id', tenantId)
+    .eq('activo', true)
+    .order('nombre', { ascending: true });
+
+  if (error) {
+    console.error('[cargarCarriers] Error', error);
+    throw new Error('No se pudo obtener la lista de empresas configuradas');
+  }
+  return Array.isArray(data) ? data : [];
+}
