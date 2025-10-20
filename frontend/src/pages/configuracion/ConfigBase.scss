@@ -6,6 +6,7 @@
 @keyframes conf-skel { 0%{background-position:200% 0;} 100%{background-position:-200% 0;} }
 @keyframes conf-pulse { 0%,100%{opacity:.45;} 50%{opacity:1;} }
 
+
 /* ===================================================================== */
 /*                          CONFIGURACIÓN (UI)                            */
 /* ===================================================================== */
@@ -219,6 +220,7 @@
 /* Que el scroll lo lleve la ventana, no el contenedor */
 .configuracion,
 .configuracion .config__container { overflow: visible !important; }
+
 /* ===== Estabilidad de scroll en Configuración ===== */
 .configuracion {
   /* Scroll suave para interacciones (no afecta a “saltos”) */
@@ -226,9 +228,15 @@
 }
 
 .config__container {
-  /* Cada sección respeta el header fijo (ajusta 72px a tu altura real) */
+  /* Cada sección respeta el header fijo (ajuste con sticky-top + safe-area) */
   [data-section] {
-    scroll-margin-top: 72px;
+    scroll-margin-top: calc(var(--sticky-top, 72px) + 12px);
+  }
+
+  @supports (padding: max(0px)) {
+    [data-section] {
+      scroll-margin-top: calc(var(--sticky-top, 72px) + max(12px, env(safe-area-inset-top)));
+    }
   }
 }
 
@@ -256,6 +264,7 @@
   text-decoration: none;
   line-height: 1;
 }
+
 /* Import Wizard (scope muy suave) */
 .import-wizard .btn { cursor: pointer; transition: transform .12s; }
 .import-wizard .btn:active { transform: translateY(1px); }

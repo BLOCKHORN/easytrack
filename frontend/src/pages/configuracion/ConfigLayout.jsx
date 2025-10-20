@@ -77,13 +77,19 @@ export default function ConfigLayout({
 
   // tabs container para autoscroll en móvil
   const tabsRef = useRef(null);
+
+  // ⚠️ Sustituyo scrollIntoView por cálculo manual de scrollLeft (no afecta al scroll vertical)
   const scrollActiveTabIntoView = useCallback((id) => {
     const wrap = tabsRef.current;
     if (!wrap) return;
     const btn = wrap.querySelector(`[data-tab="${id}"]`);
     if (!btn) return;
+
+    const btnLeft = btn.offsetLeft;
+    const btnWidth = btn.offsetWidth;
+    const target = Math.max(0, btnLeft - (wrap.clientWidth - btnWidth) / 2);
     const behavior = prefersReduced.current ? 'auto' : 'smooth';
-    btn.scrollIntoView({ inline: 'center', block: 'nearest', behavior });
+    wrap.scrollTo({ left: target, behavior });
   }, []);
 
   // scroll suave con offset real del sticky-top (en vez de scrollIntoView)
@@ -92,7 +98,7 @@ export default function ConfigLayout({
     const root = rootRef.current;
     const cs = root ? getComputedStyle(root) : null;
     const stickyVar = cs ? parseFloat(cs.getPropertyValue('--sticky-top')) : 0;
-    const offset = Number.isFinite(stickyVar) ? stickyVar : 76; // fallback seguro
+    const offset = Number.isFinite(stickyVar) ? stickyVar : 76; // fallback
 
     const targetY = el.getBoundingClientRect().top + window.scrollY - offset;
     const nowY = window.scrollY;
@@ -133,7 +139,7 @@ export default function ConfigLayout({
           if (id && id !== currentId) {
             setCurrentId(id);
             onChange?.(id);
-            scrollActiveTabIntoView(id);
+            scrollActiveTabIntoView(id); // solo horizontal, no toca el page scroll
           }
         }
       },

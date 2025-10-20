@@ -454,13 +454,15 @@ export default function ConfigPage() {
   /* ---------- Render ---------- */
   if (cargando) return <Skeleton />;
 
+  // IMPORTANTE: NO usar ids duplicados dentro del contenido. Solo el wrapper de ConfigLayout
+  // tendrá <section id={s.id}>. Aquí usamos <div data-section> para el estilo/offset.
   const sectionsSpec = [
     {
       id: 'warehouse',
       label: 'Almacén',
       icon: MdTune,
       content: (
-        <section id="warehouse" className="config__grid" data-section>
+        <div className="config__grid" data-section>
           <IdentityCard nombre={nombre} setNombre={setNombre} usuario={usuario} />
           {ubiLoading ? (
             <Skeleton />
@@ -483,37 +485,35 @@ export default function ConfigPage() {
               }}
             />
           )}
-        </section>
+        </div>
       )
     },
     {
-  id: 'import',
-  label: 'Importar inventario',
-  icon: MdTune, // o un icono mejor si lo tienes
-  content: (
-    <section id="import" data-section>
-      <ImportWizard
-        onToast={(m,t) => setToast({ mensaje: m, tipo: t || 'success' })}
-        onDone={() => {
-          // refrescar contadores tras importación
-          if (tenant?.id) {
-            Promise.all([
-              loadPackagesCount(tenant.id),
-              loadUsageByCodigo(tenant.id)
-            ]).catch(()=>{});
-          }
-        }}
-      />
-    </section>
-  )
-},
-
+      id: 'import',
+      label: 'Importar inventario',
+      icon: MdTune,
+      content: (
+        <div data-section>
+          <ImportWizard
+            onToast={(m,t) => setToast({ mensaje: m, tipo: t || 'success' })}
+            onDone={() => {
+              if (tenant?.id) {
+                Promise.all([
+                  loadPackagesCount(tenant.id),
+                  loadUsageByCodigo(tenant.id)
+                ]).catch(()=>{});
+              }
+            }}
+          />
+        </div>
+      )
+    },
     {
       id: 'carriers',
       label: 'Empresas de transporte',
       icon: MdLocalShipping,
       content: (
-        <section id="carriers" data-section ref={carriersRef} style={{ display: 'contents' }}>
+        <div data-section ref={carriersRef} style={{ display: 'contents' }}>
           <CarriersCard
             empresas={empresas}
             empresasDisponibles={empresasDisponibles}
@@ -526,7 +526,7 @@ export default function ConfigPage() {
               }
             }}
           />
-        </section>
+        </div>
       )
     },
     // ===== PIN =====
@@ -535,12 +535,12 @@ export default function ConfigPage() {
       label: 'PIN de acceso',
       icon: MdPerson,
       content: (
-        <section id="pin" data-section>
+        <div data-section>
           <PinCard
             tenantId={tenant?.id}
             onToast={(m,t) => setToast({ mensaje: m, tipo: t || 'success' })}
           />
-        </section>
+        </div>
       )
     },
     {
@@ -548,12 +548,12 @@ export default function ConfigPage() {
       label: 'Cuenta',
       icon: MdPerson,
       content: (
-        <section id="account" data-section>
+        <div data-section>
           <AccountSettings
             usuario={usuario}
             onDraftChange={setAccountDraft}
           />
-        </section>
+        </div>
       )
     }
   ];

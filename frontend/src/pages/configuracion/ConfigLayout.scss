@@ -100,6 +100,10 @@
     overscroll-behavior: contain;
     will-change: top;
     contain: layout paint;   /* evita layout-shifts hacia fuera */
+
+    /* ====== EXTRA: estabiliza en móvil para evitar micro-shifts ====== */
+    backface-visibility: hidden;
+    transform: translateZ(0);
   }
 
   .cfg__nav{ list-style:none; padding:0; margin:0; display:grid; gap:6px; }
@@ -171,3 +175,4 @@
     .cfg__navbtn{ transition: none !important; }
   }
 }
+

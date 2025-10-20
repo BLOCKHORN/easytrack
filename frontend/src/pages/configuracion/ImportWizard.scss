@@ -121,7 +121,7 @@
     position: relative;
     border:1px solid var(--iw-border);
     border-radius:12px; background:#0f1116;
-    overflow: hidden;
+    overflow: hidden; /* desktop por defecto */
 
     /* Scroll estilizado para la tabla */
     .iw-table{
@@ -204,6 +204,22 @@
     .iw-cards{ display:block; }
   }
 
+  /* ====== FIX MÓVIL: evita “saltos” con sticky + overflow ====== */
+  @media (max-width: 768px){
+    .iw-table-wrap{
+      overflow: visible; /* clave para eliminar el bug con sticky */
+    }
+    .iw-table-wrap .iw-table{
+      thead tr{
+        position: static;   /* desactiva sticky solo en móvil */
+        top: auto;
+        box-shadow: none;
+        background: #151922;
+      }
+      thead th{ position: static; }
+    }
+  }
+
   @media (max-width: 720px){
     padding: 12px;
     .iw-lined__gutter{ width: 40px; flex-basis: 40px; }
@@ -257,3 +273,4 @@
   .row-unknown{
     background-image: linear-gradient(to right, rgba(239,68,68,.07), transparent);
   }
+
