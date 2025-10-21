@@ -2,12 +2,10 @@
 // 📦 Servicio de paquetes (compatible con esquema nuevo y legacy)
 import { getTenantIdOrThrow } from '../utils/tenant';
 
-// Preferimos VITE_API_URL (tu proyecto) y aceptamos VITE_API_BASE_URL como alias.
 const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001')
   .replace(/\/+$/, '');
 const API_URL = `${API_BASE}/api`;
 
-/* ===== Helpers ===== */
 function authHeaders(token) {
   if (!token) throw new Error('[paquetesService] Falta token JWT de Supabase');
   return {
@@ -44,11 +42,9 @@ function pickArray(payload) {
 function normalizePaquete(row = {}) {
   const empresa = row.empresa_transporte ?? row.compania ?? '';
 
-  // NUEVO esquema
   const ubiIdNew    = row.ubicacion_id ?? null;
   const ubiLabelNew = row.ubicacion_label ?? null;
 
-  // LEGACY compat
   const ubiIdLegacy    = row.balda_id ?? null;
   const ubiLabelLegacy = row.compartimento ?? row?.baldas?.codigo ?? null;
 
@@ -59,19 +55,17 @@ function normalizePaquete(row = {}) {
     id: row.id,
     nombre_cliente: row.nombre_cliente ?? '',
     empresa_transporte: empresa,
-    compania: empresa, // compat
+    compania: empresa,
     entregado: !!row.entregado,
     fecha_llegada: row.fecha_llegada ?? row.created_at ?? null,
 
-    // Nuevo esquema (preferente)
     ubicacion_id: ubiId,
     ubicacion_label: typeof ubiLabel === 'string' ? ubiLabel : null,
 
-    // Compat para cualquier código viejo que aún mire estos nombres
+    // compat
     balda_id: ubiId,
     compartimento: typeof ubiLabel === 'string' ? ubiLabel : null,
 
-    // Extras que a veces envía el backend legacy
     estante: (row.estante != null ? Number(row.estante) : row?.baldas?.estante ?? null),
     balda: (row.balda != null ? Number(row.balda) : row?.baldas?.balda ?? null),
     baldas: row.baldas ?? null,
@@ -85,7 +79,6 @@ function normalizePaquete(row = {}) {
 export async function crearPaqueteBackend(datos, token) {
   const tid = datos?.tenant_id || await getTenantIdOrThrow();
 
-  // Construimos payload robusto (nuevo + compat)
   const payload = {
     tenant_id: tid,
     nombre_cliente: datos.nombre_cliente,
@@ -115,15 +108,70 @@ export async function crearPaqueteBackend(datos, token) {
   return normalizePaquete(created);
 }
 
-// Obtener lista de paquetes (SIEMPRE por tenant)
-export async function obtenerPaquetesBackend(token) {
+/**
+ * Obtener lista de paquetes (por tenant) con soporte de:
+ * - all=1 (trae todo desde backend, paginado interno de 1000)
+ * - o paginación client: limit/offset
+ * - filtros: estado ('pendiente'|'entregado'|'todos'), compania, ubicacion, search
+ * - orden: order (campo), dir ('asc'|'desc')
+ *
+ * DEFAULT: all=1 para evitar el cap de 1000 sin tocar el resto del frontend.
+ */
+export async function obtenerPaquetesBackend(token, params = {}) {
   const tid = await getTenantIdOrThrow();
-  const url = `${API_URL}/paquetes/listar?tenantId=${encodeURIComponent(tid)}`;
-  const resp = await fetch(url, { method: 'GET', headers: authHeaders(token) });
+  const url = new URL(`${API_URL}/paquetes/listar`);
+
+  const query = {
+    tenantId: tid,
+    all: params.all ?? 1,               // ← por defecto trae TODO
+    limit: params.limit,
+    offset: params.offset,
+    estado: params.estado,
+    compania: params.compania,
+    ubicacion: params.ubicacion,
+    search: params.search,
+    order: params.order,
+    dir: params.dir,
+  };
+  for (const [k, v] of Object.entries(query)) {
+    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
+  }
+
+  const resp = await fetch(url.toString(), { method: 'GET', headers: authHeaders(token) });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, 'GET /paquetes/listar');
   const arr = pickArray(body);
   return arr.map(normalizePaquete);
+}
+
+/**
+ * Conteo exacto para KPI (no depende de la lista)
+ * Acepta los mismos filtros que el listado.
+ * Devuelve: { total, entregados, pendientes }
+ */
+export async function contarPaquetesBackend(token, params = {}) {
+  const tid = await getTenantIdOrThrow();
+  const url = new URL(`${API_URL}/paquetes/count`);
+
+  const query = {
+    tenantId: tid,
+    estado: params.estado,
+    compania: params.compania,
+    ubicacion: params.ubicacion,
+    search: params.search,
+  };
+  for (const [k, v] of Object.entries(query)) {
+    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
+  }
+
+  const resp = await fetch(url.toString(), { method: 'GET', headers: authHeaders(token) });
+  const body = await parseMaybeJson(resp);
+  ensureOk(resp, body, 'GET /paquetes/count');
+  return {
+    total: Number(body?.total ?? 0),
+    entregados: Number(body?.entregados ?? 0),
+    pendientes: Number(body?.pendientes ?? 0),
+  };
 }
 
 // Eliminar un paquete
@@ -153,12 +201,9 @@ export async function editarPaqueteBackend(paquete, token) {
   const id = paquete?.id;
   if (!id) throw new Error('[paquetesService] Falta id en editarPaqueteBackend');
 
-  // Enviamos únicamente campos relevantes
   const patch = {
-    // básicos
     nombre_cliente: paquete?.nombre_cliente,
     empresa_transporte: paquete?.empresa_transporte,
-    // preferimos nuevo esquema
     ubicacion_id: paquete?.ubicacion_id ?? paquete?.balda_id ?? null,
     ubicacion_label: paquete?.ubicacion_label ?? paquete?.compartimento ?? null,
   };

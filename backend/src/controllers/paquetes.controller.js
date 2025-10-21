@@ -84,27 +84,152 @@ async function ensureUbiBelongsToTenant(tenantId, ubiId) {
   return !!data?.id;
 }
 
+/* ---------- filtros compartidos (lista y count) ---------- */
+function applyCommonFilters(qb, { estado, compania, ubicacion, search }) {
+  if (estado === 'pendiente') qb = qb.eq('entregado', false);
+  else if (estado === 'entregado') qb = qb.eq('entregado', true);
+
+  if (compania && compania !== 'todos') qb = qb.eq('empresa_transporte', compania);
+  if (ubicacion && ubicacion !== 'todas') qb = qb.eq('ubicacion_label', up(ubicacion));
+
+  if (search && search.trim()) {
+    // búsqueda simple por nombre_cliente
+    qb = qb.ilike('nombre_cliente', `%${search.trim()}%`);
+  }
+  return qb;
+}
+
+/* ---------- fetch ALL con paginado interno (lotes de 1000) ---------- */
+async function fetchAllPackagesBatched(tenantId, filters, selectCols, orderBy = { col: 'fecha_llegada', asc: false }, HARD_MAX = 50000) {
+  const PAGE = 1000;
+  let from = 0;
+  let all = [];
+
+  while (true) {
+    let qb = supabase
+      .from('packages')
+      .select(selectCols)
+      .eq('tenant_id', tenantId);
+
+    qb = applyCommonFilters(qb, filters);
+    qb = qb.order(orderBy.col, { ascending: !!orderBy.asc }).range(from, from + PAGE - 1);
+
+    const { data, error } = await qb;
+    if (error) throw error;
+
+    const batch = data || [];
+    all = all.concat(batch);
+    if (batch.length < PAGE) break;
+    from += PAGE;
+
+    if (all.length >= HARD_MAX) break; // airbag por si acaso
+  }
+
+  return all;
+}
+
 /* ========== Listar (packages) ========== */
 async function listarPaquetes(req, res) {
   try {
     const tenantId = await resolveTenantId(req);
     if (!tenantId) return res.json({ paquetes: [] });
 
-    const { data, error } = await supabase
-      .from('packages')
-      .select(`
-        id, tenant_id, nombre_cliente, empresa_transporte, empresa_id,
-        fecha_llegada, entregado, fecha_entregado, ingreso_generado,
-        ubicacion_id, ubicacion_label
-      `)
-      .eq('tenant_id', tenantId)
-      .order('fecha_llegada', { ascending: false });
+    // query params
+    const {
+      limit,
+      offset,
+      all,            // all=1 para traer todo
+      estado,         // 'pendiente' | 'entregado' | 'todos'
+      compania,       // nombre exacto o 'todos'
+      ubicacion,      // label o 'todas'
+      search,         // texto libre
+      order = 'fecha_llegada',
+      dir = 'desc',
+    } = req.query || {};
 
+    const filters = { estado, compania, ubicacion, search };
+
+    // 🔴 SOLO columnas que EXISTEN en 'packages'
+    const cols = `
+      id, tenant_id, nombre_cliente, empresa_transporte, empresa_id,
+      fecha_llegada, entregado, fecha_entregado, ingreso_generado,
+      ubicacion_id, ubicacion_label
+    `;
+
+    if (String(all) === '1') {
+      // Trae TODO por lotes de 1000 desde backend
+      const paquetes = await fetchAllPackagesBatched(
+        tenantId,
+        filters,
+        cols,
+        { col: order || 'fecha_llegada', asc: String(dir).toLowerCase() === 'asc' }
+      );
+      return res.json({ paquetes });
+    }
+
+    // Paginado normal (recomendado para tabla)
+    let qb = supabase
+      .from('packages')
+      .select(cols)
+      .eq('tenant_id', tenantId);
+
+    qb = applyCommonFilters(qb, filters);
+
+    const asc = String(dir).toLowerCase() === 'asc';
+    qb = qb.order(order || 'fecha_llegada', { ascending: asc });
+
+    const lim = Number(limit ?? 50);
+    const off = Number(offset ?? 0);
+
+    // IMPORTANTÍSIMO: usar range para no caer en el cap de 1000
+    qb = qb.range(off, off + lim - 1);
+
+    const { data, error } = await qb;
     if (error) return res.status(500).json({ error: error.message });
+
     return res.json({ paquetes: data || [] });
   } catch (err) {
     console.error('[packages.listar] err:', err);
     return res.status(500).json({ error: 'Error al listar paquetes' });
+  }
+}
+
+/* ========== Contar (exacto, para KPI) ========== */
+async function contarPaquetes(req, res) {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) return res.json({ total: 0, entregados: 0, pendientes: 0 });
+
+    const { estado, compania, ubicacion, search } = req.query || {};
+    const filters = { estado: undefined, compania, ubicacion, search }; // estado no aplica en total
+
+    // base builder
+    const base = () => {
+      let qb = supabase
+        .from('packages')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId);
+      qb = applyCommonFilters(qb, filters);
+      return qb;
+    };
+
+    const { count: total, error: e0 } = await base();
+    if (e0) return res.status(500).json({ error: e0.message });
+
+    const { count: entregados, error: e1 } = await base().eq('entregado', true);
+    if (e1) return res.status(500).json({ error: e1.message });
+
+    const { count: pendientes, error: e2 } = await base().eq('entregado', false);
+    if (e2) return res.status(500).json({ error: e2.message });
+
+    return res.json({
+      total: total ?? 0,
+      entregados: entregados ?? 0,
+      pendientes: pendientes ?? 0,
+    });
+  } catch (err) {
+    console.error('[packages.contar] err:', err);
+    return res.status(500).json({ error: 'Error al contar paquetes' });
   }
 }
 
@@ -116,8 +241,8 @@ async function crearPaquete(req, res) {
       nombre_cliente,
       empresa_transporte,
       ubicacion_id,
-      ubicacion_label,   // "B6", "B25", ...
-      // compat vieja: por si el front aun manda estos
+      ubicacion_label,
+      // compat vieja:
       balda_id,
       compartimento
     } = req.body || {};
@@ -339,6 +464,7 @@ async function eliminarPaquete(req, res) {
 
 module.exports = {
   listarPaquetes,
+  contarPaquetes, // NUEVO
   crearPaquete,
   entregarPaquete,
   editarPaquete,
