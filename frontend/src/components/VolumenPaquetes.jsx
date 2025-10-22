@@ -7,20 +7,23 @@ import { Truck } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import "../styles/VolumenPaquetes.scss";
 import { supabase } from "../utils/supabaseClient";
+import { obtenerPaquetesBackend } from "../services/paquetesService";
+
+/**
+ * Agregador en cliente:
+ * - recibidos: cuenta por fecha_llegada
+ * - entregados: cuenta por fecha_entregado (si entregado === true)
+ *
+ * Rangos:
+ * - anual:     meses del año de la fecha seleccionada
+ * - mensual:   días del mes de la fecha seleccionada
+ * - semanal:   semana (Lun-Dom) de la fecha seleccionada
+ * - diaria:    horas 0..23 de la fecha seleccionada
+ * - historial: últimos 30 días hasta la fecha seleccionada (incluida)
+ */
 
 export default function VolumenPaquetes() {
   const location = useLocation();
-
-  // API base coherente con el Dashboard (scoping por slug)
-  const apiBase = useMemo(() => {
-    const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
-    const segs = location.pathname.split("/").filter(Boolean);
-    if (segs.length >= 2 && (segs[1] === "dashboard" || segs[1] === "area-personal")) {
-      const slug = segs[0];
-      return `${API_URL}/${slug}/api/dashboard`;
-    }
-    return `${API_URL}/api/dashboard`;
-  }, [location.pathname]);
 
   const vistas = ["anual", "mensual", "semanal", "diaria", "historial"];
   const [vista, setVista] = useState("anual"); // anual | mensual | semanal | diaria | historial
@@ -46,15 +49,104 @@ export default function VolumenPaquetes() {
   const mesesCorto = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   const diasCorto   = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 
-  const formatoEjeX = (tick) => {
-    if (vista === "diaria") return `${tick}h`;
-    if (vista === "historial") {
-      const d = new Date(tick);
-      const dd = String(d.getDate()).padStart(2, "0");
-      const mm = String(d.getMonth() + 1).padStart(2, "0");
-      return isNaN(d) ? tick : `${dd}/${mm}`;
+  // ---- Helpers de fechas (zona local del navegador; OK para UI)
+  const toLocalDate = (iso) => (iso ? new Date(iso) : null);
+  const ymd = (d) => {
+    if (!d || isNaN(d)) return null;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+  const startOfWeekMon = (d) => {
+    const nd = new Date(d);
+    const day = (nd.getDay() + 6) % 7; // 0..6 (Lun=0)
+    nd.setDate(nd.getDate() - day);
+    nd.setHours(0,0,0,0);
+    return nd;
+  };
+  const endOfWeekSun = (d) => {
+    const s = startOfWeekMon(d);
+    const e = new Date(s);
+    e.setDate(s.getDate() + 6);
+    e.setHours(23,59,59,999);
+    return e;
+  };
+  const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1, 0,0,0,0);
+  const endOfMonth = (d) => new Date(d.getFullYear(), d.getMonth() + 1, 0, 23,59,59,999);
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0,0);
+  const endOfDay   = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23,59,59,999);
+  const addDays = (d, n) => {
+    const r = new Date(d);
+    r.setDate(r.getDate() + n);
+    return r;
+  };
+  const inRange = (date, a, b) => date && !isNaN(date) && date >= a && date <= b;
+
+  // ---- Generadores de categorías y llaves por vista
+  const generarAnual = (baseDate) => {
+    const y = baseDate.getFullYear();
+    return mesesCorto.map((mes, i) => ({
+      key: `${y}-${String(i+1).padStart(2,"0")}`, // yyyy-mm
+      periodo: mes,
+      y, m: i, // para comparar rápido
+    }));
+  };
+
+  const generarMensual = (baseDate) => {
+    const ini = startOfMonth(baseDate);
+    const fin = endOfMonth(baseDate);
+    const days = fin.getDate();
+    const y = baseDate.getFullYear();
+    const m = baseDate.getMonth(); // 0..11
+    return Array.from({ length: days }, (_, idx) => {
+      const d = idx + 1;
+      return {
+        key: `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`,
+        periodo: String(d),
+        y, m, d
+      };
+    });
+  };
+
+  const generarSemanal = (baseDate) => {
+    const ini = startOfWeekMon(baseDate);
+    return Array.from({ length: 7 }, (_, idx) => {
+      const d = addDays(ini, idx);
+      return {
+        key: ymd(d),
+        periodo: diasCorto[idx], // Lun..Dom
+        y: d.getFullYear(), m: d.getMonth(), d: d.getDate(),
+        date: d
+      };
+    });
+  };
+
+  const generarDiaria = (baseDate) => {
+    const y = baseDate.getFullYear();
+    const m = baseDate.getMonth();
+    const d = baseDate.getDate();
+    return Array.from({ length: 24 }, (_, h) => ({
+      key: `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}T${String(h).padStart(2,"0")}:00`,
+      periodo: String(h),
+      y, m, d, h
+    }));
+  };
+
+  const generarHistorial = (baseDate) => {
+    // Últimos 30 días hasta la fecha seleccionada (incluida)
+    const fin = endOfDay(baseDate);
+    const ini = addDays(startOfDay(baseDate), -29);
+    const arr = [];
+    for (let d = new Date(ini); d <= fin; d = addDays(d, 1)) {
+      arr.push({
+        key: ymd(d),
+        periodo: d.toISOString().split("T")[0],
+        y: d.getFullYear(), m: d.getMonth(), d: d.getDate(),
+        date: new Date(d)
+      });
     }
-    return tick;
+    return arr;
   };
 
   const ordenar = (arr) => {
@@ -76,9 +168,10 @@ export default function VolumenPaquetes() {
     return arr;
   };
 
+  // ---- Agregado en cliente
   useEffect(() => {
     let cancel = false;
-    const obtenerDatos = async () => {
+    (async () => {
       setCargando(true);
       setError(null);
       try {
@@ -86,20 +179,89 @@ export default function VolumenPaquetes() {
         const token = session?.access_token;
         if (!token) throw new Error("Sesión no disponible");
 
-        const res = await fetch(`${apiBase}/volumen-paquetes`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ tipo_vista: vista, fecha }),
-        });
+        // 1) Traemos TODOS los paquetes del tenant (el servicio ya pide all=1 por defecto)
+        const paquetes = await obtenerPaquetesBackend(token, { all: 1 });
+        if (cancel) return;
 
-        const json = await res.json().catch(() => []);
-        if (!res.ok) throw new Error(json?.error || "No se pudo obtener el volumen.");
+        // 2) Preparamos el rango/categorías según vista
+        const baseDate = new Date(fecha + "T00:00:00"); // usar medianoche local del día elegido
+        let categorias = [];
+        let rangeIni = null;
+        let rangeFin = null;
 
+        if (vista === "anual") {
+          categorias = generarAnual(baseDate);
+          rangeIni = new Date(baseDate.getFullYear(), 0, 1, 0,0,0,0);
+          rangeFin = new Date(baseDate.getFullYear(), 11, 31, 23,59,59,999);
+        } else if (vista === "mensual") {
+          categorias = generarMensual(baseDate);
+          rangeIni = startOfMonth(baseDate);
+          rangeFin = endOfMonth(baseDate);
+        } else if (vista === "semanal") {
+          categorias = generarSemanal(baseDate);
+          rangeIni = startOfWeekMon(baseDate);
+          rangeFin = endOfWeekSun(baseDate);
+        } else if (vista === "diaria") {
+          categorias = generarDiaria(baseDate);
+          rangeIni = startOfDay(baseDate);
+          rangeFin = endOfDay(baseDate);
+        } else if (vista === "historial") {
+          categorias = generarHistorial(baseDate);
+          rangeIni = categorias[0]?.date ? startOfDay(categorias[0].date) : startOfDay(baseDate);
+          rangeFin = endOfDay(baseDate);
+        }
+
+        // 3) Inicializamos diccionario acumulador
+        const acc = new Map(categorias.map(c => [c.key, { periodo: c.periodo, recibidos: 0, entregados: 0 }]));
+
+        // 4) Recorremos paquetes y sumamos en el bucket correspondiente
+        for (const p of paquetes) {
+          const fRec = toLocalDate(p.fecha_llegada);
+          const fEnt = p.entregado ? toLocalDate(p.fecha_entregado || p.fecha_llegada) : null;
+
+          // solo consideramos dentro del rango de la vista
+          if (fRec && inRange(fRec, rangeIni, rangeFin)) {
+            if (vista === "anual") {
+              const key = `${fRec.getFullYear()}-${String(fRec.getMonth()+1).padStart(2,"0")}`;
+              if (acc.has(key)) acc.get(key).recibidos += 1;
+            } else if (vista === "mensual") {
+              const key = `${fRec.getFullYear()}-${String(fRec.getMonth()+1).padStart(2,"0")}-${String(fRec.getDate()).padStart(2,"0")}`;
+              if (acc.has(key)) acc.get(key).recibidos += 1;
+            } else if (vista === "semanal") {
+              const key = ymd(fRec);
+              if (acc.has(key)) acc.get(key).recibidos += 1;
+            } else if (vista === "diaria") {
+              const key = `${fRec.getFullYear()}-${String(fRec.getMonth()+1).padStart(2,"0")}-${String(fRec.getDate()).padStart(2,"0")}T${String(fRec.getHours()).padStart(2,"0")}:00`;
+              if (acc.has(key)) acc.get(key).recibidos += 1;
+            } else if (vista === "historial") {
+              const key = ymd(fRec);
+              if (acc.has(key)) acc.get(key).recibidos += 1;
+            }
+          }
+
+          if (fEnt && inRange(fEnt, rangeIni, rangeFin)) {
+            if (vista === "anual") {
+              const key = `${fEnt.getFullYear()}-${String(fEnt.getMonth()+1).padStart(2,"0")}`;
+              if (acc.has(key)) acc.get(key).entregados += 1;
+            } else if (vista === "mensual") {
+              const key = `${fEnt.getFullYear()}-${String(fEnt.getMonth()+1).padStart(2,"0")}-${String(fEnt.getDate()).padStart(2,"0")}`;
+              if (acc.has(key)) acc.get(key).entregados += 1;
+            } else if (vista === "semanal") {
+              const key = ymd(fEnt);
+              if (acc.has(key)) acc.get(key).entregados += 1;
+            } else if (vista === "diaria") {
+              const key = `${fEnt.getFullYear()}-${String(fEnt.getMonth()+1).padStart(2,"0")}-${String(fEnt.getDate()).padStart(2,"0")}T${String(fEnt.getHours()).padStart(2,"0")}:00`;
+              if (acc.has(key)) acc.get(key).entregados += 1;
+            } else if (vista === "historial") {
+              const key = ymd(fEnt);
+              if (acc.has(key)) acc.get(key).entregados += 1;
+            }
+          }
+        }
+
+        const salida = categorias.map(c => acc.get(c.key) || { periodo: c.periodo, recibidos: 0, entregados: 0 });
         if (!cancel) {
-          setDatos(ordenar(json));
+          setDatos(ordenar(salida));
           setError(null);
         }
       } catch (err) {
@@ -111,11 +273,10 @@ export default function VolumenPaquetes() {
       } finally {
         if (!cancel) setCargando(false);
       }
-    };
-
-    obtenerDatos();
+    })();
     return () => { cancel = true; };
-  }, [apiBase, vista, fecha, refreshTick]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista, fecha, refreshTick]);
 
   const kpis = useMemo(() => {
     const totalRec = datos.reduce((acc, d) => acc + (Number(d.recibidos) || 0), 0);
@@ -130,6 +291,17 @@ export default function VolumenPaquetes() {
   }, [datos]);
 
   const activeIndex = vistas.indexOf(vista);
+
+  const formatoEjeX = (tick) => {
+    if (vista === "diaria") return `${tick}h`;
+    if (vista === "historial") {
+      const d = new Date(tick);
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      return isNaN(d) ? tick : `${dd}/${mm}`;
+    }
+    return tick;
+  };
 
   return (
     <div className="volumen-paquetes">
