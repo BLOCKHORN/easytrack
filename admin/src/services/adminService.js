@@ -243,3 +243,98 @@ export async function getDemoCounters() {
   if (!r.ok) throw new Error('DEMO_COUNTERS_FAILED');
   return r.json(); // -> { ok:true, total, pending, pending_unseen, accepted, declined }
 }
+
+/* ============== NUEVO: Admin Billing (modo tier + Stripe oculto) ============== */
+
+/** NUEVO: fija el tier del tenant (basic | pro | elite). */
+export async function adminSetTier(tenantId, tier) {
+  const r = await fetch(`${API}/admin/billing/assign-tier`, {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify({ tenantId, tier }),
+  });
+  if (!r.ok) throw new Error('ASSIGN_TIER_FAILED');
+  return r.json(); // { ok:true, tenantId, tier }
+}
+
+/** (legacy) Genera una sesión de Checkout directa para un plan concreto (p.ej. "pro_m12"). */
+export async function adminAssignPlan(tenant_id, plan_code) {
+  const r = await fetch(`${API}/admin/billing/assign-plan`, {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify({ tenant_id, plan_code }),
+  });
+  if (!r.ok) throw new Error('ASSIGN_PLAN_FAILED');
+  return r.json(); // { ok:true, url }
+}
+
+/** Cambia el price del subscription Stripe activo (prorrateado). */
+export async function adminSwapSubscription(tenant_id, plan_code) {
+  const r = await fetch(`${API}/admin/billing/swap-subscription`, {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify({ tenant_id, plan_code }),
+  });
+  if (!r.ok) throw new Error('SWAP_SUBSCRIPTION_FAILED');
+  return r.json(); // { ok:true }
+}
+
+/** Estado de billing del tenant (tenant + subscription + entitlements). */
+export async function adminGetBillingState(tenant_id) {
+  const r = await fetch(`${API}/admin/tenants/${tenant_id}/billing-state`, {
+    headers: await getHeaders(),
+  });
+  if (!r.ok) throw new Error('BILLING_STATE_FAILED');
+  return r.json(); // { ok:true, tenant, subscription, entitlements }
+}
+
+/** Trial ON/OFF y/o fecha fin (ISO) y/o cuota. */
+export async function adminSetTrial(tenant_id, { active, ends_at, quota } = {}) {
+  const r = await fetch(`${API}/admin/tenants/${tenant_id}/trial`, {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify({ active, ends_at, quota }),
+  });
+  if (!r.ok) throw new Error('TRIAL_UPDATE_FAILED');
+  return r.json(); // { ok:true }
+}
+
+/** Soft-block ON/OFF para cortar acceso sin borrar nada. */
+export async function adminSetBlock(tenant_id, soft_blocked) {
+  const r = await fetch(`${API}/admin/tenants/${tenant_id}/block`, {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify({ soft_blocked }),
+  });
+  if (!r.ok) throw new Error('BLOCK_UPDATE_FAILED');
+  return r.json(); // { ok:true }
+}
+
+/* === Stripe trial controls === */
+export async function endTrialNow(subId) {
+  const r = await fetch(`${API}/admin/billing/subscription/${subId}/trial/end`, {
+    method: 'POST',
+    headers: await getHeaders(),
+  });
+  if (!r.ok) throw new Error('TRIAL_END_FAILED');
+  return r.json(); // { ok:true, subscription:{...} }
+}
+
+export async function extendTrial(subId, days) {
+  const r = await fetch(`${API}/admin/billing/subscription/${subId}/trial/extend`, {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify({ days })
+  });
+  if (!r.ok) throw new Error('TRIAL_EXTEND_FAILED');
+  return r.json(); // { ok:true, subscription:{...} }
+}
+
+export async function adminSyncFromStripe(tenant_id) {
+  const r = await fetch(`${API}/admin/billing/sync-from-stripe/${tenant_id}`, {
+    method: 'POST',
+    headers: await getHeaders(),
+  });
+  if (!r.ok) throw new Error('SYNC_FROM_STRIPE_FAILED');
+  return r.json(); // { ok:true, subscription }
+}

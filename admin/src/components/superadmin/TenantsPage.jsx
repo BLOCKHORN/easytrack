@@ -1,10 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+// admin/src/components/superadmin/TenantsPage.jsx
+import { useEffect, useMemo, useRef, useState } from "react"; 
 import {
   listTenants, getTenant,
   extendSubscription, setPlan, cancelSubscription, resumeSubscription,
   assumeTenant, endAssume,
   listTables, queryTable, patchRow,
-  listAudit, searchUsers, sendReset, makeImpersonateLink
+  listAudit, searchUsers, sendReset, makeImpersonateLink,
+  // Legacy (se mantienen por compatibilidad, no se usan en el nuevo flujo)
+  adminAssignPlan, adminSwapSubscription,
+  // Nuevo flujo
+  adminSetTrial, adminSetBlock, adminSetTier,
+  endTrialNow, extendTrial, adminSyncFromStripe
 } from "../../services/adminService";
 import "../../styles/TenantsPage.scss";
 import Icon from "./Icon.jsx";
@@ -35,6 +41,16 @@ const Empty = ({ title, sub, icon = "shield" }) => (
     <p className="muted">{sub}</p>
   </div>
 );
+
+/* ====== Spinner inline (SVG) ====== */
+function Spinner({ size=16 }) {
+  return (
+    <svg className="tz-spin" width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <circle className="bg" cx="12" cy="12" r="9" strokeWidth="3" fill="none"/>
+      <circle className="fg" cx="12" cy="12" r="9" strokeWidth="3" strokeLinecap="round" fill="none" />
+    </svg>
+  );
+}
 
 export default function TenantsPage() {
   /* ===================== SIDEBAR ===================== */
@@ -116,7 +132,30 @@ export default function TenantsPage() {
     window.scrollTo({ top: 0, behavior: "instant" });
   }
 
+  /* ===================== BUSY MANAGER (per-button) ===================== */
+  const [busy, setBusy] = useState({});
+  const setB = (k, v) => setBusy((p) => ({ ...p, [k]: v }));
+  const isBusy = (k) => !!busy[k];
+  const anyBusy = Object.values(busy).some(Boolean);
+
+  async function runBusy(key, fn) {
+    setB(key, true);
+    try {
+      await fn();
+    } finally {
+      setB(key, false);
+    }
+  }
+
   /* ===================== SUSCRIPCIONES ===================== */
+  async function refreshSelected() {
+    if (!selected) return;
+    try {
+      const fresh = await getTenant(selected.id);
+      setSelected({ ...(fresh.tenant || selected), subscription: fresh.subscription || null });
+    } catch {}
+  }
+
   async function onExtend(days) {
     if (!selected) return;
     const { subscription } = await extendSubscription(selected.id, days);
@@ -138,6 +177,35 @@ export default function TenantsPage() {
     setSelected((p) => ({ ...p, subscription }));
   }
 
+  /* ====== Nuevo: selección SOLO del TIER (el periodo lo elige el cliente) ====== */
+  const [planTier, setPlanTier] = useState('basic'); // basic | pro | elite
+  const tierLabel = (t) => ({ basic: 'BASIC', pro: 'PRO', elite: 'ELITE' }[t] || String(t).toUpperCase());
+
+  async function onSaveTier() {
+    if (!selected) return;
+    await adminSetTier(selected.id, planTier);
+    alert(`Tier guardado: ${tierLabel(planTier)}.\nEl cliente elegirá el periodo (mensual/trimestral/anual) en su cuenta.`);
+    // Opcional: si tu backend devuelve el tier en /billing-state, podrías refrescar aquí.
+    // await refreshSelected();
+  }
+
+  /* ===================== TRIAL (Stripe) ===================== */
+  async function onTrialOffStripe() {
+    const subId = selected?.subscription?.provider_subscription_id;
+    if (!subId) return alert('No hay subscriptionId de Stripe.');
+    await endTrialNow(subId);
+    await refreshSelected();
+    alert('Trial terminado. La suscripción ha pasado a active.');
+  }
+
+  async function onTrialExtendStripe(days) {
+    const subId = selected?.subscription?.provider_subscription_id;
+    if (!subId) return alert('No hay subscriptionId de Stripe.');
+    await extendTrial(subId, days);
+    await refreshSelected();
+    alert(`Trial extendido ${days} días.`);
+  }
+
   /* ===================== IMPERSONACIÓN ===================== */
   async function onAssume(reason = "Soporte") {
     if (!selected) return;
@@ -153,18 +221,14 @@ export default function TenantsPage() {
   // acceso rápido
   async function onQuickAccess() {
     if (!selected) return;
-    try {
-      const candidateEmail = selected.owner_email || selected.email || null;
-      if (!candidateEmail) {
-        alert("No encuentro email principal del tenant. Busca un usuario y usa 'Magic link'.");
-        return;
-      }
-      const { link } = await makeImpersonateLink(candidateEmail, selected.id, 60);
-      if (link) window.open(link, "_blank", "noopener");
-      else alert("No se generó el enlace de acceso.");
-    } catch {
-      alert("No se pudo crear el magic link de acceso rápido.");
+    const candidateEmail = selected.owner_email || selected.email || null;
+    if (!candidateEmail) {
+      alert("No encuentro email principal del tenant. Busca un usuario y usa 'Magic link'.");
+      return;
     }
+    const { link } = await makeImpersonateLink(candidateEmail, selected.id, 60);
+    if (link) window.open(link, "_blank", "noopener");
+    else alert("No se generó el enlace de acceso.");
   }
 
   /* ===================== USERS ===================== */
@@ -182,16 +246,12 @@ export default function TenantsPage() {
   }, [userQ]);
 
   async function onReset(email) {
-    try {
-      const { link } = await sendReset(email);
-      alert("Enlace de recuperación generado.\n" + (link || "Se envió por email"));
-    } catch { alert("No se pudo generar el reset."); }
+    const { link } = await sendReset(email);
+    alert("Enlace de recuperación generado.\n" + (link || "Se envió por email"));
   }
   async function onImpersonate(email) {
-    try {
-      const { link } = await makeImpersonateLink(email, selected?.id || null, 30);
-      if (link) window.open(link, "_blank", "noopener");
-    } catch { alert("No se pudo generar el magic link."); }
+    const { link } = await makeImpersonateLink(email, selected?.id || null, 30);
+    if (link) window.open(link, "_blank", "noopener");
   }
 
   /* ===================== AUDITORÍA ===================== */
@@ -248,7 +308,6 @@ export default function TenantsPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null); // { tableSel, row, idKey, field, value }
 
-  // bloquear scroll de fondo con modal
   useEffect(() => {
     if (!editOpen) return;
     document.body.classList.add("no-scroll");
@@ -305,7 +364,14 @@ export default function TenantsPage() {
   }, [tab, tableSel, selected?.id]);
 
   const planText = selected?.subscription?.plan_code
-    ? PLAN_LABEL[normalize(selected.subscription.plan_code)] || selected.subscription.plan_code
+    ? (()=>{
+        // Mostrar el plan activo actual (sólo informativo)
+        const code = selected.subscription.plan_code;
+        const [tier, per] = String(code).split('_'); // p.ej. pro_m12
+        const t = { basic:'BASIC', pro:'PRO', elite:'ELITE' }[tier] || tier?.toUpperCase?.() || code;
+        const p = { m1:'Mensual', m3:'Trimestral', m12:'Anual' }[per] || '';
+        return [t, p && `· ${p}`].filter(Boolean).join(' ');
+      })()
     : selected?.subscription?.plan_id
     ? `#${String(selected.subscription.plan_id).slice(0, 8)}`
     : "—";
@@ -313,6 +379,9 @@ export default function TenantsPage() {
   /* ===================== RENDER ===================== */
   return (
     <div className="tenants tenants--clean">
+      {/* barra fina de progreso cuando hay acciones */}
+      <div className={`tz-topbar ${anyBusy ? "is-on" : ""}`} aria-hidden />
+
       {/* ===== Sidebar ===== */}
       <aside className="tz-side" aria-label="Listado y filtros de tenants">
         <div className="tz-side__head">
@@ -390,7 +459,7 @@ export default function TenantsPage() {
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => openTenant(t)}
+                  onClick={() => runBusy('openTenant', () => openTenant(t))}
                   className={`tz-item ${active ? "is-active" : ""}`}
                   title={`Renueva: ${renew}`}
                   aria-current={active ? "true" : "false"}
@@ -450,7 +519,9 @@ export default function TenantsPage() {
                 {selected.email && <Chip tone="ghost">{selected.email}</Chip>}
               </div>
               <div className="h-right">
-                <Chip tone="info">{planText}</Chip>
+                <Chip tone="info">
+                  {planText}
+                </Chip>
                 <Chip
                   tone={
                     selected.subscription?.status === "active"
@@ -489,39 +560,163 @@ export default function TenantsPage() {
                 <section className="tz-card">
                   <header className="tz-card__head"><Icon name="id" /><h3>Estado</h3></header>
                   <div className="tz-kv">
-                    <KV label="Plan" value={planText} />
+                    <KV label="Plan activo (Stripe)" value={planText} />
                     <KV label="Estado" value={<span className={`pill pill--${selected.subscription?.status || "muted"}`}>{selected.subscription?.status || "—"}</span>} />
                     <KV label="Inicio periodo" value={selected.subscription?.current_period_start ? new Date(selected.subscription.current_period_start).toLocaleString() : "—"} />
                     <KV label="Fin periodo" value={selected.subscription?.current_period_end ? new Date(selected.subscription.current_period_end).toLocaleString() : "—"} />
-                    <KV label="Fin trial" value={selected.subscription?.trial_ends_at ? new Date(selected.subscription.trial_ends_at).toLocaleString() : "—"} />
+                    <KV label="Fin trial (sub)" value={selected.subscription?.trial_ends_at ? new Date(selected.subscription.trial_ends_at).toLocaleString() : "—"} />
+                    <KV label="Trial activo (tenant)" value={String(!!selected.trial_active)} />
+                    <KV label="Trial fin (tenant)" value={selected.trial_ends_at ? new Date(selected.trial_ends_at).toLocaleString() : "—"} />
+                    <KV label="Soft-block" value={String(!!selected.soft_blocked)} />
                   </div>
                 </section>
 
                 {/* Acciones */}
                 <section className="tz-card">
                   <header className="tz-card__head"><Icon name="zap" /><h3>Acciones</h3></header>
+
+                  {/* Trial (Stripe) */}
                   <div className="tz-row wrap gap8">
-                    <button className="tz-btn" onClick={() => onExtend(30)}>+30 días</button>
-                    <button className="tz-btn" onClick={() => onExtend(90)}>+90 días</button>
-                    <button className="tz-btn" onClick={() => onExtend(365)}>+365 días</button>
-                    <button className="tz-btn tz-btn--ghost" onClick={() => {
-                      const s = selected?.subscription;
-                      alert(`Periodo actual:\nInicio: ${s?.current_period_start ? new Date(s.current_period_start).toLocaleString() : "—"}\nFin: ${s?.current_period_end ? new Date(s.current_period_end).toLocaleString() : "—"}\nTrial: ${s?.trial_ends_at ? new Date(s.trial_ends_at).toLocaleString() : "—"}`);
-                    }}>Ver fechas</button>
+                    <button
+                      className={`tz-btn ${isBusy('trialOff') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('trialOff', onTrialOffStripe)}
+                      disabled={String(selected.subscription?.status).toLowerCase() !== 'trialing' || isBusy('trialOff')}
+                      title="Terminar periodo de prueba (Stripe)"
+                    >
+                      {isBusy('trialOff') && <Spinner />} Trial OFF
+                    </button>
+                    <button
+                      className={`tz-btn tz-btn--ghost ${isBusy('trial30') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('trial30', () => onTrialExtendStripe(30))}
+                      disabled={String(selected.subscription?.status).toLowerCase() !== 'trialing' || isBusy('trial30')}
+                    >
+                      {isBusy('trial30') && <Spinner />} Trial +30 días
+                    </button>
+                    <button
+                      className={`tz-btn tz-btn--ghost ${isBusy('trial90') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('trial90', () => onTrialExtendStripe(90))}
+                      disabled={String(selected.subscription?.status).toLowerCase() !== 'trialing' || isBusy('trial90')}
+                    >
+                      {isBusy('trial90') && <Spinner />} Trial +90 días
+                    </button>
+                    <button
+                      className={`tz-btn tz-btn--ghost ${isBusy('trial365') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('trial365', () => onTrialExtendStripe(365))}
+                      disabled={String(selected.subscription?.status).toLowerCase() !== 'trialing' || isBusy('trial365')}
+                    >
+                      {isBusy('trial365') && <Spinner />} Trial +365 días
+                    </button>
+
+                    <div className="spacer" />
+                    <button
+                      className={`tz-btn ${selected?.soft_blocked ? '' : 'tz-btn--ghost'} ${isBusy('block') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('block', async () => { await adminSetBlock(selected.id, true); await refreshSelected(); })}
+                      title="Bloquear (suave)"
+                      disabled={isBusy('block')}
+                    >
+                      {isBusy('block') && <Spinner />} Bloquear
+                    </button>
+                    <button
+                      className={`tz-btn tz-btn--ghost ${isBusy('unblock') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('unblock', async () => { await adminSetBlock(selected.id, false); await refreshSelected(); })}
+                      disabled={isBusy('unblock')}
+                    >
+                      {isBusy('unblock') && <Spinner />} Desbloquear
+                    </button>
                   </div>
+
+                  <div className="tz-divider" />
+
+                  {/* Selección de TIER (solo esto desde admin) */}
                   <div className="tz-row wrap gap8">
-                    <button className="tz-btn tz-btn--ghost" onClick={() => onSetPlan("monthly")}>Mensual</button>
-                    <button className="tz-btn tz-btn--ghost" onClick={() => onSetPlan("quarterly")}>Trimestral</button>
-                    <button className="tz-btn tz-btn--ghost" onClick={() => onSetPlan("yearly")}>Anual</button>
+                    <label className="tz-select">
+                      <span className="muted tiny">Tier</span>
+                      <select value={planTier} onChange={(e) => setPlanTier(e.target.value)}>
+                        <option value="basic">BASIC</option>
+                        <option value="pro">PRO</option>
+                        <option value="elite">ELITE</option>
+                      </select>
+                    </label>
+
+                    <Chip tone="ghost">{tierLabel(planTier)}</Chip>
                   </div>
+
                   <div className="tz-row wrap gap8">
-                    {selected.subscription?.cancel_at_period_end ? (
-                      <button className="tz-btn" onClick={onResume}>Reanudar</button>
+                    <button
+                      className={`tz-btn tz-btn--primary ${isBusy('saveTier') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('saveTier', onSaveTier)}
+                      disabled={isBusy('saveTier')}
+                      title="Guardar el tier que verá el cliente en su panel; el cliente elegirá mensual/trimestral/anual."
+                    >
+                      {isBusy('saveTier') && <Spinner />} <Icon name="check" /> Guardar tier
+                    </button>
+
+                    <div className="spacer" />
+
+                    {/* Herramientas de periodo (legacy, DB) */}
+                    <button
+                      className={`tz-btn tz-btn--ghost ${isBusy('ext30') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('ext30', () => onExtend(30))}
+                      disabled={isBusy('ext30')}
+                    >
+                      {isBusy('ext30') && <Spinner />} +30 días
+                    </button>
+                    <button
+                      className={`tz-btn tz-btn--ghost ${isBusy('ext90') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('ext90', () => onExtend(90))}
+                      disabled={isBusy('ext90')}
+                    >
+                      {isBusy('ext90') && <Spinner />} +90 días
+                    </button>
+                    <button
+                      className={`tz-btn tz-btn--ghost ${isBusy('ext365') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('ext365', () => onExtend(365))}
+                      disabled={isBusy('ext365')}
+                    >
+                      {isBusy('ext365') && <Spinner />} +365 días
+                    </button>
+                    <button
+                      className="tz-btn tz-btn--ghost"
+                      onClick={() => {
+                        const s = selected?.subscription;
+                        alert(`Periodo actual:\nInicio: ${s?.current_period_start ? new Date(s.current_period_start).toLocaleString() : "—"}\nFin: ${s?.current_period_end ? new Date(s.current_period_end).toLocaleString() : "—"}\nTrial: ${s?.trial_ends_at ? new Date(s.trial_ends_at).toLocaleString() : "—"}`);
+                      }}
+                    >
+                      Ver fechas
+                    </button>
+                    <button
+                      className={`tz-btn tz-btn--ghost ${isBusy('sync') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('sync', async () => { await adminSyncFromStripe(selected.id); await refreshSelected(); alert('Sincronizado desde Stripe.'); })}
+                      disabled={isBusy('sync')}
+                    >
+                      {isBusy('sync') && <Spinner />} Sync desde Stripe
+                    </button>
+                  </div>
+
+                  <div className="tz-row wrap gap8">
+                    {selected?.subscription?.cancel_at_period_end ? (
+                      <button
+                        className={`tz-btn ${isBusy('resume') ? 'is-loading' : ''}`}
+                        onClick={() => runBusy('resume', onResume)}
+                        disabled={isBusy('resume')}
+                      >
+                        {isBusy('resume') && <Spinner />} Reanudar
+                      </button>
                     ) : (
                       <>
-                        <button className="tz-btn tz-btn--ghost" onClick={() => onCancel(true)}>Cancelar al final</button>
-                        <button className="tz-btn" onClick={() => { if (!confirm("¿Cancelar inmediatamente?")) return; onCancel(false); }}>
-                          Cancelar ahora
+                        <button
+                          className={`tz-btn tz-btn--ghost ${isBusy('cancelEnd') ? 'is-loading' : ''}`}
+                          onClick={() => runBusy('cancelEnd', () => onCancel(true))}
+                          disabled={isBusy('cancelEnd')}
+                        >
+                          {isBusy('cancelEnd') && <Spinner />} Cancelar al final
+                        </button>
+                        <button
+                          className={`tz-btn ${isBusy('cancelNow') ? 'is-loading' : ''}`}
+                          onClick={() => runBusy('cancelNow', async () => { if (!confirm("¿Cancelar inmediatamente?")) return; await onCancel(false); })}
+                          disabled={isBusy('cancelNow')}
+                        >
+                          {isBusy('cancelNow') && <Spinner />} Cancelar ahora
                         </button>
                       </>
                     )}
@@ -532,11 +727,29 @@ export default function TenantsPage() {
                 <section className="tz-card">
                   <header className="tz-card__head"><Icon name="switch" /><h3>Acceso rápido</h3></header>
                   <div className="tz-row wrap gap8">
-                    <button className="tz-btn tz-btn--primary" onClick={onQuickAccess}><Icon name="login" /> Acceder con Magic Link</button>
+                    <button
+                      className={`tz-btn tz-btn--primary ${isBusy('magic') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('magic', onQuickAccess)}
+                      disabled={isBusy('magic')}
+                    >
+                      {isBusy('magic') && <Spinner />} <Icon name="login" /> Acceder con Magic Link
+                    </button>
                     {!assumeSession ? (
-                      <button className="tz-btn tz-btn--ghost" onClick={() => onAssume("Soporte al cliente")}><Icon name="user-check" /> Asumir sesión (legacy)</button>
+                      <button
+                        className={`tz-btn tz-btn--ghost ${isBusy('assume') ? 'is-loading' : ''}`}
+                        onClick={() => runBusy('assume', () => onAssume("Soporte al cliente"))}
+                        disabled={isBusy('assume')}
+                      >
+                        {isBusy('assume') && <Spinner />} <Icon name="user-check" /> Asumir sesión (legacy)
+                      </button>
                     ) : (
-                      <button className="tz-btn tz-btn--ghost" onClick={onEndAssume}><Icon name="logout" /> Finalizar asunción</button>
+                      <button
+                        className={`tz-btn tz-btn--ghost ${isBusy('endAssume') ? 'is-loading' : ''}`}
+                        onClick={() => runBusy('endAssume', onEndAssume)}
+                        disabled={isBusy('endAssume')}
+                      >
+                        {isBusy('endAssume') && <Spinner />} <Icon name="logout" /> Finalizar asunción
+                      </button>
                     )}
                   </div>
 
@@ -565,8 +778,20 @@ export default function TenantsPage() {
                           <div className="ell">{u.email}</div>
                           <div>{u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString() : "—"}</div>
                           <div className="actions">
-                            <button className="tz-btn tz-btn--ghost" onClick={() => onReset(u.email)}>Reset pass</button>
-                            <button className="tz-btn" onClick={() => onImpersonate(u.email)}>Magic link</button>
+                            <button
+                              className={`tz-btn tz-btn--ghost ${isBusy(`reset_${u.id}`) ? 'is-loading' : ''}`}
+                              onClick={() => runBusy(`reset_${u.id}`, () => onReset(u.email))}
+                              disabled={isBusy(`reset_${u.id}`)}
+                            >
+                              {isBusy(`reset_${u.id}`) && <Spinner />} Reset pass
+                            </button>
+                            <button
+                              className={`tz-btn ${isBusy(`ml_${u.id}`) ? 'is-loading' : ''}`}
+                              onClick={() => runBusy(`ml_${u.id}`, () => onImpersonate(u.email))}
+                              disabled={isBusy(`ml_${u.id}`)}
+                            >
+                              {isBusy(`ml_${u.id}`) && <Spinner />} Magic link
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -600,7 +825,13 @@ export default function TenantsPage() {
                     </div>
 
                     <div className="spacer" />
-                    <button className="tz-btn tz-btn--ghost" onClick={refreshTable}><Icon name="refresh" /> Refrescar</button>
+                    <button
+                      className={`tz-btn tz-btn--ghost ${isBusy('refreshTable') ? 'is-loading' : ''}`}
+                      onClick={() => runBusy('refreshTable', refreshTable)}
+                      disabled={isBusy('refreshTable')}
+                    >
+                      {isBusy('refreshTable') && <Spinner />} <Icon name="refresh" /> Refrescar
+                    </button>
                   </div>
 
                   <p className="muted tiny">{tableLoading ? "Cargando…" : `Mostrando datos para tenant_id = ${selected.id}`}</p>
@@ -715,8 +946,16 @@ export default function TenantsPage() {
             </div>
 
             <div className="tz-modal__footer">
-              <button className="tz-btn tz-btn--ghost" onClick={() => setEditOpen(false)}>Cancelar</button>
-              <button className="tz-btn" onClick={applyEdit}>Guardar</button>
+              <button className={`tz-btn tz-btn--ghost ${isBusy('editCancel') ? 'is-loading' : ''}`} onClick={() => setEditOpen(false)}>
+                {isBusy('editCancel') && <Spinner />} Cancelar
+              </button>
+              <button
+                className={`tz-btn ${isBusy('editSave') ? 'is-loading' : ''}`}
+                onClick={() => runBusy('editSave', applyEdit)}
+                disabled={isBusy('editSave')}
+              >
+                {isBusy('editSave') && <Spinner />} Guardar
+              </button>
             </div>
           </div>
         </div>

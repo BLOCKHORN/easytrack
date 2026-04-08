@@ -1,0 +1,12 @@
+{
+  "name": "easytrack-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix apps/frontend\" \"npm run dev --prefix apps/backend\"",
+    "install:all": "npm install && npm install --prefix apps/frontend && npm install --prefix apps/backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
