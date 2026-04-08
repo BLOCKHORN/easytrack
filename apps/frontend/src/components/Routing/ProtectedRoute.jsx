@@ -27,7 +27,6 @@ export default function ProtectedRoute({ children }) {
         ? currentPath.replace(`/${tenantSlug}`, '')
         : currentPath
 
-      // Si no hay slug en la URL (o no coincide), redirige a la misma ruta con su slug
       if (!tenantSlug || tenantSlug !== tenant.slug) {
         navigate(`/${tenant.slug}${tail || '/dashboard'}`, { replace: true })
         return
