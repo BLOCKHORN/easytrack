@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../../utils/supabaseClient";
 import {
@@ -19,6 +19,7 @@ const IconTimes = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="no
 
 const RESULTADOS_POR_PAGINA = 10;
 const LS_KEY = "buscar_paquete_filtros_v12";
+const QUEUE_KEY = "easytrack_sync_queue";
 
 const normalize = (s = "") => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^\p{L}\p{N}\s'-]+/gu, " ").replace(/\s+/g, " ");
 const tokenize = (s = "") => normalize(s).split(" ").filter(Boolean);
@@ -129,6 +130,11 @@ export default function BuscarPaquete() {
   const [revealAll, setRevealAll] = useState(false);
   const [revealedSet, setRevealedSet] = useState(() => new Set());
   const [selectedIds, setSelectedIds] = useState(() => new Set());
+  
+  const [toastMsg, setToastMsg] = useState(null);
+
+  const retryQueue = useRef(new Set());
+  const isSyncing = useRef(false);
 
   const isSelected = (id) => selectedIds.has(id);
   const clearSelection = () => setSelectedIds(new Set());
@@ -138,6 +144,11 @@ export default function BuscarPaquete() {
       n.has(id) ? n.delete(id) : n.add(id);
       return n;
     });
+  };
+
+  const showToast = (msg, isError = false) => {
+    setToastMsg({ msg, isError });
+    setTimeout(() => setToastMsg(null), 3500);
   };
 
   const [tenantId, setTenantId] = useState(null);
@@ -150,22 +161,62 @@ export default function BuscarPaquete() {
   const [cargando, setCargando] = useState(false);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [paqueteEditando, setPaqueteEditando] = useState(null);
+  const [loadingEdit, setLoadingEdit] = useState(false);
   
   const [confirmState, setConfirmState] = useState({ open: false, payload: null });
   const [confirmBulk, setConfirmBulk] = useState(false);
 
   const searchDebounceRef = useRef(null);
 
+  const processSyncQueue = useCallback(async () => {
+    if (isSyncing.current || retryQueue.current.size === 0) {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(Array.from(retryQueue.current)));
+      return;
+    }
+    
+    isSyncing.current = true;
+    const currentQueue = Array.from(retryQueue.current);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        for (const id of currentQueue) {
+          try {
+            await entregarPaqueteBackend(id, session.access_token);
+            retryQueue.current.delete(id);
+          } catch (e) {
+          }
+        }
+      }
+    } catch (e) {}
+
+    isSyncing.current = false;
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(Array.from(retryQueue.current)));
+
+    if (retryQueue.current.size > 0) {
+      setTimeout(processSyncQueue, 10000);
+    }
+  }, []);
+
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      setEstadoFiltro(saved.estadoFiltro ?? "pendiente");
-      setCompaniaFiltro(saved.companiaFiltro ?? "todos");
-      setUbicacionFiltro(saved.ubicacionFiltro ?? "todas");
+      const rawFiltros = localStorage.getItem(LS_KEY);
+      if (rawFiltros) {
+        const saved = JSON.parse(rawFiltros);
+        setEstadoFiltro(saved.estadoFiltro ?? "pendiente");
+        setCompaniaFiltro(saved.companiaFiltro ?? "todos");
+        setUbicacionFiltro(saved.ubicacionFiltro ?? "todas");
+      }
+      const rawQueue = localStorage.getItem(QUEUE_KEY);
+      if (rawQueue) {
+        const savedQueue = JSON.parse(rawQueue);
+        if (Array.isArray(savedQueue) && savedQueue.length > 0) {
+          savedQueue.forEach(id => retryQueue.current.add(id));
+          processSyncQueue();
+        }
+      }
     } catch {}
-  }, []);
+  }, [processSyncQueue]);
 
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify({ estadoFiltro, companiaFiltro, ubicacionFiltro }));
@@ -198,11 +249,16 @@ export default function BuscarPaquete() {
 
         const list = (paquetesAPI || []).map(p => {
           const label = (p.ubicacion_label && String(p.ubicacion_label).toUpperCase()) || (p.compartimento && String(p.compartimento).toUpperCase()) || (p.ubicacion_id && (mapU.get(p.ubicacion_id) || "")) || "";
+          let entregadoLocal = !!p.entregado;
+          if (retryQueue.current.has(p.id)) {
+            entregadoLocal = true;
+          }
+
           return {
             id: p.id,
             nombre_cliente: p.nombre_cliente ?? "",
             compania: p.empresa_transporte ?? p.compania ?? "",
-            entregado: !!p.entregado,
+            entregado: entregadoLocal,
             fecha_llegada: p.fecha_llegada ?? p.created_at ?? new Date().toISOString(),
             ubicacion_id: p.ubicacion_id ?? null,
             ubicacion_label: label || null,
@@ -276,63 +332,64 @@ export default function BuscarPaquete() {
     return paquetes.filter(p => set.has(p.id) && !p.entregado).map(p => p.id);
   }, [selectedIds, paquetes]);
 
-  const marcarEntregado = async (id) => {
-    const snapshot = paquetes;
+  const marcarEntregado = (id) => {
     setPaquetes(prev => prev.map(p => p.id === id ? { ...p, entregado: true } : p));
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      await entregarPaqueteBackend(id, session.access_token);
-    } catch (e) {
-      setPaquetes(snapshot);
-    }
+    retryQueue.current.add(id);
+    processSyncQueue();
+    showToast("Paquete marcado como entregado.");
+  };
+
+  const entregarSeleccionados = () => {
+    const ids = selectedPendingIds;
+    if (ids.length === 0) return;
+    
+    setPaquetes(prev => prev.map(p => ids.includes(p.id) ? { ...p, entregado: true } : p));
+    ids.forEach(id => retryQueue.current.add(id));
+    clearSelection();
+    processSyncQueue();
+    showToast(`${ids.length} paquetes marcados como entregados.`);
   };
 
   const confirmarEliminar = async () => {
     const payload = confirmState.payload;
     setConfirmState({ open: false, payload: null });
     if (!payload) return;
-    const snapshot = paquetes;
+    
     setPaquetes(prev => prev.filter(p => p.id !== payload.id));
+    
     try {
       const { data: { session } } = await supabase.auth.getSession();
       await eliminarPaqueteBackend(payload.id, session.access_token);
       setSelectedIds(prev => { const n = new Set(prev); n.delete(payload.id); return n; });
+      showToast("Paquete eliminado permanentemente.");
     } catch (e) {
-      setPaquetes(snapshot);
-    }
-  };
-
-  const entregarSeleccionados = async () => {
-    const ids = selectedPendingIds;
-    if (ids.length === 0) return;
-    const snapshot = paquetes;
-    setPaquetes(prev => prev.map(p => ids.includes(p.id) ? { ...p, entregado: true } : p));
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      for (const id of ids) await entregarPaqueteBackend(id, session.access_token);
-      clearSelection();
-    } catch (e) {
-      setPaquetes(snapshot);
+      setPaquetes(prev => [...prev, payload]);
+      showToast("Error de red. No se pudo eliminar.", true);
     }
   };
 
   const eliminarSeleccionados = async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    const snapshot = paquetes;
+    
+    const backup = paquetes.filter(p => ids.includes(p.id));
     setPaquetes(prev => prev.filter(p => !ids.includes(p.id)));
     setConfirmBulk(false);
+    
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      for (const id of ids) await eliminarPaqueteBackend(id, session.access_token);
+      await Promise.all(ids.map(id => eliminarPaqueteBackend(id, session.access_token)));
       clearSelection();
+      showToast(`${ids.length} paquetes eliminados.`);
     } catch (e) {
-      setPaquetes(snapshot);
+      setPaquetes(prev => [...prev, ...backup]);
+      showToast("Error al eliminar el lote. Reinténtalo.", true);
     }
   };
 
   const guardarCambios = async () => {
     if (!paqueteEditando) return;
+    setLoadingEdit(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const newLabel = String(paqueteEditando.ubicacion_label || "").toUpperCase().trim();
@@ -344,7 +401,6 @@ export default function BuscarPaquete() {
       if (tenantId && oldLabel && newLabel && oldLabel !== newLabel) {
         const countInOld = paquetes.filter(p => !p.entregado && String(p.ubicacion_label || "").toUpperCase() === oldLabel).length;
         const nextThreshold = Math.max(0, countInOld - 1);
-        
         try {
           const key = `ap_penalties_${tenantId}`;
           const penalties = JSON.parse(localStorage.getItem(key)) || {};
@@ -370,7 +426,12 @@ export default function BuscarPaquete() {
         ubicacion_label: actualizado?.ubicacion_label ?? newLabel,
       } : p));
       setMostrarModal(false);
-    } catch (e) {}
+      showToast("Paquete modificado.");
+    } catch (e) {
+      showToast("Error al guardar cambios.", true);
+    } finally {
+      setLoadingEdit(false);
+    }
   };
 
   const totalKPI = paquetes.length;
@@ -380,7 +441,22 @@ export default function BuscarPaquete() {
   const selectedPendingCount = selectedPendingIds.length;
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-24 relative">
+      
+      <AnimatePresence>
+        {toastMsg && (
+          <motion.div 
+            initial={{ opacity: 0, y: -50, x: '-50%' }} 
+            animate={{ opacity: 1, y: 0, x: '-50%' }} 
+            exit={{ opacity: 0, y: -20, x: '-50%' }}
+            className={`fixed top-24 left-1/2 z-[9999] px-5 sm:px-6 py-3 rounded-2xl shadow-2xl font-black text-white text-sm sm:text-base flex items-center gap-3 border ${toastMsg.isError ? 'bg-red-500 border-red-400' : 'bg-emerald-500 border-emerald-400'} whitespace-nowrap`}
+          >
+            {toastMsg.isError ? <IconTimes /> : <IconCheck />}
+            {toastMsg.msg}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 pb-6 border-b border-zinc-200/80">
         <div>
           <h1 className="text-4xl font-black text-zinc-950 tracking-tight flex items-center gap-3">
@@ -659,7 +735,9 @@ export default function BuscarPaquete() {
               </div>
               <div className="p-8 flex items-center justify-end gap-4 border-t border-zinc-100 bg-white">
                 <button onClick={() => setMostrarModal(false)} className="px-6 py-4 rounded-xl font-bold text-lg text-zinc-600 bg-zinc-100 hover:bg-zinc-200 transition-colors">Cancelar</button>
-                <button onClick={guardarCambios} className="px-6 py-4 rounded-xl font-black text-lg bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/30 transition-all active:scale-95">Guardar Cambios</button>
+                <button onClick={guardarCambios} disabled={loadingEdit} className="px-6 py-4 rounded-xl font-black text-lg bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-300 disabled:text-zinc-500 text-white shadow-lg shadow-brand-500/30 transition-all active:scale-95">
+                  {loadingEdit ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
               </div>
             </motion.div>
           </div>
