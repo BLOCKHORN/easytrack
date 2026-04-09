@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../../utils/supabaseClient";
 import {
@@ -19,7 +19,6 @@ const IconTimes = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="no
 
 const RESULTADOS_POR_PAGINA = 10;
 const LS_KEY = "buscar_paquete_filtros_v12";
-const QUEUE_KEY = "easytrack_sync_queue";
 
 const normalize = (s = "") => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^\p{L}\p{N}\s'-]+/gu, " ").replace(/\s+/g, " ");
 const tokenize = (s = "") => normalize(s).split(" ").filter(Boolean);
@@ -133,9 +132,6 @@ export default function BuscarPaquete() {
   
   const [toastMsg, setToastMsg] = useState(null);
 
-  const retryQueue = useRef(new Set());
-  const isSyncing = useRef(false);
-
   const isSelected = (id) => selectedIds.has(id);
   const clearSelection = () => setSelectedIds(new Set());
   const toggleSelectOne = (id) => {
@@ -168,55 +164,16 @@ export default function BuscarPaquete() {
 
   const searchDebounceRef = useRef(null);
 
-  const processSyncQueue = useCallback(async () => {
-    if (isSyncing.current || retryQueue.current.size === 0) {
-      localStorage.setItem(QUEUE_KEY, JSON.stringify(Array.from(retryQueue.current)));
-      return;
-    }
-    
-    isSyncing.current = true;
-    const currentQueue = Array.from(retryQueue.current);
-    
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        for (const id of currentQueue) {
-          try {
-            await entregarPaqueteBackend(id, session.access_token);
-            retryQueue.current.delete(id);
-          } catch (e) {
-          }
-        }
-      }
-    } catch (e) {}
-
-    isSyncing.current = false;
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(Array.from(retryQueue.current)));
-
-    if (retryQueue.current.size > 0) {
-      setTimeout(processSyncQueue, 10000);
-    }
-  }, []);
-
   useEffect(() => {
     try {
-      const rawFiltros = localStorage.getItem(LS_KEY);
-      if (rawFiltros) {
-        const saved = JSON.parse(rawFiltros);
-        setEstadoFiltro(saved.estadoFiltro ?? "pendiente");
-        setCompaniaFiltro(saved.companiaFiltro ?? "todos");
-        setUbicacionFiltro(saved.ubicacionFiltro ?? "todas");
-      }
-      const rawQueue = localStorage.getItem(QUEUE_KEY);
-      if (rawQueue) {
-        const savedQueue = JSON.parse(rawQueue);
-        if (Array.isArray(savedQueue) && savedQueue.length > 0) {
-          savedQueue.forEach(id => retryQueue.current.add(id));
-          processSyncQueue();
-        }
-      }
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      setEstadoFiltro(saved.estadoFiltro ?? "pendiente");
+      setCompaniaFiltro(saved.companiaFiltro ?? "todos");
+      setUbicacionFiltro(saved.ubicacionFiltro ?? "todas");
     } catch {}
-  }, [processSyncQueue]);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify({ estadoFiltro, companiaFiltro, ubicacionFiltro }));
@@ -249,16 +206,11 @@ export default function BuscarPaquete() {
 
         const list = (paquetesAPI || []).map(p => {
           const label = (p.ubicacion_label && String(p.ubicacion_label).toUpperCase()) || (p.compartimento && String(p.compartimento).toUpperCase()) || (p.ubicacion_id && (mapU.get(p.ubicacion_id) || "")) || "";
-          let entregadoLocal = !!p.entregado;
-          if (retryQueue.current.has(p.id)) {
-            entregadoLocal = true;
-          }
-
           return {
             id: p.id,
             nombre_cliente: p.nombre_cliente ?? "",
             compania: p.empresa_transporte ?? p.compania ?? "",
-            entregado: entregadoLocal,
+            entregado: !!p.entregado,
             fecha_llegada: p.fecha_llegada ?? p.created_at ?? new Date().toISOString(),
             ubicacion_id: p.ubicacion_id ?? null,
             ubicacion_label: label || null,
@@ -332,22 +284,16 @@ export default function BuscarPaquete() {
     return paquetes.filter(p => set.has(p.id) && !p.entregado).map(p => p.id);
   }, [selectedIds, paquetes]);
 
-  const marcarEntregado = (id) => {
+  const marcarEntregado = async (id) => {
     setPaquetes(prev => prev.map(p => p.id === id ? { ...p, entregado: true } : p));
-    retryQueue.current.add(id);
-    processSyncQueue();
-    showToast("Paquete marcado como entregado.");
-  };
-
-  const entregarSeleccionados = () => {
-    const ids = selectedPendingIds;
-    if (ids.length === 0) return;
-    
-    setPaquetes(prev => prev.map(p => ids.includes(p.id) ? { ...p, entregado: true } : p));
-    ids.forEach(id => retryQueue.current.add(id));
-    clearSelection();
-    processSyncQueue();
-    showToast(`${ids.length} paquetes marcados como entregados.`);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sesión expirada");
+      await entregarPaqueteBackend(id, session.access_token);
+    } catch (e) {
+      setPaquetes(prev => prev.map(p => p.id === id ? { ...p, entregado: false } : p));
+      showToast("Error de conexión. El paquete no se ha entregado.", true);
+    }
   };
 
   const confirmarEliminar = async () => {
@@ -365,6 +311,23 @@ export default function BuscarPaquete() {
     } catch (e) {
       setPaquetes(prev => [...prev, payload]);
       showToast("Error de red. No se pudo eliminar.", true);
+    }
+  };
+
+  const entregarSeleccionados = async () => {
+    const ids = selectedPendingIds;
+    if (ids.length === 0) return;
+    
+    setPaquetes(prev => prev.map(p => ids.includes(p.id) ? { ...p, entregado: true } : p));
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await Promise.all(ids.map(id => entregarPaqueteBackend(id, session.access_token)));
+      clearSelection();
+      showToast(`${ids.length} paquetes entregados correctamente.`);
+    } catch (e) {
+      setPaquetes(prev => prev.map(p => ids.includes(p.id) ? { ...p, entregado: false } : p));
+      showToast("Error al entregar el lote. Reinténtalo.", true);
     }
   };
 
@@ -545,7 +508,7 @@ export default function BuscarPaquete() {
                       </div>
                     </div>
                     
-                    <div className="shrink-0 flex items-center justify-center min-w-[4rem] px-4 py-2.5 bg-brand-100 border-2 border-brand-500 text-brand-950 text-3xl font-black rounded-2xl shadow-sm">
+                    <div className="shrink-0 flex items-center justify-center min-w-[4.5rem] px-4 py-2.5 bg-brand-100 border-2 border-brand-500 text-brand-950 text-3xl font-black rounded-2xl shadow-sm">
                       {p.ubicacion_label || "—"}
                     </div>
                   </div>
@@ -626,7 +589,7 @@ export default function BuscarPaquete() {
                         {p.compania || "—"}
                       </td>
                       <td className="py-5 px-6 text-center">
-                        <span className="inline-flex items-center justify-center min-w-[4.5rem] px-5 py-2.5 bg-brand-100 border-2 border-brand-500 text-brand-950 text-3xl font-black rounded-2xl shadow-sm">
+                        <span className="inline-flex items-center justify-center min-w-[5rem] px-5 py-2.5 bg-brand-100 border-2 border-brand-500 text-brand-950 text-3xl font-black rounded-2xl shadow-sm">
                           {p.ubicacion_label || "—"}
                         </span>
                       </td>
@@ -738,29 +701,6 @@ export default function BuscarPaquete() {
                 <button onClick={guardarCambios} disabled={loadingEdit} className="px-6 py-4 rounded-xl font-black text-lg bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-300 disabled:text-zinc-500 text-white shadow-lg shadow-brand-500/30 transition-all active:scale-95">
                   {loadingEdit ? 'Guardando...' : 'Guardar Cambios'}
                 </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {(confirmState.open || confirmBulk) && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm" onClick={() => {setConfirmState({open:false, payload:null}); setConfirmBulk(false);}} />
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden p-10 text-center">
-              <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-red-100">
-                <IconTrash />
-              </div>
-              <h3 className="text-3xl font-black text-zinc-950 mb-3">Eliminar paquete{confirmBulk ? 's' : ''}</h3>
-              <p className="text-lg font-bold text-zinc-500 mb-10 leading-relaxed">
-                {confirmBulk 
-                  ? `Estás a punto de eliminar ${selectedIds.size} paquetes de forma irreversible.` 
-                  : `¿Seguro que deseas eliminar el paquete de ${confirmState.payload?.nombre_cliente}? Esta acción no se puede deshacer.`}
-              </p>
-              <div className="flex gap-4">
-                <button onClick={() => {setConfirmState({open:false, payload:null}); setConfirmBulk(false);}} className="flex-1 py-4 rounded-xl font-black text-lg text-zinc-700 bg-zinc-100 hover:bg-zinc-200 transition-colors">Cancelar</button>
-                <button onClick={confirmBulk ? eliminarSeleccionados : confirmarEliminar} className="flex-1 py-4 rounded-xl font-black text-lg text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all active:scale-95">Sí, Eliminar</button>
               </div>
             </motion.div>
           </div>
