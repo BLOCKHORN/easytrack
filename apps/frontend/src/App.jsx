@@ -1,10 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, useNavigate, useParams, useLocation, Outlet } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
-// --- Landing ---
 import LandingPage from './components/Landing/LandingPage';
-
-// --- Dashboard ---
 import DashboardLayout from './components/Dashboard/DashboardLayout';
 import Dashboard from './components/Dashboard/Dashboard';
 import AnadirPaquete from './components/Dashboard/AnadirPaquete';
@@ -13,18 +10,15 @@ import VerEstantes from './components/Dashboard/VerEstantes';
 import AreaPersonal from './components/Dashboard/AreaPersonal';
 import ConfigPage from './components/Configuracion/ConfigPage';
 
-// --- Auth ---
 import Registro from './components/Auth/Registro';
 import CrearPassword from './components/Auth/CrearPassword';
 import EmailConfirmado from './components/Auth/EmailConfirmado';
 import LoginModal from './components/Auth/LoginModal';
 
-// --- Billing ---
 import UpgradeSuccess from './components/Billing/UpgradeSuccess';
 import SubscriptionGate from './components/Billing/SubscriptionGate';
 import PortalBridge from './components/Billing/PortalBridge';
 
-// --- Support & Legal ---
 import Soporte from './components/Support/Soporte';
 import Contacto from './components/Support/Contacto';
 import SoporteInterno from './components/Support/SupportRouter';
@@ -33,16 +27,12 @@ import Privacidad from './components/Legal/Privacidad';
 import Terminos from './components/Legal/Terminos';
 import CookiesPage from './components/Legal/Cookies';
 
-// --- Layout ---
 import Navbar from './components/Layout/Navbar/Navbar';
 import Footer from './components/Layout/Footer';
 
-// --- Routing & Context ---
 import RequireActive from './components/Routing/RequireActive';
 import { useModal } from './context/ModalContext';
-import { supabase } from './utils/supabaseClient';
-
-const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+import { useTenant } from './context/TenantContext';
 
 function ScrollWithHash() {
   const location = useLocation();
@@ -88,47 +78,33 @@ function RedirectPreserveHash({ to }) {
 function RedirectToMyTenant() {
   const navigate = useNavigate();
   const loc = useLocation();
+  const { tenant, loading } = useTenant();
+
   useEffect(() => {
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return navigate('/', { replace: true });
+    if (loading) return;
+    if (!tenant?.slug) {
+      navigate('/', { replace: true });
+      return;
+    }
+    navigate(`/${tenant.slug}/dashboard${loc.search || ''}${loc.hash || ''}`, { replace: true });
+  }, [tenant, loading, navigate, loc.search, loc.hash]);
 
-      const r = await fetch(`${API}/api/tenants/me`, {
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      });
-
-      if (r.status === 402) return navigate('/reactivar?reason=inactive', { replace: true });
-      if (!r.ok) return navigate('/', { replace: true });
-
-      const { tenant } = await r.json();
-      if (!tenant?.slug) return navigate('/', { replace: true });
-
-      navigate(`/${tenant.slug}/dashboard${loc.search || ''}${loc.hash || ''}`, { replace: true });
-    })();
-  }, [navigate, loc.search, loc.hash]);
   return null;
 }
 
 function RedirectShortToSlug({ subpath }) {
   const navigate = useNavigate();
+  const { tenant, loading } = useTenant();
+
   useEffect(() => {
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return navigate('/', { replace: true });
+    if (loading) return;
+    if (!tenant?.slug) {
+      navigate('/', { replace: true });
+      return;
+    }
+    navigate(`/${tenant.slug}${subpath}`, { replace: true });
+  }, [tenant, loading, navigate, subpath]);
 
-      const r = await fetch(`${API}/api/tenants/me`, {
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      });
-
-      if (r.status === 402) return navigate('/reactivar?reason=inactive', { replace: true });
-      if (!r.ok) return navigate('/', { replace: true });
-
-      const { tenant } = await r.json();
-      if (!tenant?.slug) return navigate('/', { replace: true });
-
-      navigate(`/${tenant.slug}${subpath}`, { replace: true });
-    })();
-  }, [navigate, subpath]);
   return null;
 }
 
@@ -136,37 +112,22 @@ function ProtectedRoute({ children }) {
   const navigate = useNavigate();
   const { tenantSlug } = useParams();
   const location = useLocation();
+  const { tenant, loading } = useTenant();
 
   useEffect(() => {
-    let unsub;
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return navigate('/', { replace: true });
+    if (loading) return;
+    if (!tenant?.slug) {
+      navigate('/', { replace: true });
+      return;
+    }
+    if (!tenantSlug || tenantSlug !== tenant.slug) {
+      const tail = location.pathname.replace(/^\/[^/]+/, '');
+      const cleanTail = tail.startsWith('/') ? tail : '/' + tail;
+      navigate(`/${tenant.slug}${cleanTail}`, { replace: true });
+    }
+  }, [tenant, loading, tenantSlug, navigate, location.pathname]);
 
-      const r = await fetch(`${API}/api/tenants/me`, {
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      });
-
-      if (r.status === 402) return navigate('/reactivar?reason=inactive', { replace: true });
-      if (!r.ok) return navigate('/', { replace: true });
-
-      const { tenant } = await r.json();
-      if (!tenant?.slug) return navigate('/', { replace: true });
-
-      if (!tenantSlug || tenantSlug !== tenant.slug) {
-        const tail = location.pathname.replace(/^\/[^/]+/, '');
-        return navigate(`/${tenant.slug}${tail.startsWith('/') ? tail : '/' + tail}`, { replace: true });
-      }
-    })();
-
-    const s = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') navigate('/', { replace: true });
-    });
-    unsub = s?.data?.subscription?.unsubscribe;
-
-    return () => unsub && unsub();
-  }, [tenantSlug, navigate, location.pathname]);
-
+  if (loading || !tenant) return null;
   return children;
 }
 
@@ -184,24 +145,20 @@ function LoginRoute() {
   const { modal, openLogin } = useModal();
   const navigate = useNavigate();
   const location = useLocation();
+  const { tenant, loading } = useTenant();
   const [armed, setArmed] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (session?.access_token) {
-        navigate('/dashboard', { replace: true });
-        return;
-      }
-      if (!armed) {
-        if (typeof openLogin === 'function') openLogin();
-        setArmed(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [openLogin, navigate, armed]);
+    if (loading) return;
+    if (tenant) {
+      navigate(`/${tenant.slug}/dashboard`, { replace: true });
+      return;
+    }
+    if (!armed) {
+      if (typeof openLogin === 'function') openLogin();
+      setArmed(true);
+    }
+  }, [tenant, loading, openLogin, navigate, armed]);
 
   useEffect(() => {
     if (!armed) return;
@@ -246,7 +203,6 @@ export default function App() {
       <ScrollWithHash />
       
       <Routes>
-        {/* --- RUTAS PÚBLICAS CON NAVBAR Y FOOTER --- */}
         <Route element={<PublicLayout />}>
           <Route path="/" element={<LandingPage />} />
           <Route path="/caracteristicas" element={<LandingSection sectionId="features" />} />
@@ -271,7 +227,6 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Route>
 
-        {/* --- REDIRECTS --- */}
         <Route path="/create-password" element={<RedirectPreserveHash to="/crear-password" />} />
         <Route path="/sobre" element={<Redirect to="/sobre-nosotros" />} />
         <Route path="/privacidad" element={<Redirect to="/legal/privacidad" />} />
@@ -287,7 +242,6 @@ export default function App() {
         <Route path="/almacen" element={<RedirectToMyTenant />} />
         <Route path="/configuracion" element={<RedirectShortToSlug subpath="/dashboard/configuracion" />} />
 
-        {/* --- RUTAS DEL DASHBOARD (SIN NAVBAR/FOOTER PÚBLICO) --- */}
         <Route
           path="/:tenantSlug/dashboard"
           element={
@@ -311,4 +265,4 @@ export default function App() {
       {modal === 'login' && <LoginModal onClose={closeModal} />}
     </Router>
   );
-} 
+}

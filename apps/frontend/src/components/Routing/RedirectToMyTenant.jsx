@@ -1,20 +1,20 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../utils/supabaseClient'
+import { useTenant } from '../context/TenantContext'
 
 export default function RedirectToMyTenant() {
   const navigate = useNavigate()
+  const { tenant, loading } = useTenant()
+
   useEffect(() => {
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return navigate('/', { replace: true })
-      const r = await fetch('http://localhost:3001/api/tenants/me', {
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      })
-      if (!r.ok) return navigate('/', { replace: true })
-      const { tenant } = await r.json()
+    if (loading) return
+    
+    if (!tenant) {
+      navigate('/', { replace: true })
+    } else {
       navigate(`/${tenant.slug}/dashboard`, { replace: true })
-    })()
-  }, [navigate])
+    }
+  }, [tenant, loading, navigate])
+
   return null
 }

@@ -1,49 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { supabase } from '../../utils/supabaseClient'
+import { useTenant } from '../context/TenantContext'
 
 export default function ProtectedRoute({ children }) {
   const { tenantSlug } = useParams()
+  const { tenant, loading } = useTenant()
   const navigate = useNavigate()
   const location = useLocation()
-  const [checking, setChecking] = useState(true)
 
   useEffect(() => {
-    let unsub
-    ;(async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { navigate('/', { replace: true }); return }
+    if (loading) return
 
-      // Verifica que el backend reconoce al usuario y devuelve su tenant
-      const r = await fetch('http://localhost:3001/api/tenants/me', {
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      })
-      if (!r.ok) { navigate('/', { replace: true }); return }
-      const { tenant } = await r.json()
+    if (!tenant) {
+      navigate('/', { replace: true })
+      return
+    }
 
-      // Mantén la ruta actual (tail), reemplazando el slug si venía
-      const currentPath = location.pathname
-      const tail = tenantSlug
-        ? currentPath.replace(`/${tenantSlug}`, '')
-        : currentPath
+    const currentPath = location.pathname
+    const tail = tenantSlug ? currentPath.replace(`/${tenantSlug}`, '') : currentPath
 
-      if (!tenantSlug || tenantSlug !== tenant.slug) {
-        navigate(`/${tenant.slug}${tail || '/dashboard'}`, { replace: true })
-        return
-      }
+    if (!tenantSlug || tenantSlug !== tenant.slug) {
+      navigate(`/${tenant.slug}${tail || '/dashboard'}`, { replace: true })
+    }
+  }, [tenant, loading, tenantSlug, navigate, location.pathname])
 
-      setChecking(false)
-    })()
+  if (loading || !tenant) return null
 
-    // Si se cierra sesión, vete al home
-    const s = supabase.auth.onAuthStateChange((_e, session) => {
-      if (!session) navigate('/', { replace: true })
-    })
-    unsub = s?.data?.subscription?.unsubscribe
-
-    return () => unsub && unsub()
-  }, [tenantSlug, navigate, location.pathname])
-
-  if (checking) return null // o un spinner si prefieres
   return children
 }
