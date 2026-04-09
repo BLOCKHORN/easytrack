@@ -6,7 +6,14 @@ import { hasNotice, subscribeNotice, setNotice, clearNotice } from '../../utils/
 import { listTickets } from '../../services/ticketsService';
 import { supabase } from '../../utils/supabaseClient';
 
-const IconLogo = () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>;
+const IconLogoRoute = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="5" cy="18" r="3"/>
+    <circle cx="19" cy="6" r="3"/>
+    <path d="M5 15v-4a4 4 0 0 1 4-4h6a4 4 0 0 0 4-4V6"/>
+  </svg>
+);
+
 const IconChart = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>;
 const IconPlus = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
 const IconSearch = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
@@ -72,12 +79,13 @@ export default function DashboardLayout() {
       
       {/* SIDEBAR DESKTOP */}
       <aside className="hidden md:flex flex-col w-[260px] bg-zinc-950 border-r border-zinc-900 sticky top-0 h-screen overflow-y-auto">
-        <div className="p-7 flex items-center gap-3 cursor-pointer" onClick={() => navigate('.')}>
-          <div className="text-white">
-            <IconLogo />
+        <div className="p-7 flex items-center gap-2.5 cursor-pointer group" onClick={() => navigate('.')}>
+          <div className="text-brand-500 transition-transform duration-300 group-hover:scale-105">
+            <IconLogoRoute />
           </div>
-          <span className="text-xl font-black tracking-tight text-white">
-            EasyTrack
+          <span className="text-[1.35rem] tracking-tighter select-none flex items-center">
+            <span className="font-medium text-zinc-300">easy</span>
+            <span className="font-black text-white">track</span>
           </span>
         </div>
 
@@ -129,9 +137,12 @@ export default function DashboardLayout() {
 
       {/* HEADER MOBILE */}
       <header className="md:hidden sticky top-0 z-40 bg-zinc-950 flex items-center justify-between p-4 shadow-md">
-        <div className="flex items-center gap-3">
-          <div className="text-white"><IconLogo /></div>
-          <span className="text-xl font-black tracking-tight text-white">EasyTrack</span>
+        <div className="flex items-center gap-2">
+          <div className="text-brand-500"><IconLogoRoute /></div>
+          <span className="text-xl tracking-tighter select-none flex items-center">
+            <span className="font-medium text-zinc-300">easy</span>
+            <span className="font-black text-white">track</span>
+          </span>
         </div>
         <div className="flex items-center gap-1">
           <a href="/" className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-white rounded-lg transition-colors">
