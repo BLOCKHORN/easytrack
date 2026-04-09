@@ -8,11 +8,9 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
-/* ===== Middlewares propios ===== */
 const requireAuth = require('./middlewares/requireAuth');
 const subscriptionFirewall = require('./middlewares/subscriptionFirewall');
 
-/* ===== Rutas existentes ===== */
 const paquetesRoutes = require('./routes/paquetes.routes');
 const ubicacionesRoutes = require('./routes/ubicaciones.routes');
 const estantesRoutes = require('./routes/estantes.routes');
@@ -30,19 +28,15 @@ const adminCountersRoutes = require('./routes/admin.counters.routes');
 const adminSupportRoutes = require('./routes/admin.support.routes');
 const importRoutes = require('./routes/import.routes');
 
-/* ===== NUEVAS rutas DEMO/Activación ===== */
-const activationRoutes   = require('./routes/auth.activation.routes');
-const geoRoutes          = require('./routes/geo.routes');
+const activationRoutes = require('./routes/auth.activation.routes');
+const geoRoutes = require('./routes/geo.routes');
 
-/* ===== NUEVA ruta SOPORTE ===== */
-const supportRoutes      = require('./routes/support.routes');
-const ticketsRoutes      = require('./routes/tickets.routes');
+const supportRoutes = require('./routes/support.routes');
+const ticketsRoutes = require('./routes/tickets.routes');
 
-/* ===== NUEVAS rutas ADMIN BILLING/TRIAL ===== */
 const adminBillingRoutes = require('./routes/admin.billing.routes');
 const adminTenantsRoutes = require('./routes/admin.tenants.routes');
 
-/* ============== CORS ROBUSTO ============== */
 const envOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
   .split(',').map(s => s.trim()).filter(Boolean);
 
@@ -88,48 +82,34 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
-/* ============== Healthchecks ============== */
-app.get('/health', (_req, res) => res.json({ ok: true }));
-app.get('/.well-known/health', (_req, res) => res.json({ ok: true }));
+app.get('/health', (req, res) => res.status(200).send('OK'));
+app.head('/health', (req, res) => res.status(200).end());
+app.get('/.well-known/health', (req, res) => res.status(200).send('OK'));
+app.head('/.well-known/health', (req, res) => res.status(200).end());
 
-/* =========================================================
-   STRIPE WEBHOOK (RAW) — SIEMPRE antes de express.json()
-   ========================================================= */
 const rawJson = express.raw({ type: 'application/json' });
 app.post('/billing/stripe/webhook', rawJson, stripeWebhook);
-app.post('/webhooks/stripe',      rawJson, stripeWebhook);
+app.post('/webhooks/stripe', rawJson, stripeWebhook);
 
-/* ============== Parsers JSON normales ============== */
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-/* ============== Rutas públicas (sin firewall) ============== */
-app.use('/api/auth',              authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/verificar-usuario', verificarUsuarioRoutes);
-app.use('/api/metrics',           metricsRouter);
-app.use('/api',                   activationRoutes);    // POST /api/auth/activate
+app.use('/api/metrics', metricsRouter);
+app.use('/api', activationRoutes);
 
-/* ============== Admin (Superadmin) ============== */
 app.use('/admin', adminRoutes);
 app.use('/admin', adminCountersRoutes);
 app.use('/api/geo', geoRoutes);
 app.use('/admin', adminSupportRoutes);
 
-/* =========================================================
-   Billing (Stripe) — accesible sin firewall
-   ========================================================= */
-app.use('/billing',     billingRoutes);
+app.use('/billing', billingRoutes);
 app.use('/api/billing', billingRoutes);
 
-/* =========================================================
-   Admin Billing/Trial (requires auth, permisos internos)
-   ========================================================= */
 app.use('/admin', adminBillingRoutes);
-app.use('/admin/tenants',  adminTenantsRoutes);
+app.use('/admin/tenants', adminTenantsRoutes);
 
-/* =========================================================
-   Helpers de montaje
-   ========================================================= */
 function gate(path, router) {
   app.use(path, requireAuth, subscriptionFirewall(), router);
 }
@@ -137,15 +117,11 @@ function authOnly(path, router) {
   app.use(path, requireAuth, router);
 }
 
-/* ============== Rutas protegidas (solo login) ============== */
-authOnly('/api/dashboard',  dashboardRoutes);
-authOnly('/api/estantes',   estantesRoutes);
-authOnly('/:tenantSlug/api/dashboard',  dashboardRoutes);
-authOnly('/:tenantSlug/api/estantes',   estantesRoutes);
+authOnly('/api/dashboard', dashboardRoutes);
+authOnly('/api/estantes', estantesRoutes);
+authOnly('/:tenantSlug/api/dashboard', dashboardRoutes);
+authOnly('/:tenantSlug/api/estantes', estantesRoutes);
 
-/* =========================================================
-   Trial-friendly: SIN subscriptionFirewall
-   ========================================================= */
 authOnly('/api/paquetes', paquetesRoutes);
 app.use('/api/ubicaciones', ubicacionesRoutes);
 authOnly('/api/area-personal', areaPersonalRoutes);
@@ -154,38 +130,25 @@ authOnly('/:tenantSlug/api/area-personal', areaPersonalRoutes);
 authOnly('/api/import', importRoutes);
 authOnly('/:tenantSlug/api/import', importRoutes);
 
-/* =========================================================
-   Limits — solo login (sin subscriptionFirewall)  ✅
-   ========================================================= */
 authOnly('/api/limits', limitsRoutes);
 authOnly('/:tenantSlug/api/limits', limitsRoutes);
 
-/* =========================================================
-   Tenants: protegido con firewall
-   ========================================================= */
 gate('/api/tenants', tenantsRoutes);
 
-/* =========================================================
-   Soporte (tickets) — solo login
-   ========================================================= */
 authOnly('/api/support', supportRoutes);
 authOnly('/:tenantSlug/api/support', supportRoutes);
 app.use('/api/tickets', ticketsRoutes);
 
-/* ============== 404 ============== */
 app.use((req, res) => {
   if (req.path === '/favicon.ico') return res.status(204).end();
   return res.status(404).json({ ok: false, error: 'Not found' });
 });
 
-/* ============== Error handler ============== */
 app.use((err, _req, res, _next) => {
-  console.error('Unhandled error:', err);
   const status = err.status || 500;
   res.status(status).json({ ok: false, error: err.message || 'Internal error' });
 });
 
-/* ============== Arranque ============== */
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, '0.0.0.0', () => {
   const required = [
@@ -199,9 +162,7 @@ app.listen(PORT, '0.0.0.0', () => {
     'STRIPE_WEBHOOK_SECRET',
   ];
   const missing = required.filter(k => !process.env[k]);
-  if (missing.length) console.warn('⚠️ Faltan variables .env:', missing.join(', '));
-
-  console.log(`🚀 API EasyTrack escuchando en http://localhost:${PORT}`);
+  if (missing.length) console.warn('Missing env vars:', missing.join(', '));
 });
 
 module.exports = app;
