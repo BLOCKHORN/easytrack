@@ -10,11 +10,11 @@ import {
 import { getTenantIdOrThrow } from "../../utils/tenant";
 
 const IconSearch = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>;
-const IconCheck = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>;
-const IconTrash = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>;
-const IconEdit = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>;
-const IconEye = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>;
-const IconEyeSlash = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20"/></svg>;
+const IconCheck = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>;
+const IconTrash = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>;
+const IconEdit = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>;
+const IconEye = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>;
+const IconEyeSlash = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20"/></svg>;
 const IconTimes = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 
 const RESULTADOS_POR_PAGINA = 10;
@@ -444,27 +444,88 @@ export default function BuscarPaquete() {
       </div>
 
       <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        
+        <div className="block lg:hidden divide-y divide-zinc-100">
+          {cargando ? (
+            [...Array(5)].map((_, i) => (
+              <div key={i} className="p-6"><div className="h-20 bg-zinc-100 rounded-xl animate-pulse"></div></div>
+            ))
+          ) : paginados.length === 0 ? (
+            <div className="py-16 text-center text-zinc-500 font-bold text-lg">No hay paquetes que coincidan.</div>
+          ) : (
+            paginados.map(p => {
+              const revealed = revealAll || revealedSet.has(p.id);
+              const checked = isSelected(p.id);
+              return (
+                <div key={p.id} className={`p-5 flex flex-col gap-4 transition-colors ${checked ? 'bg-brand-50/50' : 'bg-white hover:bg-zinc-50'}`}>
+                  
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4 overflow-hidden pt-1">
+                      <button onClick={() => toggleSelectOne(p.id)} className={`shrink-0 w-7 h-7 rounded-md flex items-center justify-center border-2 transition-colors ${checked ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-zinc-300'}`}>
+                        {checked && <IconCheck />}
+                      </button>
+                      <div className={`font-black text-2xl text-zinc-950 truncate transition-all ${revealed ? '' : 'blur-[6px] select-none'}`}>
+                        {busqueda ? highlightApprox(p.nombre_cliente, busqueda) : p.nombre_cliente}
+                      </div>
+                    </div>
+                    
+                    <div className="shrink-0 flex items-center justify-center min-w-[4rem] px-4 py-2.5 bg-brand-100 border-2 border-brand-500 text-brand-950 text-3xl font-black rounded-2xl shadow-sm">
+                      {p.ubicacion_label || "—"}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 text-sm font-bold text-zinc-600 pl-11">
+                    <span className="bg-zinc-100 px-3 py-1.5 rounded-lg">{p.compania || "—"}</span>
+                    <span>{new Date(p.fecha_llegada).toLocaleDateString()}</span>
+                    <span className={`px-3 py-1.5 rounded-full border ${p.entregado ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                      {p.entregado ? "Entregado" : "Pendiente"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 mt-2 border-t border-zinc-100 pt-4">
+                    <button onClick={() => {setRevealAll(false); setRevealedSet(prev => {const n=new Set(prev); n.has(p.id)?n.delete(p.id):n.add(p.id); return n;})}} className="w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-colors">
+                      {revealed ? <IconEyeSlash /> : <IconEye />}
+                    </button>
+                    <button onClick={() => {setPaqueteEditando(p); setMostrarModal(true);}} className="w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors">
+                      <IconEdit />
+                    </button>
+                    <button onClick={() => setConfirmState({ open: true, payload: p })} className="w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+                      <IconTrash />
+                    </button>
+                    
+                    {!p.entregado && (
+                      <button onClick={() => marcarEntregado(p.id)} className="ml-2 px-6 py-3 bg-brand-500 hover:bg-brand-400 text-white text-lg font-black rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-brand-500/20 active:scale-95">
+                        <IconCheck /> Entregar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-left border-collapse whitespace-nowrap">
             <thead>
               <tr className="bg-zinc-50/80 border-b border-zinc-200 text-sm font-black text-zinc-600 uppercase tracking-wider">
-                <th className="py-4 px-6 w-12 text-center">
-                  <button onClick={toggleSelectAllPage} className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${allPageSelected ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-zinc-300'}`}>
+                <th className="py-5 px-6 w-16 text-center">
+                  <button onClick={toggleSelectAllPage} className={`w-6 h-6 rounded flex items-center justify-center border-2 transition-colors ${allPageSelected ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-zinc-300'}`}>
                     {allPageSelected && <IconCheck />}
                   </button>
                 </th>
-                <th className="py-4 px-6">Cliente</th>
-                <th className="py-4 px-6">Compañía</th>
-                <th className="py-4 px-6">Ubicación</th>
-                <th className="py-4 px-6">Fecha</th>
-                <th className="py-4 px-6">Estado</th>
-                <th className="py-4 px-6 text-right">Acciones</th>
+                <th className="py-5 px-6">Cliente</th>
+                <th className="py-5 px-6">Compañía</th>
+                <th className="py-5 px-6 text-center">Ubicación</th>
+                <th className="py-5 px-6">Fecha</th>
+                <th className="py-5 px-6">Estado</th>
+                <th className="py-5 px-6 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {cargando ? (
                 [...Array(5)].map((_, i) => (
-                  <tr key={i}><td colSpan="7" className="py-6 px-6"><div className="h-4 bg-zinc-100 rounded w-full animate-pulse"></div></td></tr>
+                  <tr key={i}><td colSpan="7" className="py-8 px-6"><div className="h-6 bg-zinc-100 rounded w-full animate-pulse"></div></td></tr>
                 ))
               ) : paginados.length === 0 ? (
                 <tr><td colSpan="7" className="py-16 text-center text-zinc-500 font-bold text-lg">No hay paquetes que coincidan con la búsqueda.</td></tr>
@@ -475,53 +536,52 @@ export default function BuscarPaquete() {
                   
                   return (
                     <tr key={p.id} className={`hover:bg-zinc-50 transition-colors ${checked ? 'bg-brand-50/50' : ''}`}>
-                      <td className="py-4 px-6 text-center">
-                        <button onClick={() => toggleSelectOne(p.id)} className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${checked ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-zinc-300'}`}>
+                      <td className="py-5 px-6 text-center">
+                        <button onClick={() => toggleSelectOne(p.id)} className={`w-6 h-6 rounded flex items-center justify-center border-2 transition-colors ${checked ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-zinc-300'}`}>
                           {checked && <IconCheck />}
                         </button>
                       </td>
-                      <td className="py-4 px-6">
-                        <div className={`font-black text-lg text-zinc-950 transition-all ${revealed ? '' : 'blur-[4px] select-none'}`}>
+                      <td className="py-5 px-6">
+                        <div className={`font-black text-xl text-zinc-950 transition-all ${revealed ? '' : 'blur-[5px] select-none'}`}>
                           {busqueda ? highlightApprox(p.nombre_cliente, busqueda) : p.nombre_cliente}
                         </div>
                       </td>
-                      <td className="py-4 px-6 font-black text-zinc-700 text-base">
+                      <td className="py-5 px-6 font-black text-zinc-700 text-lg">
                         {p.compania || "—"}
                       </td>
-                      <td className="py-4 px-6">
-                        <span className="inline-flex items-center px-3 py-1 bg-zinc-100 border border-zinc-200 text-zinc-900 text-sm font-black rounded-lg">
+                      <td className="py-5 px-6 text-center">
+                        <span className="inline-flex items-center justify-center min-w-[4.5rem] px-5 py-2.5 bg-brand-100 border-2 border-brand-500 text-brand-950 text-3xl font-black rounded-2xl shadow-sm">
                           {p.ubicacion_label || "—"}
                         </span>
                       </td>
-                      <td className="py-4 px-6 text-base font-bold text-zinc-600">
+                      <td className="py-5 px-6 text-base font-bold text-zinc-600">
                         {new Date(p.fecha_llegada).toLocaleDateString()}
                       </td>
-                      <td className="py-4 px-6">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-black border ${p.entregado ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                      <td className="py-5 px-6">
+                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-black border ${p.entregado ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                           {p.entregado ? "Entregado" : "Pendiente"}
                         </span>
                       </td>
                       
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => {setRevealAll(false); setRevealedSet(prev => {const n=new Set(prev); n.has(p.id)?n.delete(p.id):n.add(p.id); return n;})}} className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-colors" title="Mostrar/Ocultar nombre">
+                      <td className="py-5 px-6 text-right">
+                        <div className="flex items-center justify-end gap-3">
+                          <button onClick={() => {setRevealAll(false); setRevealedSet(prev => {const n=new Set(prev); n.has(p.id)?n.delete(p.id):n.add(p.id); return n;})}} className="w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-colors" title="Mostrar/Ocultar nombre">
                             {revealed ? <IconEyeSlash /> : <IconEye />}
                           </button>
-                          <button onClick={() => {setPaqueteEditando(p); setMostrarModal(true);}} className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors" title="Editar paquete">
+                          <button onClick={() => {setPaqueteEditando(p); setMostrarModal(true);}} className="w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors" title="Editar paquete">
                             <IconEdit />
                           </button>
-                          <button onClick={() => setConfirmState({ open: true, payload: p })} className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors" title="Eliminar paquete">
+                          <button onClick={() => setConfirmState({ open: true, payload: p })} className="w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors" title="Eliminar paquete">
                             <IconTrash />
                           </button>
                           
                           {!p.entregado && (
-                            <button onClick={() => marcarEntregado(p.id)} className="ml-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-400 text-white text-base font-black rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-brand-500/20 active:scale-95">
+                            <button onClick={() => marcarEntregado(p.id)} className="ml-3 px-6 py-3 bg-brand-500 hover:bg-brand-400 text-white text-base font-black rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-brand-500/20 active:scale-95">
                               <IconCheck /> Entregar
                             </button>
                           )}
                         </div>
                       </td>
-
                     </tr>
                   )
                 })
@@ -531,20 +591,20 @@ export default function BuscarPaquete() {
         </div>
 
         {totalPaginas > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-200 bg-zinc-50">
+          <div className="flex items-center justify-between px-8 py-5 border-t border-zinc-200 bg-zinc-50">
             <span className="text-base font-bold text-zinc-600">Página <strong className="text-zinc-950 font-black">{paginaActual}</strong> de {totalPaginas}</span>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button 
                 onClick={() => cambiarPagina(paginaActual - 1)} 
                 disabled={paginaActual === 1} 
-                className="px-5 py-2.5 rounded-xl border border-zinc-200 bg-white text-base font-black text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-6 py-3 rounded-xl border border-zinc-200 bg-white text-base font-black text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
                 Anterior
               </button>
               <button 
                 onClick={() => cambiarPagina(paginaActual + 1)} 
                 disabled={paginaActual === totalPaginas} 
-                className="px-5 py-2.5 rounded-xl border border-zinc-200 bg-white text-base font-black text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-6 py-3 rounded-xl border border-zinc-200 bg-white text-base font-black text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
                 Siguiente
               </button>
@@ -557,12 +617,12 @@ export default function BuscarPaquete() {
         {anySelected && (
           <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-950 text-white px-6 py-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center gap-4 sm:gap-6 z-50 border border-zinc-800">
             <div className="text-base font-black whitespace-nowrap">
-              <span className="text-brand-400 text-lg mr-1">{selectedIds.size}</span> seleccionados
+              <span className="text-brand-400 text-xl mr-2">{selectedIds.size}</span> seleccionados
             </div>
             <div className="flex items-center gap-3">
-              <button onClick={clearSelection} className="px-3 py-2 rounded-lg text-base font-bold text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">Cancelar</button>
-              <button onClick={() => setConfirmBulk(true)} className="px-3 py-2 rounded-lg text-base font-black text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-2"><IconTrash /> Eliminar</button>
-              <button onClick={entregarSeleccionados} disabled={selectedPendingCount === 0} className="px-5 py-2 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-base font-black transition-colors flex items-center gap-2 shadow-lg shadow-brand-500/20">
+              <button onClick={clearSelection} className="px-4 py-2.5 rounded-xl text-base font-bold text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">Cancelar</button>
+              <button onClick={() => setConfirmBulk(true)} className="px-4 py-2.5 rounded-xl text-base font-black text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-2"><IconTrash /> Eliminar</button>
+              <button onClick={entregarSeleccionados} disabled={selectedPendingCount === 0} className="px-6 py-3 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-lg font-black transition-colors flex items-center gap-2 shadow-lg shadow-brand-500/20">
                 <IconCheck /> Entregar {selectedPendingCount > 0 ? `(${selectedPendingCount})` : ''}
               </button>
             </div>
@@ -574,32 +634,32 @@ export default function BuscarPaquete() {
         {mostrarModal && paqueteEditando && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm" onClick={() => setMostrarModal(false)} />
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
-              <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
-                <h3 className="text-xl font-black text-zinc-950">Editar Paquete</h3>
-                <button onClick={() => setMostrarModal(false)} className="w-8 h-8 flex items-center justify-center bg-zinc-100 text-zinc-500 hover:text-zinc-950 hover:bg-zinc-200 rounded-full transition-colors"><IconTimes /></button>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
+              <div className="p-8 border-b border-zinc-100 flex items-center justify-between">
+                <h3 className="text-2xl font-black text-zinc-950">Editar Paquete</h3>
+                <button onClick={() => setMostrarModal(false)} className="w-10 h-10 flex items-center justify-center bg-zinc-100 text-zinc-500 hover:text-zinc-950 hover:bg-zinc-200 rounded-full transition-colors"><IconTimes /></button>
               </div>
-              <div className="p-6 space-y-5 bg-zinc-50/50">
+              <div className="p-8 space-y-6 bg-zinc-50/50">
                 <div>
-                  <label className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-1.5 block">Cliente</label>
-                  <input type="text" value={paqueteEditando.nombre_cliente} onChange={e => setPaqueteEditando(p => ({ ...p, nombre_cliente: e.target.value }))} className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-black text-lg text-zinc-950" />
+                  <label className="text-sm font-black text-zinc-500 uppercase tracking-widest mb-2 block">Cliente</label>
+                  <input type="text" value={paqueteEditando.nombre_cliente} onChange={e => setPaqueteEditando(p => ({ ...p, nombre_cliente: e.target.value }))} className="w-full px-5 py-4 bg-white border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 outline-none font-black text-xl text-zinc-950" />
                 </div>
                 <div>
-                  <label className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-1.5 block">Compañía</label>
-                  <select value={paqueteEditando.compania} onChange={e => setPaqueteEditando(p => ({ ...p, compania: e.target.value }))} className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-black text-lg text-zinc-950">
+                  <label className="text-sm font-black text-zinc-500 uppercase tracking-widest mb-2 block">Compañía</label>
+                  <select value={paqueteEditando.compania} onChange={e => setPaqueteEditando(p => ({ ...p, compania: e.target.value }))} className="w-full px-5 py-4 bg-white border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 outline-none font-black text-xl text-zinc-950">
                     {companias.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-1.5 block">Ubicación</label>
-                  <select value={paqueteEditando.ubicacion_label} onChange={e => setPaqueteEditando(p => ({ ...p, ubicacion_label: e.target.value }))} className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-black text-lg text-zinc-950">
+                  <label className="text-sm font-black text-zinc-500 uppercase tracking-widest mb-2 block">Ubicación</label>
+                  <select value={paqueteEditando.ubicacion_label} onChange={e => setPaqueteEditando(p => ({ ...p, ubicacion_label: e.target.value }))} className="w-full px-5 py-4 bg-white border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 outline-none font-black text-xl text-zinc-950">
                     {ubicaciones.map(u => <option key={u.id} value={u.label}>{u.label}</option>)}
                   </select>
                 </div>
               </div>
-              <div className="p-6 flex items-center justify-end gap-3 border-t border-zinc-100 bg-white">
-                <button onClick={() => setMostrarModal(false)} className="px-5 py-3 rounded-xl font-bold text-base text-zinc-600 bg-zinc-100 hover:bg-zinc-200 transition-colors">Cancelar</button>
-                <button onClick={guardarCambios} className="px-5 py-3 rounded-xl font-black text-base bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/30 transition-all active:scale-95">Guardar Cambios</button>
+              <div className="p-8 flex items-center justify-end gap-4 border-t border-zinc-100 bg-white">
+                <button onClick={() => setMostrarModal(false)} className="px-6 py-4 rounded-xl font-bold text-lg text-zinc-600 bg-zinc-100 hover:bg-zinc-200 transition-colors">Cancelar</button>
+                <button onClick={guardarCambios} className="px-6 py-4 rounded-xl font-black text-lg bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/30 transition-all active:scale-95">Guardar Cambios</button>
               </div>
             </motion.div>
           </div>
@@ -610,19 +670,19 @@ export default function BuscarPaquete() {
         {(confirmState.open || confirmBulk) && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm" onClick={() => {setConfirmState({open:false, payload:null}); setConfirmBulk(false);}} />
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden p-8 text-center">
-              <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-red-100">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden p-10 text-center">
+              <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-red-100">
                 <IconTrash />
               </div>
-              <h3 className="text-2xl font-black text-zinc-950 mb-2">Eliminar paquete{confirmBulk ? 's' : ''}</h3>
-              <p className="text-base font-bold text-zinc-500 mb-8">
+              <h3 className="text-3xl font-black text-zinc-950 mb-3">Eliminar paquete{confirmBulk ? 's' : ''}</h3>
+              <p className="text-lg font-bold text-zinc-500 mb-10 leading-relaxed">
                 {confirmBulk 
                   ? `Estás a punto de eliminar ${selectedIds.size} paquetes de forma irreversible.` 
                   : `¿Seguro que deseas eliminar el paquete de ${confirmState.payload?.nombre_cliente}? Esta acción no se puede deshacer.`}
               </p>
-              <div className="flex gap-3">
-                <button onClick={() => {setConfirmState({open:false, payload:null}); setConfirmBulk(false);}} className="flex-1 py-3.5 rounded-xl font-black text-base text-zinc-700 bg-zinc-100 hover:bg-zinc-200 transition-colors">Cancelar</button>
-                <button onClick={confirmBulk ? eliminarSeleccionados : confirmarEliminar} className="flex-1 py-3.5 rounded-xl font-black text-base text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all active:scale-95">Sí, Eliminar</button>
+              <div className="flex gap-4">
+                <button onClick={() => {setConfirmState({open:false, payload:null}); setConfirmBulk(false);}} className="flex-1 py-4 rounded-xl font-black text-lg text-zinc-700 bg-zinc-100 hover:bg-zinc-200 transition-colors">Cancelar</button>
+                <button onClick={confirmBulk ? eliminarSeleccionados : confirmarEliminar} className="flex-1 py-4 rounded-xl font-black text-lg text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all active:scale-95">Sí, Eliminar</button>
               </div>
             </motion.div>
           </div>
