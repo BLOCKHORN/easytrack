@@ -6,7 +6,7 @@ import { hasNotice, subscribeNotice, setNotice, clearNotice } from '../../utils/
 import { listTickets } from '../../services/ticketsService';
 import { supabase } from '../../utils/supabaseClient';
 
-const IconLogo = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>;
+const IconLogo = () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>;
 const IconChart = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>;
 const IconPlus = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
 const IconSearch = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
@@ -72,43 +72,43 @@ export default function DashboardLayout() {
       
       {/* SIDEBAR DESKTOP */}
       <aside className="hidden md:flex flex-col w-[260px] bg-zinc-950 border-r border-zinc-900 sticky top-0 h-screen overflow-y-auto">
-        <div className="p-8 flex items-center gap-3 cursor-pointer" onClick={() => navigate('.')}>
+        <div className="p-7 flex items-center gap-3 cursor-pointer" onClick={() => navigate('.')}>
           <div className="text-white">
             <IconLogo />
           </div>
-          <span className="text-xl font-bold tracking-tight text-white">
+          <span className="text-xl font-black tracking-tight text-white">
             EasyTrack
           </span>
         </div>
 
-        <nav className="flex-1 px-4 space-y-1">
-          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 pl-3 mt-4">Core</div>
+        <nav className="flex-1 px-4 space-y-1.5">
+          <div className="text-[11px] font-black text-zinc-500 uppercase tracking-widest mb-3 pl-3 mt-3">Core</div>
           {navItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               end={item.end}
-              className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}
+              className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 ${isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}
             >
               {item.icon}
               {item.label}
             </NavLink>
           ))}
           
-          <div className="mt-10 mb-6 border-t border-zinc-800/50 mx-3" />
-          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 pl-3">Sistema</div>
+          <div className="mt-8 mb-5 border-t border-zinc-800/50 mx-3" />
+          <div className="text-[11px] font-black text-zinc-500 uppercase tracking-widest mb-3 pl-3">Sistema</div>
           
           {bottomItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               onClick={() => item.isSupport && clearNotice()}
-              className={({ isActive }) => `relative flex items-center gap-3 px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}
+              className={({ isActive }) => `relative flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 ${isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}
             >
               {item.icon}
               {item.label}
               {item.isSupport && supportNotice && (
-                <span className="absolute right-3 w-2 h-2 bg-red-500 rounded-full" />
+                <span className="absolute right-3 w-2.5 h-2.5 bg-red-500 rounded-full" />
               )}
             </NavLink>
           ))}
@@ -116,11 +116,11 @@ export default function DashboardLayout() {
 
         {/* ACCIONES GLOBALES FOOTER */}
         <div className="mt-auto p-4 border-t border-zinc-900">
-          <a href="/" className="flex items-center gap-3 px-3 py-2 rounded-lg font-medium text-sm text-zinc-500 hover:bg-zinc-900 hover:text-white transition-all">
+          <a href="/" className="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm text-zinc-500 hover:bg-zinc-900 hover:text-white transition-all">
             <IconGlobe />
             Volver a la Web
           </a>
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 mt-1 rounded-lg font-medium text-sm text-zinc-500 hover:bg-red-500/10 hover:text-red-400 transition-all">
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 mt-1 rounded-xl font-bold text-sm text-zinc-500 hover:bg-red-500/10 hover:text-red-400 transition-all">
             <IconLogout />
             Cerrar Sesión
           </button>
@@ -129,15 +129,15 @@ export default function DashboardLayout() {
 
       {/* HEADER MOBILE */}
       <header className="md:hidden sticky top-0 z-40 bg-zinc-950 flex items-center justify-between p-4 shadow-md">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <div className="text-white"><IconLogo /></div>
-          <span className="text-lg font-bold tracking-tight text-white">EasyTrack</span>
+          <span className="text-xl font-black tracking-tight text-white">EasyTrack</span>
         </div>
         <div className="flex items-center gap-1">
-          <a href="/" className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-white rounded-lg transition-colors">
+          <a href="/" className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-white rounded-lg transition-colors">
             <IconGlobe />
           </a>
-          <button onClick={handleLogout} className="w-9 h-9 flex items-center justify-center text-zinc-500 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-colors">
+          <button onClick={handleLogout} className="w-10 h-10 flex items-center justify-center text-zinc-500 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-colors">
             <IconLogout />
           </button>
         </div>
@@ -150,7 +150,7 @@ export default function DashboardLayout() {
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          className="flex-1 p-4 md:p-10 max-w-7xl w-full mx-auto"
+          className="flex-1 p-5 md:p-8 max-w-[1440px] w-full mx-auto"
         >
           <Outlet />
         </motion.div>
@@ -158,17 +158,17 @@ export default function DashboardLayout() {
 
       {/* BOTTOM NAV MOBILE */}
       <nav className="md:hidden fixed bottom-4 left-4 right-4 z-50">
-        <div className="bg-zinc-950 rounded-2xl p-2 flex justify-between items-center shadow-2xl">
+        <div className="bg-zinc-950 rounded-2xl p-2.5 flex justify-between items-center shadow-2xl">
           {[...navItems.slice(0,3), ...bottomItems].map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               onClick={() => item.isSupport && clearNotice()}
-              className={({ isActive }) => `relative flex flex-col items-center justify-center w-10 sm:w-12 h-10 sm:h-12 rounded-xl transition-colors ${isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+              className={({ isActive }) => `relative flex flex-col items-center justify-center w-12 sm:w-14 h-12 sm:h-14 rounded-xl transition-colors ${isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
               title={item.label}
             >
               {item.icon}
-              {item.isSupport && supportNotice && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />}
+              {item.isSupport && supportNotice && <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full" />}
             </NavLink>
           ))}
         </div>

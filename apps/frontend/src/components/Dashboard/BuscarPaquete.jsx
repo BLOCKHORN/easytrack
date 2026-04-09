@@ -9,9 +9,6 @@ import {
 } from "../../services/paquetesService";
 import { getTenantIdOrThrow } from "../../utils/tenant";
 
-// ==========================================
-// ICONOS CUSTOM
-// ==========================================
 const IconSearch = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>;
 const IconCheck = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>;
 const IconTrash = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>;
@@ -20,9 +17,6 @@ const IconEye = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none
 const IconEyeSlash = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20"/></svg>;
 const IconTimes = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 
-// ==========================================
-// LÓGICA DE BÚSQUEDA Y CONSTANTES
-// ==========================================
 const RESULTADOS_POR_PAGINA = 10;
 const LS_KEY = "buscar_paquete_filtros_v12";
 
@@ -126,9 +120,6 @@ function highlightApprox(name, query) {
   );
 }
 
-// ==========================================
-// COMPONENTE PRINCIPAL
-// ==========================================
 export default function BuscarPaquete() {
   const [busqueda, setBusqueda] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState("pendiente");
@@ -149,6 +140,7 @@ export default function BuscarPaquete() {
     });
   };
 
+  const [tenantId, setTenantId] = useState(null);
   const [paquetes, setPaquetes] = useState([]);
   const [companias, setCompanias] = useState([]);
   const [ubicaciones, setUbicaciones] = useState([]); 
@@ -164,7 +156,6 @@ export default function BuscarPaquete() {
 
   const searchDebounceRef = useRef(null);
 
-  // LS persist
   useEffect(() => {
     try {
       const raw = localStorage.getItem(LS_KEY);
@@ -180,7 +171,6 @@ export default function BuscarPaquete() {
     localStorage.setItem(LS_KEY, JSON.stringify({ estadoFiltro, companiaFiltro, ubicacionFiltro }));
   }, [estadoFiltro, companiaFiltro, ubicacionFiltro]);
 
-  // Carga inicial
   useEffect(() => {
     let cancelado = false;
     (async () => {
@@ -188,15 +178,18 @@ export default function BuscarPaquete() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
-        const tenantId = await getTenantIdOrThrow();
+        const tId = await getTenantIdOrThrow();
+        if (cancelado) return;
+        
+        setTenantId(tId);
 
         const paquetesAPI = await obtenerPaquetesBackend(token);
         if (cancelado) return;
 
-        const { data: empresas } = await supabase.from("empresas_transporte_tenant").select("nombre").eq("tenant_id", tenantId);
+        const { data: empresas } = await supabase.from("empresas_transporte_tenant").select("nombre").eq("tenant_id", tId);
         setCompanias((empresas || []).map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b)));
 
-        const { data: uRows } = await supabase.from("ubicaciones").select("id,label").eq("tenant_id", tenantId);
+        const { data: uRows } = await supabase.from("ubicaciones").select("id,label").eq("tenant_id", tId);
         const ubis = (uRows || []).map(r => ({ id: r.id, label: String(r.label || "").toUpperCase() }));
         setUbicaciones(ubis);
         
@@ -262,7 +255,6 @@ export default function BuscarPaquete() {
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / RESULTADOS_POR_PAGINA));
   const paginados = useMemo(() => filtrados.slice((paginaActual - 1) * RESULTADOS_POR_PAGINA, paginaActual * RESULTADOS_POR_PAGINA), [filtrados, paginaActual]);
   
-  // FUNCION DE CAMBIO DE PAGINA (RESTURADA)
   const cambiarPagina = (nueva) => {
     if (nueva >= 1 && nueva <= totalPaginas) setPaginaActual(nueva);
   };
@@ -284,7 +276,6 @@ export default function BuscarPaquete() {
     return paquetes.filter(p => set.has(p.id) && !p.entregado).map(p => p.id);
   }, [selectedIds, paquetes]);
 
-  // Acciones DB
   const marcarEntregado = async (id) => {
     const snapshot = paquetes;
     setPaquetes(prev => prev.map(p => p.id === id ? { ...p, entregado: true } : p));
@@ -344,15 +335,30 @@ export default function BuscarPaquete() {
     if (!paqueteEditando) return;
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const label = String(paqueteEditando.ubicacion_label || "").toUpperCase().trim();
-      const ubiRow = ubicaciones.find(u => u.label === label) || null;
+      const newLabel = String(paqueteEditando.ubicacion_label || "").toUpperCase().trim();
+      const ubiRow = ubicaciones.find(u => u.label === newLabel) || null;
+
+      const originalPkg = paquetes.find(p => p.id === paqueteEditando.id);
+      const oldLabel = String(originalPkg?.ubicacion_label || "").toUpperCase().trim();
+
+      if (tenantId && oldLabel && newLabel && oldLabel !== newLabel) {
+        const countInOld = paquetes.filter(p => !p.entregado && String(p.ubicacion_label || "").toUpperCase() === oldLabel).length;
+        const nextThreshold = Math.max(0, countInOld - 1);
+        
+        try {
+          const key = `ap_penalties_${tenantId}`;
+          const penalties = JSON.parse(localStorage.getItem(key)) || {};
+          penalties[oldLabel] = nextThreshold;
+          localStorage.setItem(key, JSON.stringify(penalties));
+        } catch(e) {}
+      }
       
       const payload = {
         id: paqueteEditando.id,
         nombre_cliente: paqueteEditando.nombre_cliente,
         empresa_transporte: paqueteEditando.compania,
         ubicacion_id: ubiRow?.id || null,
-        ubicacion_label: label || null,
+        ubicacion_label: newLabel || null,
       };
 
       const actualizado = await editarPaqueteBackend(payload, session.access_token);
@@ -361,46 +367,45 @@ export default function BuscarPaquete() {
         nombre_cliente: actualizado?.nombre_cliente ?? payload.nombre_cliente,
         compania: actualizado?.empresa_transporte ?? payload.empresa_transporte,
         ubicacion_id: actualizado?.ubicacion_id ?? payload.ubicacion_id,
-        ubicacion_label: actualizado?.ubicacion_label ?? label,
+        ubicacion_label: actualizado?.ubicacion_label ?? newLabel,
       } : p));
       setMostrarModal(false);
     } catch (e) {}
   };
 
-  // KPIs
   const totalKPI = paquetes.length;
   const pendientesKPI = paquetes.filter(p => !p.entregado).length;
   const entregadosKPI = totalKPI - pendientesKPI;
   const progresoKPI = totalKPI ? Math.round((entregadosKPI / totalKPI) * 100) : 0;
+  const selectedPendingCount = selectedPendingIds.length;
 
   return (
     <div className="space-y-6 pb-24">
-      {/* HEADER & KPIS */}
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 pb-6 border-b border-zinc-200/80">
         <div>
-          <h1 className="text-3xl font-extrabold text-zinc-950 tracking-tight flex items-center gap-3">
+          <h1 className="text-4xl font-black text-zinc-950 tracking-tight flex items-center gap-3">
              <IconSearch /> Localizador
           </h1>
-          <p className="text-sm font-medium text-zinc-500 mt-1">Encuentra y gestiona el histórico de paquetes.</p>
+          <p className="text-base font-bold text-zinc-600 mt-1">Encuentra y gestiona el histórico de paquetes.</p>
         </div>
         
         <div className="flex flex-wrap md:flex-nowrap gap-3">
           <div className="bg-white px-5 py-3 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-center flex-1">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Total</span>
-            <span className="text-2xl font-black text-zinc-900">{totalKPI}</span>
+            <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">Total</span>
+            <span className="text-3xl font-black text-zinc-950 mt-1">{totalKPI}</span>
           </div>
           <div className="bg-white px-5 py-3 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-center flex-1">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pendientes</span>
-            <span className="text-2xl font-black text-amber-600">{pendientesKPI}</span>
+            <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">Pendientes</span>
+            <span className="text-3xl font-black text-amber-600 mt-1">{pendientesKPI}</span>
           </div>
           <div className="bg-white px-5 py-3 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-center flex-1">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Entregados</span>
-            <span className="text-2xl font-black text-emerald-600">{entregadosKPI}</span>
+            <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">Entregados</span>
+            <span className="text-3xl font-black text-emerald-600 mt-1">{entregadosKPI}</span>
           </div>
           <div className="bg-white px-5 py-3 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-center flex-1 w-full md:w-48">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Progreso</span>
-              <span className="text-xs font-black text-brand-600">{progresoKPI}%</span>
+              <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">Progreso</span>
+              <span className="text-sm font-black text-brand-600">{progresoKPI}%</span>
             </div>
             <div className="w-full bg-zinc-100 rounded-full h-2">
               <div className="bg-brand-500 h-2 rounded-full" style={{ width: `${progresoKPI}%` }}></div>
@@ -409,11 +414,10 @@ export default function BuscarPaquete() {
         </div>
       </div>
 
-      {/* FILTROS Y BUSQUEDA */}
       <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col xl:flex-row gap-4 justify-between items-center">
         <div className="relative w-full xl:w-96 flex-shrink-0">
           <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-zinc-400"><IconSearch /></div>
-          <input type="text" placeholder="Buscar nombre o compañía..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="w-full pl-12 pr-10 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-bold text-zinc-900 transition-all" />
+          <input type="text" placeholder="Buscar nombre o compañía..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="w-full pl-12 pr-10 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-black text-lg text-zinc-950 transition-all placeholder:font-bold" />
           {busqueda && (
             <button onClick={() => setBusqueda("")} className="absolute inset-y-0 right-3 flex items-center justify-center text-zinc-400 hover:text-zinc-600">
               <IconTimes />
@@ -422,30 +426,29 @@ export default function BuscarPaquete() {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-          <select value={estadoFiltro} onChange={e => setEstadoFiltro(e.target.value)} className="px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm font-bold text-zinc-700 outline-none focus:ring-2 focus:ring-brand-500">
+          <select value={estadoFiltro} onChange={e => setEstadoFiltro(e.target.value)} className="px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-base font-black text-zinc-800 outline-none focus:ring-2 focus:ring-brand-500">
             <option value="pendiente">Solo Pendientes</option>
             <option value="entregado">Solo Entregados</option>
             <option value="todos">Todos los Estados</option>
           </select>
-          <select value={companiaFiltro} onChange={e => setCompaniaFiltro(e.target.value)} className="px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm font-bold text-zinc-700 outline-none focus:ring-2 focus:ring-brand-500">
+          <select value={companiaFiltro} onChange={e => setCompaniaFiltro(e.target.value)} className="px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-base font-black text-zinc-800 outline-none focus:ring-2 focus:ring-brand-500">
             {companiasFiltradas.map(c => <option key={c} value={c}>{c === 'todos' ? 'Cualquier Compañía' : c}</option>)}
           </select>
-          <select value={ubicacionFiltro} onChange={e => setUbicacionFiltro(e.target.value)} className="px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm font-bold text-zinc-700 outline-none focus:ring-2 focus:ring-brand-500">
+          <select value={ubicacionFiltro} onChange={e => setUbicacionFiltro(e.target.value)} className="px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-base font-black text-zinc-800 outline-none focus:ring-2 focus:ring-brand-500">
             {ubicacionesFiltradas.map(u => <option key={u} value={u}>{u === 'todas' ? 'Todas las Ubicaciones' : u}</option>)}
           </select>
-          <button onClick={() => {setRevealAll(!revealAll); setRevealedSet(new Set());}} className={`px-4 py-3 rounded-xl border text-sm font-bold transition-colors flex items-center justify-center gap-2 ${revealAll ? 'bg-zinc-950 text-white border-zinc-950' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'}`}>
+          <button onClick={() => {setRevealAll(!revealAll); setRevealedSet(new Set());}} className={`px-4 py-3 rounded-xl border text-base font-black transition-colors flex items-center justify-center gap-2 ${revealAll ? 'bg-zinc-950 text-white border-zinc-950' : 'bg-white text-zinc-800 border-zinc-300 hover:bg-zinc-50'}`}>
             {revealAll ? <IconEyeSlash /> : <IconEye />} {revealAll ? 'Ocultar' : 'Mostrar'}
           </button>
         </div>
       </div>
 
-      {/* TABLA DE DATOS */}
       <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse whitespace-nowrap">
             <thead>
-              <tr className="bg-zinc-50/80 border-b border-zinc-200 text-xs font-bold text-zinc-500 uppercase tracking-widest">
-                <th className="py-4 px-4 w-12 text-center">
+              <tr className="bg-zinc-50/80 border-b border-zinc-200 text-sm font-black text-zinc-600 uppercase tracking-wider">
+                <th className="py-4 px-6 w-12 text-center">
                   <button onClick={toggleSelectAllPage} className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${allPageSelected ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-zinc-300'}`}>
                     {allPageSelected && <IconCheck />}
                   </button>
@@ -464,7 +467,7 @@ export default function BuscarPaquete() {
                   <tr key={i}><td colSpan="7" className="py-6 px-6"><div className="h-4 bg-zinc-100 rounded w-full animate-pulse"></div></td></tr>
                 ))
               ) : paginados.length === 0 ? (
-                <tr><td colSpan="7" className="py-16 text-center text-zinc-500 font-medium">No hay paquetes que coincidan con la búsqueda.</td></tr>
+                <tr><td colSpan="7" className="py-16 text-center text-zinc-500 font-bold text-lg">No hay paquetes que coincidan con la búsqueda.</td></tr>
               ) : (
                 paginados.map(p => {
                   const revealed = revealAll || revealedSet.has(p.id);
@@ -472,34 +475,33 @@ export default function BuscarPaquete() {
                   
                   return (
                     <tr key={p.id} className={`hover:bg-zinc-50 transition-colors ${checked ? 'bg-brand-50/50' : ''}`}>
-                      <td className="py-4 px-4 text-center">
+                      <td className="py-4 px-6 text-center">
                         <button onClick={() => toggleSelectOne(p.id)} className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${checked ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-zinc-300'}`}>
                           {checked && <IconCheck />}
                         </button>
                       </td>
                       <td className="py-4 px-6">
-                        <div className={`font-bold text-zinc-900 transition-all ${revealed ? '' : 'blur-[4px] select-none'}`}>
+                        <div className={`font-black text-lg text-zinc-950 transition-all ${revealed ? '' : 'blur-[4px] select-none'}`}>
                           {busqueda ? highlightApprox(p.nombre_cliente, busqueda) : p.nombre_cliente}
                         </div>
                       </td>
-                      <td className="py-4 px-6 font-semibold text-zinc-600 text-sm">
+                      <td className="py-4 px-6 font-black text-zinc-700 text-base">
                         {p.compania || "—"}
                       </td>
                       <td className="py-4 px-6">
-                        <span className="inline-flex items-center px-2.5 py-1 bg-zinc-100 border border-zinc-200 text-zinc-800 text-xs font-black rounded-lg">
+                        <span className="inline-flex items-center px-3 py-1 bg-zinc-100 border border-zinc-200 text-zinc-900 text-sm font-black rounded-lg">
                           {p.ubicacion_label || "—"}
                         </span>
                       </td>
-                      <td className="py-4 px-6 text-sm font-medium text-zinc-500">
+                      <td className="py-4 px-6 text-base font-bold text-zinc-600">
                         {new Date(p.fecha_llegada).toLocaleDateString()}
                       </td>
                       <td className="py-4 px-6">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${p.entregado ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-black border ${p.entregado ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                           {p.entregado ? "Entregado" : "Pendiente"}
                         </span>
                       </td>
                       
-                      {/* ACCIONES (Siempre Visibles, Máximo Protagonismo para ENTREGAR) */}
                       <td className="py-4 px-6 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button onClick={() => {setRevealAll(false); setRevealedSet(prev => {const n=new Set(prev); n.has(p.id)?n.delete(p.id):n.add(p.id); return n;})}} className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-colors" title="Mostrar/Ocultar nombre">
@@ -512,9 +514,8 @@ export default function BuscarPaquete() {
                             <IconTrash />
                           </button>
                           
-                          {/* BOTON ESTRELLA */}
                           {!p.entregado && (
-                            <button onClick={() => marcarEntregado(p.id)} className="ml-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-400 text-white text-sm font-black rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-brand-500/20 active:scale-95">
+                            <button onClick={() => marcarEntregado(p.id)} className="ml-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-400 text-white text-base font-black rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-brand-500/20 active:scale-95">
                               <IconCheck /> Entregar
                             </button>
                           )}
@@ -529,22 +530,21 @@ export default function BuscarPaquete() {
           </table>
         </div>
 
-        {/* PAGINACIÓN FUNCIONAL */}
         {totalPaginas > 1 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-200 bg-zinc-50">
-            <span className="text-sm font-medium text-zinc-500">Página <strong className="text-zinc-900">{paginaActual}</strong> de {totalPaginas}</span>
+            <span className="text-base font-bold text-zinc-600">Página <strong className="text-zinc-950 font-black">{paginaActual}</strong> de {totalPaginas}</span>
             <div className="flex gap-2">
               <button 
                 onClick={() => cambiarPagina(paginaActual - 1)} 
                 disabled={paginaActual === 1} 
-                className="px-5 py-2.5 rounded-xl border border-zinc-200 bg-white text-sm font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-5 py-2.5 rounded-xl border border-zinc-200 bg-white text-base font-black text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Anterior
               </button>
               <button 
                 onClick={() => cambiarPagina(paginaActual + 1)} 
                 disabled={paginaActual === totalPaginas} 
-                className="px-5 py-2.5 rounded-xl border border-zinc-200 bg-white text-sm font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-5 py-2.5 rounded-xl border border-zinc-200 bg-white text-base font-black text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Siguiente
               </button>
@@ -553,17 +553,16 @@ export default function BuscarPaquete() {
         )}
       </div>
 
-      {/* BARRA FLOTANTE ACCIONES MASIVAS */}
       <AnimatePresence>
         {anySelected && (
           <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-950 text-white px-6 py-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center gap-4 sm:gap-6 z-50 border border-zinc-800">
-            <div className="text-sm font-bold whitespace-nowrap">
+            <div className="text-base font-black whitespace-nowrap">
               <span className="text-brand-400 text-lg mr-1">{selectedIds.size}</span> seleccionados
             </div>
             <div className="flex items-center gap-3">
-              <button onClick={clearSelection} className="px-3 py-2 rounded-lg text-sm font-bold text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">Cancelar</button>
-              <button onClick={() => setConfirmBulk(true)} className="px-3 py-2 rounded-lg text-sm font-bold text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-2"><IconTrash /> Eliminar</button>
-              <button onClick={entregarSeleccionados} disabled={selectedPendingCount === 0} className="px-5 py-2 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-sm font-bold transition-colors flex items-center gap-2 shadow-lg shadow-brand-500/20">
+              <button onClick={clearSelection} className="px-3 py-2 rounded-lg text-base font-bold text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">Cancelar</button>
+              <button onClick={() => setConfirmBulk(true)} className="px-3 py-2 rounded-lg text-base font-black text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-2"><IconTrash /> Eliminar</button>
+              <button onClick={entregarSeleccionados} disabled={selectedPendingCount === 0} className="px-5 py-2 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-base font-black transition-colors flex items-center gap-2 shadow-lg shadow-brand-500/20">
                 <IconCheck /> Entregar {selectedPendingCount > 0 ? `(${selectedPendingCount})` : ''}
               </button>
             </div>
@@ -571,7 +570,6 @@ export default function BuscarPaquete() {
         )}
       </AnimatePresence>
 
-      {/* MODAL EDICION */}
       <AnimatePresence>
         {mostrarModal && paqueteEditando && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -583,32 +581,31 @@ export default function BuscarPaquete() {
               </div>
               <div className="p-6 space-y-5 bg-zinc-50/50">
                 <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Cliente</label>
-                  <input type="text" value={paqueteEditando.nombre_cliente} onChange={e => setPaqueteEditando(p => ({ ...p, nombre_cliente: e.target.value }))} className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-bold text-zinc-900" />
+                  <label className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-1.5 block">Cliente</label>
+                  <input type="text" value={paqueteEditando.nombre_cliente} onChange={e => setPaqueteEditando(p => ({ ...p, nombre_cliente: e.target.value }))} className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-black text-lg text-zinc-950" />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Compañía</label>
-                  <select value={paqueteEditando.compania} onChange={e => setPaqueteEditando(p => ({ ...p, compania: e.target.value }))} className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-bold text-zinc-900">
+                  <label className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-1.5 block">Compañía</label>
+                  <select value={paqueteEditando.compania} onChange={e => setPaqueteEditando(p => ({ ...p, compania: e.target.value }))} className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-black text-lg text-zinc-950">
                     {companias.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Ubicación</label>
-                  <select value={paqueteEditando.ubicacion_label} onChange={e => setPaqueteEditando(p => ({ ...p, ubicacion_label: e.target.value }))} className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-bold text-zinc-900">
+                  <label className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-1.5 block">Ubicación</label>
+                  <select value={paqueteEditando.ubicacion_label} onChange={e => setPaqueteEditando(p => ({ ...p, ubicacion_label: e.target.value }))} className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-black text-lg text-zinc-950">
                     {ubicaciones.map(u => <option key={u.id} value={u.label}>{u.label}</option>)}
                   </select>
                 </div>
               </div>
               <div className="p-6 flex items-center justify-end gap-3 border-t border-zinc-100 bg-white">
-                <button onClick={() => setMostrarModal(false)} className="px-5 py-3 rounded-xl font-bold text-sm text-zinc-600 bg-zinc-100 hover:bg-zinc-200 transition-colors">Cancelar</button>
-                <button onClick={guardarCambios} className="px-5 py-3 rounded-xl font-black text-sm bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/30 transition-all active:scale-95">Guardar Cambios</button>
+                <button onClick={() => setMostrarModal(false)} className="px-5 py-3 rounded-xl font-bold text-base text-zinc-600 bg-zinc-100 hover:bg-zinc-200 transition-colors">Cancelar</button>
+                <button onClick={guardarCambios} className="px-5 py-3 rounded-xl font-black text-base bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/30 transition-all active:scale-95">Guardar Cambios</button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* MODALES CONFIRMACION */}
       <AnimatePresence>
         {(confirmState.open || confirmBulk) && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -618,14 +615,14 @@ export default function BuscarPaquete() {
                 <IconTrash />
               </div>
               <h3 className="text-2xl font-black text-zinc-950 mb-2">Eliminar paquete{confirmBulk ? 's' : ''}</h3>
-              <p className="text-sm font-medium text-zinc-500 mb-8">
+              <p className="text-base font-bold text-zinc-500 mb-8">
                 {confirmBulk 
                   ? `Estás a punto de eliminar ${selectedIds.size} paquetes de forma irreversible.` 
                   : `¿Seguro que deseas eliminar el paquete de ${confirmState.payload?.nombre_cliente}? Esta acción no se puede deshacer.`}
               </p>
               <div className="flex gap-3">
-                <button onClick={() => {setConfirmState({open:false, payload:null}); setConfirmBulk(false);}} className="flex-1 py-3.5 rounded-xl font-bold text-sm text-zinc-700 bg-zinc-100 hover:bg-zinc-200 transition-colors">Cancelar</button>
-                <button onClick={confirmBulk ? eliminarSeleccionados : confirmarEliminar} className="flex-1 py-3.5 rounded-xl font-black text-sm text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all active:scale-95">Sí, Eliminar</button>
+                <button onClick={() => {setConfirmState({open:false, payload:null}); setConfirmBulk(false);}} className="flex-1 py-3.5 rounded-xl font-black text-base text-zinc-700 bg-zinc-100 hover:bg-zinc-200 transition-colors">Cancelar</button>
+                <button onClick={confirmBulk ? eliminarSeleccionados : confirmarEliminar} className="flex-1 py-3.5 rounded-xl font-black text-base text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all active:scale-95">Sí, Eliminar</button>
               </div>
             </motion.div>
           </div>
