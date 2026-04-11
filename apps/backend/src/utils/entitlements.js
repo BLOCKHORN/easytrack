@@ -1,4 +1,3 @@
-// utils/entitlements.js
 'use strict';
 
 function pickPlanName(sub) {
@@ -9,72 +8,80 @@ function deriveCadence(price, sub) {
   const rec = price?.recurring || {};
   const int = String(rec.interval || sub?.interval || '').toLowerCase();
   const count = Number(rec.interval_count || sub?.interval_count || 1);
-
   if (int === 'month' && count === 1) return { cadence: 'monthly', months: 1 };
   if (int === 'year' && count === 1) return { cadence: 'annual', months: 12 };
   return { cadence: 'custom', months: count || 1 };
 }
 
 function computeEntitlements({ tenant = null, subscription = null } = {}) {
-  const subStatus = String(subscription?.status || '').toLowerCase();
-  const subscriptionActive = ['active', 'trialing', 'past_due'].includes(subStatus);
+  const planId = tenant?.plan_id || 'free';
   const softBlocked = !!tenant?.soft_blocked;
-
-  // ==========================================
-  // ESCUDO VIP (Cuentas en Producción)
-  // ==========================================
-  const VIP_TENANTS = [
-    '463e2871-32de-4880-bddc-e1072acb7f59', // Estanco Benidoleig (Tu negocio - Lifetime)
-    '9934a0b9-6603-42ed-8d32-9aa7d32de1e2'  // Kiosco hospital Dénia (Cliente 2 - Blindado temporalmente)
-  ];
-  const isVip = VIP_TENANTS.includes(tenant?.id);
-
-  // Lógica de Límite Físico (250 default)
-  const defaultQuota = (Number.isFinite(tenant?.trial_quota) && tenant.trial_quota > 0) ? tenant.trial_quota : 250;
-  const trialQuota = isVip ? 10000000 : defaultQuota; 
   
+  const VIP_TENANTS = ['463e2871-32de-4880-bddc-e1072acb7f59', '9934a0b9-6603-42ed-8d32-9aa7d32de1e2'];
+  const isVip = VIP_TENANTS.includes(tenant?.id);
+  
+  const trialQuota = isVip ? 1000000 : (Number.isFinite(tenant?.trial_quota) ? tenant.trial_quota : 250);
   const trialUsed = Number(tenant?.trial_used ?? 0);
   const quotaOk = trialUsed < trialQuota;
 
-  // Acceso y Creación
-  const canUseApp = !softBlocked;
-  const canCreatePackage = !softBlocked && (subscriptionActive || quotaOk);
+  const now = new Date();
+  const aiTrialEnds = tenant?.ai_trial_ends_at ? new Date(tenant.ai_trial_ends_at) : null;
+  const aiTrialUsed = !!tenant?.ai_trial_used;
 
-  let reason = null;
-  if (softBlocked) reason = 'blocked';
-  else if (!subscriptionActive && !quotaOk) reason = 'quota_exceeded';
-  else if (subscriptionActive && subStatus === 'past_due') reason = 'past_due';
+  let aiStatus = 'locked';
+  if (planId === 'pro' || isVip) {
+    aiStatus = 'unlimited';
+  } else if (planId === 'plus') {
+    if (!aiTrialUsed) {
+      aiStatus = 'trial_available';
+    } else if (aiTrialEnds && now < aiTrialEnds) {
+      aiStatus = 'trial_active';
+    } else {
+      aiStatus = 'trial_expired';
+    }
+  }
+  
+  const features = {
+    canViewFinancialArea: planId !== 'free' || isVip,
+    canUseWhatsAppClient: planId !== 'free' || isVip,
+    aiStatus,
+    supportType: (planId === 'pro' || isVip) ? 'direct_whatsapp' : (planId === 'plus' ? 'ticket' : 'none'),
+    unlimitedPackages: planId !== 'free' || isVip
+  };
 
-  const price = subscription?.price || subscription?.items?.[0]?.price || null;
-  const product = subscription?.product || price?.product || null;
-  const { cadence, months } = deriveCadence(price, subscription);
+  const subStatus = String(subscription?.status || '').toLowerCase();
+  const hasActiveStripeSub = ['active', 'trialing', 'past_due'].includes(subStatus);
+  const isPaidPlan = planId === 'pro' || planId === 'plus' || isVip;
+  const subscriptionActive = hasActiveStripeSub || isPaidPlan;
 
-  const plan = subscriptionActive ? {
-    id: subscription?.provider_subscription_id || subscription?.id || null,
-    name: pickPlanName({ ...subscription, price, product }) || 'Premium',
-    status: subStatus,
+  const hasStripeInvolved = !!tenant?.stripe_customer_id || !!subscription?.provider_subscription_id;
+  const isManualOverride = isPaidPlan && !hasStripeInvolved;
+
+  const price = subscription?.price || null;
+  const product = subscription?.product || null;
+  const { cadence } = deriveCadence(price, subscription);
+  
+  const planInfo = subscriptionActive ? {
+    id: subscription?.provider_subscription_id || subscription?.id || 'manual-override',
+    name: pickPlanName({ ...subscription, price, product }) || (planId === 'pro' ? 'Pro' : (planId === 'plus' ? 'Plus' : 'VIP')),
+    status: isManualOverride ? 'manual' : (subStatus || 'active'),
     cancel_at_period_end: !!subscription?.cancel_at_period_end,
     currency: price?.currency || subscription?.currency || 'EUR',
-    cadence,
-    metadata: { ...(product?.metadata || {}), ...(price?.metadata || {}) },
+    cadence: isManualOverride ? 'manual' : cadence,
+    current_period_end: subscription?.current_period_end || null,
   } : null;
 
   return {
-    canUseApp,
-    canCreatePackage,
+    plan_id: planId,
+    canUseApp: !softBlocked,
+    canCreatePackage: !softBlocked && (features.unlimitedPackages || quotaOk),
+    features,
     subscriptionActive,
     is_paid: subscriptionActive,
-    showTrialBanner: !subscriptionActive && quotaOk && !isVip, 
-    trial: {
-      active: !subscriptionActive,
-      quota: trialQuota,
-      used: trialUsed,
-      remaining: Math.max(0, trialQuota - trialUsed),
-      quota_ok: quotaOk,
-    },
+    trial: { active: planId === 'free' && !isVip, quota: trialQuota, used: trialUsed, remaining: Math.max(0, trialQuota - trialUsed), quota_ok: quotaOk },
     soft_blocked: softBlocked,
-    reason,
-    plan
+    reason: softBlocked ? 'blocked' : (!(features.unlimitedPackages || quotaOk) ? 'quota_exceeded' : null),
+    plan: planInfo
   };
 }
 

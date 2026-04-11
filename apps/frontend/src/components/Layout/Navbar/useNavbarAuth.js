@@ -14,6 +14,11 @@ export default function useNavbarAuth(navigate) {
     return base.charAt(0).toUpperCase() + base.slice(1);
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/', { replace: true });
+  };
+
   useEffect(() => {
     let unsub = null;
 
@@ -53,11 +58,6 @@ export default function useNavbarAuth(navigate) {
     init();
     return () => { if (unsub) unsub(); };
   }, [navigate]);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut({ scope: 'local' });
-    navigate('/');
-  };
 
   return { checking, isLoggedIn, userEmail, avatarUrl, displayName, handleLogout };
 }

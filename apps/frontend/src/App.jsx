@@ -15,7 +15,10 @@ import CrearPassword from './components/Auth/CrearPassword';
 import EmailConfirmado from './components/Auth/EmailConfirmado';
 import LoginModal from './components/Auth/LoginModal';
 
+// --- MÓDULO BILLING ---
+import Billing from './components/Billing/Billing';
 import UpgradeSuccess from './components/Billing/UpgradeSuccess';
+import CheckoutCancel from './components/Billing/CheckoutCancel';
 import SubscriptionGate from './components/Billing/SubscriptionGate';
 import PortalBridge from './components/Billing/PortalBridge';
 
@@ -60,21 +63,6 @@ function LandingSection({ sectionId }) {
   return <LandingPage />;
 }
 
-function Redirect({ to }) {
-  const navigate = useNavigate();
-  useEffect(() => { navigate(to, { replace: true }); }, [navigate, to]);
-  return null;
-}
-
-function RedirectPreserveHash({ to }) {
-  const navigate = useNavigate();
-  const loc = useLocation();
-  useEffect(() => {
-    navigate(`${to}${loc.search || ''}${loc.hash || ''}`, { replace: true });
-  }, [navigate, to, loc.search, loc.hash]);
-  return null;
-}
-
 function RedirectToMyTenant() {
   const navigate = useNavigate();
   const loc = useLocation();
@@ -88,22 +76,6 @@ function RedirectToMyTenant() {
     }
     navigate(`/${tenant.slug}/dashboard${loc.search || ''}${loc.hash || ''}`, { replace: true });
   }, [tenant, loading, navigate, loc.search, loc.hash]);
-
-  return null;
-}
-
-function RedirectShortToSlug({ subpath }) {
-  const navigate = useNavigate();
-  const { tenant, loading } = useTenant();
-
-  useEffect(() => {
-    if (loading) return;
-    if (!tenant?.slug) {
-      navigate('/', { replace: true });
-      return;
-    }
-    navigate(`/${tenant.slug}${subpath}`, { replace: true });
-  }, [tenant, loading, navigate, subpath]);
 
   return null;
 }
@@ -133,18 +105,17 @@ function ProtectedRoute({ children }) {
 
 function NotFound() {
   return (
-    <section className="max-w-xl mx-auto mt-20 p-8 text-center">
-      <h1 className="text-4xl font-bold mb-4">404</h1>
-      <p className="text-slate-500 mb-8">Página no encontrada.</p>
-      <a className="px-6 py-3 bg-brand-600 text-white font-bold rounded-lg" href="/">Ir al inicio</a>
+    <section className="max-w-xl mx-auto mt-20 p-8 text-center font-sans">
+      <h1 className="text-5xl font-black text-zinc-950 mb-4">404</h1>
+      <p className="text-zinc-500 font-bold mb-8 text-lg">Página no encontrada.</p>
+      <a className="px-6 py-3.5 bg-zinc-950 hover:bg-zinc-800 transition-colors text-white font-black rounded-xl shadow-lg" href="/">Volver al inicio</a>
     </section>
   );
 }
 
 function LoginRoute() {
-  const { modal, openLogin } = useModal();
+  const { openLogin } = useModal();
   const navigate = useNavigate();
-  const location = useLocation();
   const { tenant, loading } = useTenant();
   const [armed, setArmed] = useState(false);
 
@@ -160,40 +131,42 @@ function LoginRoute() {
     }
   }, [tenant, loading, openLogin, navigate, armed]);
 
-  useEffect(() => {
-    if (!armed) return;
-    if (location.pathname !== '/login') return;
-    if (modal !== 'login') {
-      if (window.history.length > 1) navigate(-1);
-      else navigate('/', { replace: true });
-    }
-  }, [modal, armed, navigate, location.pathname]);
-
   return null;
 }
 
 function PublicLayout() {
+  const location = useLocation();
+  const hideNavRoutes = ['/registro', '/crear-password', '/auth/email-confirmado'];
+  const isAuthPage = hideNavRoutes.includes(location.pathname);
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-brand-100 selection:text-brand-900 flex flex-col">
-      <Navbar />
+      {!isAuthPage && <Navbar />}
       <main className="flex-1 flex flex-col">
         <Outlet />
       </main>
-      <Footer />
+      {!isAuthPage && <Footer />}
     </div>
   );
+}
+
+function RedirectShortToSlug({ subpath }) {
+  const navigate = useNavigate();
+  const { tenant, loading } = useTenant();
+  useEffect(() => {
+    if (loading) return;
+    if (!tenant?.slug) { navigate('/', { replace: true }); return; }
+    navigate(`/${tenant.slug}${subpath}`, { replace: true });
+  }, [tenant, loading, navigate, subpath]);
+  return null;
 }
 
 export default function App() {
   const { modal, openLogin, closeModal } = useModal();
 
   useEffect(() => {
-    window.__openLoginModal = () => {
-      if (typeof openLogin === 'function') openLogin();
-    };
-    const handler = () => {
-      if (typeof openLogin === 'function') openLogin();
-    };
+    window.__openLoginModal = () => { if (typeof openLogin === 'function') openLogin(); };
+    const handler = () => { if (typeof openLogin === 'function') openLogin(); };
     window.addEventListener('login:open', handler);
     return () => window.removeEventListener('login:open', handler);
   }, [openLogin]);
@@ -201,47 +174,34 @@ export default function App() {
   return (
     <Router>
       <ScrollWithHash />
-      
       <Routes>
+        {/* PUBLIC ROUTES */}
         <Route element={<PublicLayout />}>
           <Route path="/" element={<LandingPage />} />
           <Route path="/caracteristicas" element={<LandingSection sectionId="features" />} />
-          <Route path="/como-funciona" element={<LandingSection sectionId="como-funciona" />} />
           <Route path="/sobre-nosotros" element={<Sobre />} />
           <Route path="/soporte" element={<Soporte />} />
           <Route path="/contacto" element={<Contacto />} />
           <Route path="/legal/privacidad" element={<Privacidad />} />
           <Route path="/legal/terminos" element={<Terminos />} />
-          <Route path="/legal/cookies" element={<CookiesPage />} />
-          
-          <Route path="/upgrade/success" element={<UpgradeSuccess />} />
-          <Route path="/billing/success" element={<UpgradeSuccess />} />
-          <Route path="/checkout/success" element={<UpgradeSuccess />} />
           
           <Route path="/crear-password" element={<CrearPassword />} />
           <Route path="/registro" element={<Registro />} />
           <Route path="/auth/email-confirmado" element={<EmailConfirmado />} />
           <Route path="/login" element={<LoginRoute />} />
-          <Route path="/reactivar" element={<SubscriptionGate />} />
-          
-          <Route path="*" element={<NotFound />} />
         </Route>
 
-        <Route path="/create-password" element={<RedirectPreserveHash to="/crear-password" />} />
-        <Route path="/sobre" element={<Redirect to="/sobre-nosotros" />} />
-        <Route path="/privacidad" element={<Redirect to="/legal/privacidad" />} />
-        <Route path="/terminos" element={<Redirect to="/legal/terminos" />} />
-        <Route path="/docs" element={<Redirect to="/soporte#faq" />} />
-        <Route path="/changelog" element={<Redirect to="/soporte#faq" />} />
-        <Route path="/blog" element={<Redirect to="/soporte" />} />
-        
+        {/* STRIPE / BILLING GATES (No llevan el layout del dashboard) */}
+        <Route path="/upgrade/success" element={<UpgradeSuccess />} />
+        <Route path="/upgrade/cancel" element={<CheckoutCancel />} />
+        <Route path="/gate" element={<SubscriptionGate />} />
         <Route path="/portal" element={<PortalBridge />} />
-        <Route path="/:tenantSlug/portal" element={<ProtectedRoute><PortalBridge /></ProtectedRoute>} />
+
+        {/* SHORTCUT REDIRECTS */}
         <Route path="/dashboard" element={<RedirectToMyTenant />} />
-        <Route path="/personal" element={<RedirectToMyTenant />} />
-        <Route path="/almacen" element={<RedirectToMyTenant />} />
         <Route path="/configuracion" element={<RedirectShortToSlug subpath="/dashboard/configuracion" />} />
 
+        {/* PROTECTED DASHBOARD ROUTES */}
         <Route
           path="/:tenantSlug/dashboard"
           element={
@@ -257,11 +217,16 @@ export default function App() {
           <Route path="buscar" element={<BuscarPaquete />} />
           <Route path="almacen" element={<VerEstantes />} />
           <Route path="personal" element={<AreaPersonal />} />
+          
+          <Route path="facturacion" element={<Billing />} /> {/* NUEVO MÓDULO */}
           <Route path="configuracion" element={<ConfigPage />} />
           <Route path="soporte" element={<SoporteInterno />} />
         </Route>
-      </Routes>
 
+        {/* CATCH ALL */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      
       {modal === 'login' && <LoginModal onClose={closeModal} />}
     </Router>
   );

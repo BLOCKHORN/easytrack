@@ -1,8 +1,16 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { FaTimes, FaEnvelope, FaLock, FaGoogle, FaArrowRight } from "react-icons/fa";
 import { supabase } from "../../utils/supabaseClient";
+
+const GoogleIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 18 18">
+    <path fill="#4285F4" d="M17.64 9.2c0-.63-.06-1.25-.16-1.84H9v3.47h4.84c-.21 1.12-.84 2.07-1.8 2.72v2.26h2.92c1.71-1.57 2.68-3.88 2.68-6.61z"/>
+    <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.85.85-3.04.85-2.34 0-4.32-1.58-5.03-3.71H.95v2.3C2.43 15.89 5.5 18 9 18z"/>
+    <path fill="#FBBC05" d="M3.97 10.7c-.18-.54-.28-1.12-.28-1.7s.1-1.16.28-1.7V5H.95C.35 6.2 0 7.57 0 9s.35 2.8 1 4l2.97-2.3z"/>
+    <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35L15 2.47C13.47.98 11.43 0 9 0 5.5 0 2.43 2.11.95 5.1L3.97 7.4c.71-2.13 2.69-3.72 5.03-3.72z"/>
+  </svg>
+);
 
 export default function LoginModal({ onClose }) {
   const navigate = useNavigate();
@@ -16,12 +24,27 @@ export default function LoginModal({ onClose }) {
     setLoading(true);
     setError("");
 
-    const { error: authErr } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: authErr } = await supabase.auth.signInWithPassword({ email, password });
     
     if (authErr) {
-      setError("Credenciales incorrectas");
+      setError("Credenciales incorrectas. Por favor, inténtalo de nuevo.");
       setLoading(false);
     } else {
+      try {
+        const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
+        const r = await fetch(`${API_BASE}/api/tenants/me`, {
+          headers: { Authorization: `Bearer ${data.session.access_token}` }
+        });
+        if (r.ok) {
+          const tData = await r.json();
+          if (tData?.tenant?.slug) {
+            onClose();
+            navigate(`/${tData.tenant.slug}/dashboard`);
+            return;
+          }
+        }
+      } catch (err) {}
+      
       onClose();
       navigate("/dashboard");
     }
@@ -30,54 +53,75 @@ export default function LoginModal({ onClose }) {
   const handleGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/dashboard` }
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` }
     });
+  };
+
+  const goToRecovery = () => {
+    onClose();
+    navigate('/crear-password');
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-md" onClick={onClose} />
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" onClick={onClose} />
       
       <motion.div 
-        initial={{ scale: 0.9, opacity: 0 }} 
-        animate={{ scale: 1, opacity: 1 }}
-        className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden p-8 md:p-12"
+        initial={{ scale: 0.95, opacity: 0, y: 10 }} 
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
+        className="relative bg-white w-full max-w-[420px] rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] overflow-hidden p-8 md:p-10"
       >
-        <button onClick={onClose} className="absolute top-6 right-6 text-zinc-400 hover:text-zinc-950 transition-colors"><FaTimes size={24}/></button>
-
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-black text-zinc-950 mb-2">Bienvenido</h2>
-          <p className="text-zinc-500 font-medium">Entra en tu centro de mando.</p>
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-slate-900 mb-1">Inicia sesión en tu cuenta</h2>
         </div>
 
-        <button onClick={handleGoogle} className="w-full py-4 border border-zinc-200 rounded-2xl font-bold text-zinc-700 hover:bg-zinc-50 transition-all flex items-center justify-center gap-3 mb-6">
-          <FaGoogle className="text-red-500" /> Entrar con Google
-        </button>
-
-        <div className="relative mb-6">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-100"></div></div>
-          <div className="relative flex justify-center text-[10px] uppercase tracking-widest font-black text-zinc-400"><span className="bg-white px-4">O con tu email</span></div>
-        </div>
-
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div className="relative">
-            <FaEnvelope className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-400" />
-            <input required type="email" placeholder="Email" className="w-full pl-12 pr-5 py-4 bg-zinc-50 border border-zinc-200 rounded-2xl focus:ring-4 focus:ring-brand-50 focus:border-brand-500 outline-none transition-all font-medium" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <form onSubmit={handleLogin} className="space-y-5">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Correo electrónico</label>
+            <input 
+              required 
+              type="email" 
+              className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all text-slate-900 shadow-sm" 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)} 
+            />
           </div>
-          <div className="relative">
-            <FaLock className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-400" />
-            <input required type="password" placeholder="Contraseña" className="w-full pl-12 pr-5 py-4 bg-zinc-50 border border-zinc-200 rounded-2xl focus:ring-4 focus:ring-brand-50 focus:border-brand-500 outline-none transition-all font-medium" value={password} onChange={(e) => setPassword(e.target.value)} />
+          
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-semibold text-slate-700">Contraseña</label>
+              <button type="button" onClick={goToRecovery} className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors">¿No recuerdas la contraseña?</button>
+            </div>
+            <input 
+              required 
+              type="password" 
+              className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all text-slate-900 shadow-sm" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+            />
           </div>
 
-          {error && <p className="text-red-500 text-xs font-bold text-center">{error}</p>}
+          {error && <div className="p-3 bg-red-50 text-red-600 text-sm font-medium rounded-lg border border-red-100">{error}</div>}
 
-          <button disabled={loading} className="w-full py-5 bg-zinc-950 text-white font-black rounded-2xl hover:bg-zinc-800 transition-all flex items-center justify-center gap-3 group text-lg">
-            {loading ? "Entrando..." : "Acceder ahora"} <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
+          <button disabled={loading} className="w-full py-2.5 mt-2 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-700 transition-all shadow-sm disabled:bg-slate-300 active:scale-[0.98]">
+            {loading ? "Iniciando sesión..." : "Iniciar sesión"}
           </button>
         </form>
 
-        <div className="mt-8 text-center">
-          <button onClick={() => { onClose(); navigate('/registro'); }} className="text-sm font-bold text-zinc-400 hover:text-brand-600 transition-colors">¿No tienes cuenta? Regístrate</button>
+        <div className="relative my-8">
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
+          <div className="relative flex justify-center text-xs font-medium text-slate-500"><span className="bg-white px-4">O iniciar sesión con</span></div>
+        </div>
+
+        <button onClick={handleGoogle} className="w-full py-2.5 bg-white border border-slate-300 rounded-lg font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
+          <GoogleIcon /> Google
+        </button>
+
+        <div className="mt-8 text-center bg-slate-50 -mx-8 -mb-10 p-6 border-t border-slate-100">
+          <p className="text-sm text-slate-500">
+            ¿Eres nuevo en EasyTrack? <button onClick={() => { onClose(); navigate('/registro'); }} className="font-semibold text-brand-600 hover:text-brand-700 transition-colors">Crea una cuenta</button>
+          </p>
         </div>
       </motion.div>
     </div>

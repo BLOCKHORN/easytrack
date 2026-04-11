@@ -1,22 +1,26 @@
 import { useState, useEffect, useMemo, useCallback, useRef, startTransition } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../../utils/supabaseClient';
 import { getTenantIdOrThrow } from '../../utils/tenant';
 import { crearPaqueteBackend, obtenerPaquetesBackend } from '../../services/paquetesService';
 import { cargarUbicaciones } from '../../services/ubicacionesService';
 
-const IconBox = () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
+const IconBox = () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
 const IconCheck = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>;
 const IconLayers = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
 const IconSparkles = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>;
 const IconInfo = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
 const IconLightbulb = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.2 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>;
 const IconCheckCircle = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
+const IconLock = () => <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand-500"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+const IconScan = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.5-1.5"/></svg>;
+const IconPhone = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
+const IconSpinner = () => <svg className="animate-spin h-5 w-5 text-current" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>;
+const IconWhatsapp = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.487-1.761-1.66-2.059-.173-.297-.018-.458.13-.606.134-.133-.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>;
 
 const toUpperVis = (s='') => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
 const clamp = (v,min,max) => Math.max(min, Math.min(max, v));
-const normalize = (s = "") => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^\p{L}\p{N}\s'-]+/gu, " ").replace(/\s+/g, " ");
-const tokenize = (s = "") => normalize(s).split(" ").filter(Boolean);
 
 let __AUDIO_CTX = null;
 const playChime = (durationMs = 220) => {
@@ -126,11 +130,79 @@ function bestClientSuggestion(input, paquetesPendientes, threshold = 0.55) {
   return best;
 }
 
+const CameraScanner = ({ onCapture, onClose }) => {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'environment', width: { ideal: 1280 } } 
+        });
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      } catch (err) {
+        alert("No se pudo acceder a la cámara. Revisa los permisos.");
+        onClose();
+      }
+    }
+    startCamera();
+    return () => {
+      if (videoRef.current?.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [onClose]);
+
+  const capture = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    const data = canvas.toDataURL('image/jpeg', 0.6); 
+    onCapture(data);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-black flex flex-col">
+      <div className="relative flex-1 flex items-center justify-center overflow-hidden">
+        <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover" />
+        <div className="relative w-64 h-64 border-2 border-brand-400 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+           <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-10 h-0.5 bg-brand-400/50" />
+              <div className="h-10 w-0.5 bg-brand-400/50 absolute" />
+           </div>
+        </div>
+        <p className="absolute bottom-10 text-white font-black text-sm uppercase tracking-widest bg-black/40 px-4 py-2 rounded-full backdrop-blur-md">Encuadra la etiqueta</p>
+      </div>
+      <canvas ref={canvasRef} className="hidden" />
+      <div className="bg-zinc-950 p-8 flex items-center justify-between pb-12">
+        <button onClick={onClose} className="text-white font-bold text-sm hover:text-brand-400 transition-colors">CANCELAR</button>
+        <button onClick={capture} className="w-20 h-20 bg-white rounded-full border-8 border-zinc-800 active:scale-90 transition-transform flex items-center justify-center shadow-xl shadow-brand-500/20">
+           <div className="w-14 h-14 rounded-full border-2 border-zinc-950" />
+        </button>
+        <div className="w-16" />
+      </div>
+    </div>
+  );
+};
+
 export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaquetes, actualizarPaquetes }) {
+  const navigate = useNavigate();
+  const { tenantSlug } = useParams();
+
   const [tenant, setTenant] = useState(null);
+  const [aiStatus, setAiStatus] = useState('locked');
+  const [isCheckingPlan, setIsCheckingPlan] = useState(true);
+  
   const [companias, setCompanias] = useState([]);
   const [compania, setCompania]   = useState('');
   const [cliente, setCliente]     = useState('');
+  const [telefono, setTelefono]   = useState('');
+  const [enviarWhatsapp, setEnviarWhatsapp] = useState(true);
   const [activeTab, setActiveTab] = useState('single'); 
 
   const [multiCount, setMultiCount] = useState(5);
@@ -146,6 +218,14 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const [rawUbicaciones, setRawUbicaciones] = useState([]);
   const [metaUbi, setMetaUbi] = useState({ cols: 5, order: 'horizontal' });
   const [penalizedSlots, setPenalizedSlots] = useState({});
+
+  const [limiteAlcanzado, setLimiteAlcanzado] = useState(false);
+  const [showUpgradePro, setShowUpgradePro] = useState(false);
+  const [showTrialModal, setShowTrialModal] = useState(false);
+  const [activatingTrial, setActivatingTrial] = useState(false);
+
+  const [isScanning, setIsScanning] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
 
   const { visual: ubicaciones, cols } = useMemo(
     () => makeVisualUbicaciones(rawUbicaciones, metaUbi),
@@ -187,7 +267,32 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       try {
         const tid = await getTenantIdOrThrow();
         if (cancel) return;
-        setTenant({ id: tid });
+
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
+
+        let localEmpresaName = '';
+
+        try {
+          const res = await fetch(`${API_URL}/api/limits/me`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const limitsData = await res.json();
+          setAiStatus(limitsData?.entitlements?.features?.aiStatus || 'locked');
+          localEmpresaName = limitsData?.tenant?.nombre_empresa || '';
+        } catch(e) {
+          setAiStatus('locked');
+        } finally {
+          setIsCheckingPlan(false);
+        }
+
+        if (!localEmpresaName) {
+          const { data: tData } = await supabase.from('tenants').select('nombre_empresa').eq('id', tid).maybeSingle();
+          localEmpresaName = tData?.nombre_empresa || '';
+        }
+
+        setTenant({ id: tid, nombre_empresa: localEmpresaName });
 
         try {
           const storedPenalties = JSON.parse(localStorage.getItem(`ap_penalties_${tid}`)) || {};
@@ -204,8 +309,6 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         setBatchCompany(defaultCompany);
         setMultiCompanies(prev => prev.map(v => v || defaultCompany));
 
-        const { data: { session} } = await supabase.auth.getSession();
-        const token = session?.access_token;
         const ub = await cargarUbicaciones(token, tid);
         if (cancel) return;
         
@@ -213,15 +316,40 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         setMetaUbi({ cols: ub?.meta?.cols ?? 5, order: ub?.meta?.order ?? ub?.meta?.orden ?? 'horizontal' });
 
         if (!propsPaquetes) {
-          const pk = await obtenerPaquetesBackend(token).catch(() => []);
+          const pk = await obtenerPaquetesBackend(token, { estado: 'pendiente', all: 1 }).catch(() => []);
           setPaquetesLocales(Array.isArray(pk) ? pk : []);
         }
 
         startTransition(() => inputClienteRef.current?.focus());
-      } catch (e) {}
+      } catch (e) {
+        setIsCheckingPlan(false);
+      }
     })();
     return () => { cancel = true; };
   }, [propsPaquetes]);
+
+  const handleActivateTrial = async () => {
+    if (activatingTrial) return;
+    setActivatingTrial(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
+      const res = await fetch(`${API_URL}/api/tenants/me/ai-trial`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error al activar prueba');
+
+      setAiStatus('trial_active');
+      setShowTrialModal(false);
+      setTimeout(() => setShowCamera(true), 300);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setActivatingTrial(false);
+    }
+  };
 
   const occupancy = useMemo(() => {
     const map = new Map();
@@ -342,7 +470,9 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
     return s?.label || '';
   }, [leadingName, pickForClient, getMostEmptySlot]);
 
-  const puedeGuardar = cliente.trim() && compania && slotSel && (slotSel.id || slotSel.label);
+  const puedeGuardar = activeTab === 'single'
+    ? cliente.trim() && compania && slotSel && (slotSel.id || slotSel.label)
+    : multiNames.some(n => n.trim()) && slotSel && (slotSel.id || slotSel.label);
 
   const applyNewMultiCount = useCallback((v) => {
     const n = clamp(v|0, 1, 20);
@@ -361,6 +491,51 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
     });
   }, [batchSameCompany, batchCompany, compania, companias]);
 
+  const processAIScan = async (base64Image) => {
+    setIsScanning(true);
+    setShowCamera(false);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
+      
+      const res = await fetch(`${API_URL}/api/ia/scan-label`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ imageBase64: base64Image })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Error en el servidor de IA');
+      }
+      
+      const data = await res.json();
+
+      if (data.cliente) setLeadingName(data.cliente);
+      if (data.telefono) setTelefono(data.telefono);
+      
+      if (data.compania) {
+        const aiComp = toUpperVis(data.compania);
+        const match = companias.find(c => {
+          const dbComp = toUpperVis(c);
+          return dbComp === aiComp || dbComp.includes(aiComp) || aiComp.includes(dbComp);
+        });
+        if (match) {
+          setCompania(match);
+        }
+      }
+      
+      setSeleccionManual(false);
+      playChime(150);
+
+    } catch (err) {
+      alert(err.message || 'Error analizando la etiqueta. Por favor, reinténtalo.');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   const flyFromInputToSlot = useCallback(() => {
     try {
       const layer = flyLayerRef.current;
@@ -373,7 +548,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
 
       const parcel = document.createElement('div');
       parcel.className = 'fly-parcel animate';
-      parcel.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>';
+      parcel.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>';
       layer.appendChild(parcel);
 
       const sx = start.left + start.width - 30;
@@ -388,6 +563,15 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       setTimeout(() => { try { layer.removeChild(parcel); } catch {} }, 800);
     } catch {}
   }, [slotSel]);
+
+  const handleLimitError = (err) => {
+    const errorStr = String(err?.message || err?.error || err).toUpperCase();
+    if (errorStr.includes('LIMIT_EXCEEDED') || errorStr.includes('LIMITE')) {
+      setLimiteAlcanzado(true);
+    } else {
+      alert(err?.message || 'Error al guardar el paquete.');
+    }
+  };
 
   const guardar = useCallback(async (e) => {
     e?.preventDefault();
@@ -420,6 +604,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         nombre_cliente: upperCliente,
         empresa_transporte: compania,
         ubicacion_label: slotSel.label,
+        telefono: telefono.trim() || null,
         ...(slotSel.id ? { ubicacion_id: slotSel.id } : {}),
       };
       
@@ -434,6 +619,18 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         ubicacion_label: slotSel.label,
         entregado: false
       }]);
+
+      if (activeTab === 'single' && enviarWhatsapp && telefono.trim()) {
+        let cleaned = telefono.replace(/\D/g, '');
+        if (cleaned.length === 9 && ['6','7','8','9'].includes(cleaned[0])) {
+          cleaned = '34' + cleaned;
+        }
+        if (cleaned) {
+          const nombreLocal = tenant?.nombre_empresa || 'nuestro local';
+          const text = encodeURIComponent(`Hola ${upperCliente}, tu paquete de ${compania} ya está listo para recoger en ${nombreLocal}. ¡Te esperamos!`);
+          window.open(`https://wa.me/${cleaned}?text=${text}`, '_blank');
+        }
+      }
       
       localStorage.setItem('ap_last_company', compania);
       setUltimoGuardado(slotSel);
@@ -443,14 +640,15 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       setTimeout(() => setExito(false), 2000);
 
       setCliente('');
+      setTelefono('');
       setSeleccionManual(false);
       startTransition(() => inputClienteRef.current?.focus());
     } catch (err) {
-      alert(err?.message || 'Error al guardar.');
+      handleLimitError(err);
     } finally {
       setLoading(false);
     }
-  }, [loading, tenant, cliente, compania, slotSel, flyFromInputToSlot, actualizarPaquetes, seleccionManual, suggestedLabel, occupancy]);
+  }, [loading, tenant, cliente, compania, telefono, slotSel, flyFromInputToSlot, actualizarPaquetes, seleccionManual, suggestedLabel, occupancy, activeTab, enviarWhatsapp]);
 
   const guardarMultiple = useCallback(async () => {
     if (multiSaving) return;
@@ -503,7 +701,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       setTimeout(() => setExito(false), 2000);
       setMultiNames(Array.from({length: multiCount}, ()=> ''));
     } catch (err) {
-      alert(err?.message || 'Error guardando múltiples.');
+      handleLimitError(err);
     } finally {
       setMultiSaving(false);
     }
@@ -528,20 +726,60 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const suggestionPulse = !!(sugCliente || matchInfo?.label);
   const selectedPulse   = !!(seleccionManual || sugCliente || matchInfo?.label);
 
+  const renderScannerButton = () => {
+    if (isCheckingPlan) {
+      return <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Cargando...</>;
+    }
+    if (isScanning) {
+      return <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Analizando...</>;
+    }
+    switch (aiStatus) {
+      case 'unlimited':
+        return <><IconScan /> Escáner en Vivo</>;
+      case 'trial_active':
+        return <><IconScan /> Escáner IA (Prueba)</>;
+      case 'trial_available':
+        return <><IconSparkles /> Probar Pistoleo IA Gratis</>;
+      default:
+        return <><IconSparkles /> Pistoleo Inteligente IA <IconLock /></>;
+    }
+  };
+
   return (
     <div className={`bg-white relative ${modoRapido ? '' : 'p-8 rounded-[2rem] border border-zinc-200/80 shadow-sm max-w-5xl mx-auto'}`}>
       <style dangerouslySetInnerHTML={{ __html: extraStyles }} />
       <div id="fly-layer" ref={flyLayerRef} aria-hidden="true" />
-
+      
       {!modoRapido && (
-        <div className="mb-8 flex items-center gap-5 border-b border-zinc-100 pb-6">
-          <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-md">
-            <IconBox />
+        <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-5 border-b border-zinc-100 pb-6">
+          <div className="flex items-center gap-5">
+            <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-md shrink-0">
+              <IconBox />
+            </div>
+            <div>
+              <h2 className="text-3xl font-black text-zinc-950 tracking-tight">Añadir Entrada</h2>
+              <p className="text-zinc-600 font-bold text-base mt-1">Registra paquetes y el sistema sugiere la mejor ubicación.</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-3xl font-black text-zinc-950 tracking-tight">Añadir Entrada</h2>
-            <p className="text-zinc-600 font-bold text-base mt-1">Registra paquetes y el sistema sugiere la mejor ubicación.</p>
-          </div>
+          
+          <button 
+            type="button" 
+            onClick={() => {
+              if (['unlimited', 'trial_active'].includes(aiStatus)) setShowCamera(true);
+              else if (aiStatus === 'trial_available') setShowTrialModal(true);
+              else setShowUpgradePro(true);
+            }}
+            disabled={isScanning || isCheckingPlan}
+            className={`flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-black text-sm transition-all shadow-md active:scale-95 ${
+              isCheckingPlan || ['unlimited', 'trial_active'].includes(aiStatus)
+                ? 'bg-brand-500 hover:bg-brand-400 text-white shadow-brand-500/30'
+                : aiStatus === 'trial_available'
+                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
+                  : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-amber-950 shadow-amber-500/20'
+            }`}
+          >
+            {renderScannerButton()}
+          </button>
         </div>
       )}
 
@@ -551,10 +789,9 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       </div>
 
       <form onSubmit={activeTab === 'single' ? guardar : (e) => { e.preventDefault(); guardarMultiple(); }} className="space-y-8">
-        
         {activeTab === 'single' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2 relative">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2 relative md:col-span-2">
               <label className="text-xs font-black text-zinc-600 uppercase tracking-widest">Nombre del Cliente</label>
               <input 
                 ref={inputClienteRef} type="text" value={cliente} 
@@ -563,7 +800,6 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
                 placeholder="Escanea o escribe..." 
                 autoComplete="off" 
               />
-              
               <AnimatePresence>
                 {sugCliente && toUpperVis(leadingName) !== toUpperVis(sugCliente.name) && (
                   <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="absolute z-10 w-full mt-2">
@@ -589,6 +825,11 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
               <select value={compania} onChange={e => setCompania(e.target.value)} className="w-full px-4 py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 outline-none font-black text-lg text-zinc-950 transition-all cursor-pointer">
                 {companias.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+            </div>
+
+            <div className="space-y-2 md:col-span-3">
+              <label className="text-xs font-black text-zinc-600 uppercase tracking-widest flex items-center gap-2"><IconPhone /> Teléfono (Opcional)</label>
+              <input type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="Ej: 600123456" className="w-full max-w-sm px-4 py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 outline-none font-bold text-base text-zinc-950 transition-all" />
             </div>
           </div>
         ) : (
@@ -629,7 +870,6 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
 
         <div className="flex flex-col items-center justify-center gap-6 py-6 my-6 border-y border-zinc-100">
           <div className="flex flex-row items-center justify-center gap-5 sm:gap-8 w-full">
-            
             <div className={`flex flex-col items-center justify-center w-40 sm:w-56 p-5 rounded-2xl border-2 transition-all ${suggestionPulse ? 'bg-amber-50 border-amber-300 shadow-[0_0_20px_rgba(251,191,36,0.3)]' : 'bg-zinc-50 border-zinc-200'}`}>
               <span className={`flex items-center gap-2 text-xs font-black uppercase tracking-widest mb-3 ${suggestionPulse ? 'text-amber-600' : 'text-zinc-400'}`}>
                 <IconLightbulb /> Sugerencia
@@ -647,16 +887,39 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
                 <span className="text-4xl font-black text-zinc-900">{slotSel?.label || '—'}</span>
               </div>
             </div>
-
           </div>
 
-          <button 
-            type="submit" 
-            disabled={loading || !puedeGuardar} 
-            className="w-full sm:w-auto px-12 py-4 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-black text-lg rounded-xl shadow-lg shadow-brand-500/30 transition-all flex items-center justify-center gap-2 active:scale-95"
-          >
-            {loading ? <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"/> : (activeTab==='single' ? 'Guardar paquete' : `Guardar ${multiCount} paquetes`)}
-          </button>
+          <div className="w-full flex flex-col items-center justify-center">
+            {activeTab === 'single' && (
+              <div className={`mb-6 w-full sm:w-auto min-w-[320px] overflow-hidden rounded-2xl border-2 transition-all duration-300 ${telefono.trim() ? (enviarWhatsapp ? 'border-[#25D366] bg-[#25D366]/5 shadow-[0_0_20px_rgba(37,211,102,0.15)]' : 'border-zinc-200 bg-white hover:border-zinc-300') : 'border-zinc-100 bg-zinc-50/50 opacity-70'}`}>
+                <label className={`flex items-center justify-between gap-6 px-5 py-4 cursor-pointer ${!telefono.trim() && 'cursor-not-allowed'}`}>
+                  <div className="flex items-center gap-4">
+                    <div className={`flex items-center justify-center w-11 h-11 rounded-full transition-all duration-300 ${telefono.trim() && enviarWhatsapp ? 'bg-[#25D366] text-white shadow-md shadow-[#25D366]/30 scale-110' : 'bg-zinc-100 text-zinc-400'}`}>
+                      <IconWhatsapp />
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className={`text-base font-black tracking-tight transition-colors ${telefono.trim() && enviarWhatsapp ? 'text-[#25D366]' : 'text-zinc-900'}`}>Notificar por WhatsApp</span>
+                      <span className={`text-[11px] font-bold uppercase tracking-widest ${telefono.trim() ? (enviarWhatsapp ? 'text-[#25D366]/70' : 'text-zinc-400') : 'text-zinc-400'}`}>
+                        {telefono.trim() ? 'Aviso al cliente' : 'Falta teléfono'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-300 ${telefono.trim() && enviarWhatsapp ? 'bg-[#25D366]' : 'bg-zinc-200'}`}>
+                    <input type="checkbox" checked={enviarWhatsapp && !!telefono.trim()} onChange={e => setEnviarWhatsapp(e.target.checked)} disabled={!telefono.trim()} className="sr-only" />
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${telefono.trim() && enviarWhatsapp ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </div>
+                </label>
+              </div>
+            )}
+            
+            <button 
+              type="submit" 
+              disabled={loading || !puedeGuardar} 
+              className="w-full sm:w-auto px-12 py-4 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-black text-lg rounded-xl shadow-lg shadow-brand-500/30 transition-all flex items-center justify-center gap-2 active:scale-95"
+            >
+              {loading ? <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"/> : (activeTab==='single' ? 'Guardar paquete' : `Guardar ${multiCount} paquetes`)}
+            </button>
+          </div>
         </div>
 
         <div>
@@ -709,6 +972,74 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         </div>
 
       </form>
+
+      {showCamera && <CameraScanner onCapture={processAIScan} onClose={() => setShowCamera(false)} />}
+
+      <AnimatePresence>
+        {showTrialModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowTrialModal(false)} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 text-center border border-zinc-200 overflow-hidden">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/10 blur-[60px] rounded-full pointer-events-none" />
+              <div className="relative z-10">
+                <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-indigo-100 text-indigo-500"><IconSparkles /></div>
+                <h3 className="text-3xl font-black text-zinc-950 tracking-tight mb-3">Prueba Pistoleo IA</h3>
+                <p className="text-zinc-500 font-bold mb-8 leading-relaxed">Como usuario Plus, tienes un pase especial. Disfruta de <strong>7 días de escáner inteligente ilimitado</strong>. Sin compromisos ni cobros sorpresa.</p>
+                <div className="flex flex-col gap-3">
+                  <button onClick={handleActivateTrial} disabled={activatingTrial} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-lg rounded-xl shadow-lg shadow-indigo-600/30 transition-all active:scale-95 flex items-center justify-center gap-2">
+                    {activatingTrial ? <IconSpinner /> : 'Activar mis 7 días gratis'}
+                  </button>
+                  <button onClick={() => setShowTrialModal(false)} disabled={activatingTrial} className="w-full py-4 bg-zinc-100 text-zinc-600 font-bold text-base rounded-xl hover:bg-zinc-200 transition-colors">Ahora no</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {limiteAlcanzado && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 text-center border border-zinc-200 overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-brand-500/10 blur-[50px] rounded-full pointer-events-none" />
+              <div className="relative z-10">
+                <div className="w-20 h-20 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-6"><IconLock /></div>
+                <h3 className="text-3xl font-black text-zinc-950 tracking-tight mb-3">Límite alcanzado</h3>
+                <p className="text-zinc-500 font-bold mb-8 leading-relaxed">Has procesado tus 250 paquetes gratuitos. Pásate a Plus para disfrutar de paquetes ilimitados, notificaciones automáticas y analítica completa.</p>
+                <div className="flex flex-col gap-3">
+                  <button onClick={() => navigate(tenantSlug ? `/${tenantSlug}/dashboard/facturacion` : '/dashboard/facturacion')} className="w-full py-4 bg-zinc-950 text-white font-black text-lg rounded-xl shadow-xl shadow-zinc-950/20 hover:bg-zinc-800 transition-all active:scale-95">Ver Planes</button>
+                  <button onClick={() => setLimiteAlcanzado(false)} className="w-full py-4 bg-zinc-100 text-zinc-600 font-bold text-base rounded-xl hover:bg-zinc-200 transition-colors">Cerrar y ver paquetes</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showUpgradePro && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 text-center border border-zinc-200 overflow-hidden">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/20 blur-[60px] rounded-full pointer-events-none" />
+              <div className="relative z-10">
+                <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-amber-100 text-amber-500"><IconSparkles /></div>
+                <h3 className="text-3xl font-black text-zinc-950 tracking-tight mb-3">Pistoleo IA</h3>
+                <p className="text-zinc-500 font-bold mb-8 leading-relaxed">
+                  {aiStatus === 'trial_expired' 
+                    ? "Tu prueba gratuita de 7 días ha finalizado. Mejora al plan PRO para seguir usando el escáner inteligente sin límites." 
+                    : "Escanea etiquetas con la cámara y autocompleta el formulario en un segundo. Exclusivo del plan PRO."}
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button onClick={() => navigate(tenantSlug ? `/${tenantSlug}/dashboard/facturacion` : '/dashboard/facturacion')} className="w-full py-4 bg-brand-500 hover:bg-brand-400 text-white font-black text-lg rounded-xl shadow-lg shadow-brand-500/30 transition-all active:scale-95">Mejorar a PRO</button>
+                  <button onClick={() => setShowUpgradePro(false)} className="w-full py-4 bg-zinc-100 text-zinc-600 font-bold text-base rounded-xl hover:bg-zinc-200 transition-colors">Volver al escáner manual</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {exito && (

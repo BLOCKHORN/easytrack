@@ -10,6 +10,23 @@ export default function EmailConfirmado() {
   const [status, setStatus] = useState("loading");
 
   useEffect(() => {
+    const redirectUser = async (session) => {
+      try {
+        const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
+        const r = await fetch(`${API_BASE}/api/tenants/me`, {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        if (r.ok) {
+          const tData = await r.json();
+          if (tData?.tenant?.slug) {
+            navigate(`/${tData.tenant.slug}/dashboard`);
+            return;
+          }
+        }
+      } catch (err) {}
+      navigate("/");
+    };
+
     const checkSession = async () => {
       const mode = searchParams.get("mode");
       if (mode === "check-email") {
@@ -20,12 +37,12 @@ export default function EmailConfirmado() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         setStatus("success");
-        setTimeout(() => navigate("/dashboard"), 3000);
+        setTimeout(() => redirectUser(session), 2500);
       } else {
-        const { data } = supabase.auth.onAuthStateChange((event) => {
-          if (event === "SIGNED_IN") {
+        const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
+          if (event === "SIGNED_IN" && newSession) {
             setStatus("success");
-            setTimeout(() => navigate("/dashboard"), 3000);
+            setTimeout(() => redirectUser(newSession), 2500);
           }
         });
         
@@ -41,48 +58,51 @@ export default function EmailConfirmado() {
   }, [navigate, searchParams]);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 pt-24 md:pt-0">
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-md bg-white rounded-[32px] shadow-xl border border-slate-100 p-10 text-center"
+        className="w-full max-w-md bg-white rounded-3xl shadow-xl shadow-zinc-200/50 border border-zinc-100 p-10 text-center"
       >
         {status === "loading" && (
-          <div className="flex flex-col items-center animate-fade-in">
-            <FaSpinner className="text-5xl text-brand-600 animate-spin mb-6" />
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Verificando...</h2>
-            <p className="text-slate-500">Estamos confirmando tu acceso.</p>
+          <div className="flex flex-col items-center">
+            <FaSpinner className="text-5xl text-brand-500 animate-spin mb-6" />
+            <h2 className="text-2xl font-black text-zinc-950 mb-2 tracking-tight">Verificando...</h2>
+            <p className="text-zinc-500 font-medium">Estamos confirmando tu acceso.</p>
           </div>
         )}
 
         {status === "check-email" && (
-          <div className="flex flex-col items-center animate-fade-in">
-            <FaEnvelope className="text-6xl text-slate-300 mb-6" />
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Revisa tu correo</h2>
-            <p className="text-slate-500 mb-8">Te hemos enviado un enlace para confirmar tu cuenta.</p>
-            <button onClick={() => navigate("/")} className="w-full py-4 bg-slate-100 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 transition-colors">
+          <div className="flex flex-col items-center">
+            <div className="w-20 h-20 bg-brand-50 rounded-full flex items-center justify-center mb-6">
+              <FaEnvelope className="text-4xl text-brand-500" />
+            </div>
+            <h2 className="text-2xl font-black text-zinc-950 mb-3 tracking-tight">Revisa tu correo</h2>
+            <p className="text-zinc-500 font-medium mb-8 leading-relaxed">Te hemos enviado un enlace de confirmación seguro. Haz clic en él para activar tu cuenta.</p>
+            <button onClick={() => navigate("/")} className="w-full py-4 bg-zinc-100 text-zinc-700 font-bold rounded-xl hover:bg-zinc-200 transition-colors active:scale-95">
               Volver al inicio
             </button>
           </div>
         )}
 
         {status === "success" && (
-          <div className="flex flex-col items-center animate-fade-in">
-            <FaCheckCircle className="text-6xl text-emerald-500 mb-6" />
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">¡Email Confirmado!</h2>
-            <p className="text-slate-500 mb-8">Tu cuenta está lista. Redirigiendo a tu panel...</p>
-            <button onClick={() => navigate("/dashboard")} className="w-full py-4 bg-brand-600 text-white font-bold rounded-2xl hover:bg-brand-700 shadow-md transition-colors">
-              Ir al Panel
-            </button>
+          <div className="flex flex-col items-center">
+            <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mb-6">
+              <FaCheckCircle className="text-4xl text-emerald-500" />
+            </div>
+            <h2 className="text-2xl font-black text-zinc-950 mb-3 tracking-tight">¡Email Confirmado!</h2>
+            <p className="text-zinc-500 font-medium mb-8">Tu infraestructura está lista. Entrando al panel...</p>
           </div>
         )}
 
         {status === "error" && (
-          <div className="flex flex-col items-center animate-fade-in">
-            <FaExclamationTriangle className="text-6xl text-red-500 mb-6" />
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Enlace inválido</h2>
-            <p className="text-slate-500 mb-8">El enlace ha caducado o ya fue utilizado.</p>
-            <button onClick={() => navigate("/login")} className="w-full py-4 bg-slate-100 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 transition-colors">
+          <div className="flex flex-col items-center">
+            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-6">
+              <FaExclamationTriangle className="text-4xl text-red-500" />
+            </div>
+            <h2 className="text-2xl font-black text-zinc-950 mb-3 tracking-tight">Enlace inválido</h2>
+            <p className="text-zinc-500 font-medium mb-8 leading-relaxed">El enlace de seguridad ha caducado o ya fue utilizado anteriormente.</p>
+            <button onClick={() => navigate("/login")} className="w-full py-4 bg-zinc-950 text-white font-bold rounded-xl hover:bg-zinc-800 transition-colors shadow-lg shadow-zinc-950/20 active:scale-95">
               Ir a iniciar sesión
             </button>
           </div>

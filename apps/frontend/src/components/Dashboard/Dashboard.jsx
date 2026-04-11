@@ -7,7 +7,6 @@ import {
 } from "recharts";
 import AnadirPaquete from "./AnadirPaquete";
 import { supabase } from "../../utils/supabaseClient";
-import { obtenerPaquetesBackend } from "../../services/paquetesService";
 import PlanBadge from '../../components/Billing/PlanBadge';
 
 const IconPkgIn = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>;
@@ -17,17 +16,11 @@ const IconAlert = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="no
 const IconPlus = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
 const IconClose = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
 const IconChart = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>;
+const IconSparkles = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>;
 
-const toLocalDate = (iso) => (iso ? new Date(iso) : null);
 const ymd = (d) => { if (!d || isNaN(d)) return null; return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const startOfWeekMon = (d) => { const nd = new Date(d); nd.setDate(nd.getDate() - ((nd.getDay() + 6) % 7)); nd.setHours(0,0,0,0); return nd; };
-const endOfWeekSun = (d) => { const e = new Date(startOfWeekMon(d)); e.setDate(e.getDate() + 6); e.setHours(23,59,59,999); return e; };
-const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1, 0,0,0,0);
-const endOfMonth = (d) => new Date(d.getFullYear(), d.getMonth() + 1, 0, 23,59,59,999);
-const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0,0);
-const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23,59,59,999);
 const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
-const inRange = (date, a, b) => date && !isNaN(date) && date >= a && date <= b;
 
 const mesesCorto = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const diasCorto = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
@@ -44,15 +37,18 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
     }
     return `${API_URL}/api/dashboard`;
   }, [location.pathname]);
+  
   const apiRoot = useMemo(() => (import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001"), []);
 
   const [mostrarModal, setMostrarModal] = useState(false);
   const [negocio, setNegocio] = useState(null);
+  const [entitlements, setEntitlements] = useState(null); // <-- Nuevo estado para controlar el plan
   const [slug, setSlug] = useState(null);
   const [cargandoNegocio, setCargandoNegocio] = useState(true);
   const [cargandoResumen, setCargandoResumen] = useState(true);
   const [configPendiente, setConfigPendiente] = useState(false);
 
+  const [rawDiario, setRawDiario] = useState([]);
   const [resumen, setResumen] = useState({
     recibidosHoy: 0, 
     entregadosHoy: 0, 
@@ -67,10 +63,12 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
   const vistas = ["anual", "mensual", "semanal", "diaria", "historial"];
   const [vista, setVista] = useState("anual");
   const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
-  const [datosChart, setDatosChart] = useState([]);
-  const [cargandoChart, setCargandoChart] = useState(true);
 
-  const go = (path) => { if (slug) navigate(`/${slug}${path.startsWith("/") ? path : `/${path}`}`); };
+  // Ruta inteligente que respeta si hay slug de tienda o no
+  const go = (path) => { 
+    if (slug) navigate(`/${slug}${path.startsWith("/") ? path : `/${path}`}`); 
+    else navigate(path.startsWith("/") ? path : `/${path}`);
+  };
 
   useEffect(() => {
     if (mostrarModal) document.body.style.overflow = "hidden";
@@ -90,8 +88,11 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
         const data = await res.json();
         if (cancel) return;
 
-        setNegocio(data); setSlug(data?.slug || null);
-        const estLegacy = data?.estructura_almacen || data?.tipo_almacen || data?.tipoEstructura || data?.estructura;
+        setNegocio(data?.negocio || data); 
+        setEntitlements(data?.entitlements || null);
+        setSlug(data?.negocio?.slug || data?.slug || null);
+        
+        const estLegacy = data?.negocio?.estructura_almacen || data?.estructura_almacen || data?.tipo_almacen;
         if (estLegacy || data?.baldas_total > 0) { setConfigPendiente(false); return; }
 
         try {
@@ -119,79 +120,144 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
         const res = await fetch(`${apiBase}/resumen`, { headers: { Authorization: `Bearer ${session.access_token}` } });
         if (res.ok) { 
           const d = await res.json(); 
-          if (!cancel) setResumen(d || {}); 
+          if (!cancel) {
+            setResumen({
+              recibidosHoy: d.resumen?.hoy_recibidos ?? d.recibidosHoy ?? 0,
+              entregadosHoy: d.resumen?.hoy_entregados ?? d.entregadosHoy ?? 0,
+              almacenActual: d.resumen?.pendientes ?? d.almacenActual ?? 0,
+              estantesLlenos: d.estantesLlenos ?? 0,
+              mediaDiaria: d.mediaDiaria ?? 0,
+              mediaEntregados: d.mediaEntregados ?? 0,
+              recordRecibidos: d.recordRecibidos ?? 0,
+              recordEntregados: d.recordEntregados ?? 0
+            });
+            setRawDiario(d.diario || []);
+          }
         }
       } catch {} finally { if (!cancel) setCargandoResumen(false); }
     })();
     return () => { cancel = true; };
   }, [apiBase]);
 
-  useEffect(() => {
-    let cancel = false;
-    (async () => {
-      setCargandoChart(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error("Sin sesion");
-        const paquetesFetch = await obtenerPaquetesBackend(session.access_token, { all: 1 });
-        if (cancel) return;
+  const datosChart = useMemo(() => {
+    if (!rawDiario.length) return [];
+    
+    const bd = new Date(fecha + "T00:00:00");
+    const y = bd.getFullYear();
+    const m = bd.getMonth();
+    let cat = [];
 
-        const bd = new Date(fecha + "T00:00:00");
-        let cat = [], rIni = null, rFin = null;
-
-        if (vista === "anual") {
-          cat = mesesCorto.map((mes, i) => ({ key: `${bd.getFullYear()}-${String(i+1).padStart(2,"0")}`, periodo: mes }));
-          rIni = new Date(bd.getFullYear(), 0, 1); rFin = new Date(bd.getFullYear(), 11, 31, 23,59,59,999);
-        } else if (vista === "mensual") {
-          cat = Array.from({ length: endOfMonth(bd).getDate() }, (_, i) => ({ key: `${bd.getFullYear()}-${String(bd.getMonth()+1).padStart(2,"0")}-${String(i+1).padStart(2,"0")}`, periodo: String(i+1) }));
-          rIni = startOfMonth(bd); rFin = endOfMonth(bd);
-        } else if (vista === "semanal") {
-          cat = Array.from({ length: 7 }, (_, i) => { const d = addDays(startOfWeekMon(bd), i); return { key: ymd(d), periodo: diasCorto[i], date: d }; });
-          rIni = startOfWeekMon(bd); rFin = endOfWeekSun(bd);
-        } else if (vista === "diaria") {
-          cat = Array.from({ length: 24 }, (_, h) => ({ key: `${bd.getFullYear()}-${String(bd.getMonth()+1).padStart(2,"0")}-${String(bd.getDate()).padStart(2,"0")}T${String(h).padStart(2,"0")}:00`, periodo: String(h) }));
-          rIni = startOfDay(bd); rFin = endOfDay(bd);
-        } else if (vista === "historial") {
-          for (let d = new Date(addDays(startOfDay(bd), -29)); d <= endOfDay(bd); d = addDays(d, 1)) {
-            cat.push({ key: ymd(d), periodo: d.toISOString().split("T")[0], date: new Date(d) });
-          }
-          rIni = startOfDay(cat[0].date); rFin = endOfDay(bd);
-        }
-
-        const acc = new Map(cat.map(c => [c.key, { periodo: c.periodo, recibidos: 0, entregados: 0 }]));
-
-        for (const p of paquetesFetch) {
-          const fRec = toLocalDate(p.fecha_llegada);
-          const fEnt = p.entregado ? toLocalDate(p.fecha_entregado || p.fecha_llegada) : null;
-          
-          if (fRec && inRange(fRec, rIni, rFin)) {
-            let k = "";
-            if (vista === "anual") k = `${fRec.getFullYear()}-${String(fRec.getMonth()+1).padStart(2,"0")}`;
-            else if (vista === "mensual") k = `${fRec.getFullYear()}-${String(fRec.getMonth()+1).padStart(2,"0")}-${String(fRec.getDate()).padStart(2,"0")}`;
-            else if (vista === "semanal" || vista === "historial") k = ymd(fRec);
-            else if (vista === "diaria") k = `${fRec.getFullYear()}-${String(fRec.getMonth()+1).padStart(2,"0")}-${String(fRec.getDate()).padStart(2,"0")}T${String(fRec.getHours()).padStart(2,"0")}:00`;
-            if (acc.has(k)) acc.get(k).recibidos += 1;
-          }
-          if (fEnt && inRange(fEnt, rIni, rFin)) {
-            let k = "";
-            if (vista === "anual") k = `${fEnt.getFullYear()}-${String(fEnt.getMonth()+1).padStart(2,"0")}`;
-            else if (vista === "mensual") k = `${fEnt.getFullYear()}-${String(fEnt.getMonth()+1).padStart(2,"0")}-${String(fEnt.getDate()).padStart(2,"0")}`;
-            else if (vista === "semanal" || vista === "historial") k = ymd(fEnt);
-            else if (vista === "diaria") k = `${fEnt.getFullYear()}-${String(fEnt.getMonth()+1).padStart(2,"0")}-${String(fEnt.getDate()).padStart(2,"0")}T${String(fEnt.getHours()).padStart(2,"0")}:00`;
-            if (acc.has(k)) acc.get(k).entregados += 1;
+    if (vista === "anual") {
+      cat = mesesCorto.map((mes, i) => ({
+        key: `${y}-${String(i+1).padStart(2,"0")}`,
+        periodo: mes,
+        recibidos: 0, entregados: 0
+      }));
+      
+      rawDiario.forEach(d => {
+        if (d.fecha && d.fecha.startsWith(String(y))) {
+          const parts = d.fecha.split("T")[0].split("-");
+          if (parts.length >= 2) {
+            const mesIdx = parseInt(parts[1], 10) - 1;
+            if (cat[mesIdx]) {
+              cat[mesIdx].recibidos += d.recibidos || 0;
+              cat[mesIdx].entregados += d.entregados || 0;
+            }
           }
         }
-        
-        let output = Array.from(acc.values());
-        if (["mensual", "diaria"].includes(vista)) output.sort((a, b) => parseInt(a.periodo) - parseInt(b.periodo));
-        if (vista === "semanal") output.sort((a, b) => diasCorto.indexOf(a.periodo) - diasCorto.indexOf(b.periodo));
-        if (vista === "historial") output.sort((a, b) => new Date(a.periodo) - new Date(b.periodo));
+      });
+      return cat;
+    }
 
-        if (!cancel) setDatosChart(output);
-      } catch (e) {} finally { if (!cancel) setCargandoChart(false); }
-    })();
-    return () => { cancel = true; };
-  }, [vista, fecha]);
+    if (vista === "mensual") {
+      const daysInMonth = new Date(y, m + 1, 0).getDate();
+      const prefix = `${y}-${String(m+1).padStart(2,"0")}`;
+      
+      cat = Array.from({ length: daysInMonth }, (_, i) => ({
+        key: `${prefix}-${String(i+1).padStart(2,"0")}`,
+        periodo: String(i+1),
+        recibidos: 0, entregados: 0
+      }));
+
+      rawDiario.forEach(d => {
+        if (d.fecha && d.fecha.startsWith(prefix)) {
+          const parts = d.fecha.split("T")[0].split("-");
+          if (parts.length >= 3) {
+            const dayIdx = parseInt(parts[2], 10) - 1;
+            if (cat[dayIdx]) {
+              cat[dayIdx].recibidos += d.recibidos || 0;
+              cat[dayIdx].entregados += d.entregados || 0;
+            }
+          }
+        }
+      });
+      return cat;
+    }
+
+    if (vista === "semanal") {
+      const start = startOfWeekMon(bd);
+      const map = {};
+      
+      for (let i = 0; i < 7; i++) {
+        const currentD = addDays(start, i);
+        const k = ymd(currentD);
+        map[k] = { periodo: diasCorto[i], recibidos: 0, entregados: 0, _d: currentD };
+      }
+
+      rawDiario.forEach(d => {
+        const dateKey = d.fecha ? d.fecha.split("T")[0] : null;
+        if (dateKey && map[dateKey]) {
+          map[dateKey].recibidos += d.recibidos || 0;
+          map[dateKey].entregados += d.entregados || 0;
+        }
+      });
+      
+      return Object.values(map).sort((a,b) => a._d - b._d);
+    }
+
+    if (vista === "historial") {
+      const start = addDays(bd, -29);
+      const map = {};
+      
+      for (let currentD = new Date(start); currentD <= bd; currentD = addDays(currentD, 1)) {
+        const k = ymd(currentD);
+        map[k] = { periodo: k, recibidos: 0, entregados: 0, _d: new Date(currentD) };
+      }
+
+      rawDiario.forEach(d => {
+        const dateKey = d.fecha ? d.fecha.split("T")[0] : null;
+        if (dateKey && map[dateKey]) {
+          map[dateKey].recibidos += d.recibidos || 0;
+          map[dateKey].entregados += d.entregados || 0;
+        }
+      });
+      
+      return Object.values(map).sort((a,b) => a._d - b._d);
+    }
+
+    if (vista === "diaria") {
+      const prefix = ymd(bd);
+      cat = Array.from({ length: 24 }, (_, h) => ({
+        key: `${prefix}T${String(h).padStart(2,"0")}:00`,
+        periodo: String(h),
+        recibidos: 0, entregados: 0
+      }));
+
+      rawDiario.forEach(d => {
+        if (d.fecha && d.fecha.startsWith(prefix) && d.fecha.includes("T")) {
+          const hStr = d.fecha.split("T")[1].substring(0,2);
+          const hIdx = parseInt(hStr, 10);
+          if (cat[hIdx]) {
+            cat[hIdx].recibidos += d.recibidos || 0;
+            cat[hIdx].entregados += d.entregados || 0;
+          }
+        }
+      });
+      return cat;
+    }
+
+    return [];
+  }, [rawDiario, vista, fecha]);
 
   const chartKPIs = useMemo(() => {
     const totalRec = datosChart.reduce((a, b) => a + (Number(b.recibidos) || 0), 0);
@@ -214,7 +280,7 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
     return tick;
   };
 
-  if (cargandoNegocio || cargandoResumen) {
+  if (cargandoNegocio) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="w-8 h-8 border-2 border-zinc-200 border-t-brand-500 rounded-full animate-spin" />
@@ -227,10 +293,10 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-zinc-200/80">
         <div>
           <div className="flex items-center gap-3 mb-1">
-             <h1 className="text-3xl font-extrabold text-zinc-950 tracking-tight">{negocio?.nombre_empresa || "Infraestructura"}</h1>
+             <h1 className="text-3xl font-extrabold text-zinc-950 tracking-tight">{negocio?.nombre || negocio?.nombre_empresa || "Infraestructura"}</h1>
              <PlanBadge />
           </div>
-          <p className="text-sm font-medium text-zinc-500">Metricas en tiempo real y registro de entradas.</p>
+          <p className="text-sm font-medium text-zinc-500">Métricas en tiempo real y registro de entradas.</p>
         </div>
         <button onClick={() => setMostrarModal(true)} className="flex items-center justify-center gap-2 bg-zinc-950 hover:bg-zinc-800 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95 w-full md:w-auto">
           <IconPlus /> Registrar Entrada
@@ -242,8 +308,8 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center text-red-600"><IconAlert /></div>
             <div className="text-sm text-red-800 font-medium">
-              <strong className="block mb-0.5 text-red-950 font-bold">Configuracion de local pendiente</strong>
-              Debes definir los estantes o baldas de tu almacen antes de gestionar paquetes.
+              <strong className="block mb-0.5 text-red-950 font-bold">Configuración de local pendiente</strong>
+              Debes definir los estantes o baldas de tu almacén antes de gestionar paquetes.
             </div>
           </div>
           <button onClick={() => go("/dashboard/configuracion")} className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-colors w-full sm:w-auto shadow-sm shadow-red-600/20">
@@ -251,6 +317,52 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
           </button>
         </div>
       )}
+
+      {/* ========================================================= */}
+      {/* BANNER CTA: FREEMIUM UPGRADE GATILLO VISUAL */}
+      {/* ========================================================= */}
+      {entitlements?.plan_id === 'free' && entitlements?.trial && (
+        <div className="bg-gradient-to-r from-zinc-950 to-zinc-900 rounded-[2rem] p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-8 shadow-2xl border border-zinc-800 relative overflow-hidden">
+          {/* Brillo de fondo sutil */}
+          <div className="absolute top-0 left-0 w-64 h-64 bg-brand-500/10 blur-[80px] rounded-full pointer-events-none" />
+          
+          <div className="flex-1 w-full relative z-10">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="bg-zinc-800/80 text-zinc-300 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-zinc-700">Límite de la cuenta</span>
+              <h3 className="text-xl md:text-2xl font-black text-white flex items-center gap-2">
+                Plan Free <span className="text-brand-400"><IconSparkles /></span>
+              </h3>
+            </div>
+            <p className="text-sm font-medium text-zinc-400 mb-5 max-w-2xl leading-relaxed">
+              Has consumido <strong className="text-white text-base">{entitlements.trial.used}</strong> de tus <strong className="text-white text-base">{entitlements.trial.quota}</strong> paquetes gratuitos. Pásate a Plus para eliminar los límites y desbloquear el Área Financiera completa.
+            </p>
+            
+            <div className="w-full bg-zinc-950/50 rounded-full h-3 mb-2 overflow-hidden shadow-inner border border-zinc-800/50">
+              <div 
+                className={`h-full rounded-full transition-all duration-1000 ease-out relative ${entitlements.trial.remaining < 20 ? 'bg-red-500' : 'bg-brand-500'}`} 
+                style={{ width: `${Math.min(100, (entitlements.trial.used / entitlements.trial.quota) * 100)}%` }}
+              >
+                <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]" />
+              </div>
+            </div>
+            
+            <div className="flex justify-between items-center text-xs font-bold px-1">
+              <span className="text-zinc-600">0</span>
+              <span className={entitlements.trial.remaining < 20 ? 'text-red-400 animate-pulse' : 'text-brand-400'}>
+                {entitlements.trial.remaining} restantes
+              </span>
+            </div>
+          </div>
+          
+          <button 
+            onClick={() => go('/dashboard/facturacion')} 
+            className="shrink-0 w-full md:w-auto px-8 py-4 bg-brand-500 hover:bg-brand-400 text-white font-black text-base rounded-xl shadow-lg shadow-brand-500/20 transition-all active:scale-95 relative z-10"
+          >
+            Mejorar a Plus
+          </button>
+        </div>
+      )}
+      {/* ========================================================= */}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <div className="bg-white p-6 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-between">
@@ -328,7 +440,7 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
           </div>
         </div>
 
-        {!cargandoChart && (
+        {!cargandoResumen && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 bg-zinc-50/50 p-4 rounded-2xl border border-zinc-100">
             <div>
               <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Total Recibidos</div>
@@ -349,7 +461,7 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
           </div>
         )}
 
-        {cargandoChart ? (
+        {cargandoResumen ? (
           <div className="h-[360px] w-full bg-zinc-50 rounded-2xl animate-pulse flex items-center justify-center border border-zinc-100">
             <div className="w-8 h-8 border-2 border-zinc-200 border-t-brand-500 rounded-full animate-spin" />
           </div>

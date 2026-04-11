@@ -22,8 +22,11 @@ const { fetchSubscriptionForTenant } = require('../utils/subscription');
 const { slugifyBase, uniqueSlug } = require('../helpers/slug');
 
 let actualizarTenantMe = null;
+let activarPruebaIA = null;
 try {
-  ({ actualizarTenantMe } = require('../controllers/tenants.controller'));
+  const controllers = require('../controllers/tenants.controller');
+  actualizarTenantMe = controllers.actualizarTenantMe;
+  activarPruebaIA = controllers.activarPruebaIA;
 } catch {}
 
 const TENANT_FIELDS = 'id, slug, nombre_empresa, email, trial_quota, trial_used, soft_blocked, plan_id, requested_plan, is_ai_active, ai_trial_ends_at, ai_trial_used';
@@ -110,6 +113,11 @@ router.get('/me', requireAuth, async (req, res) => {
 router.post('/me', requireAuth, async (req, res, next) => {
   if (typeof actualizarTenantMe === 'function') return actualizarTenantMe(req, res, next);
   return res.status(501).json({ ok: false, error: 'Actualizar tenant no implementado' });
+});
+
+router.post('/me/ai-trial', requireAuth, async (req, res, next) => {
+  if (typeof activarPruebaIA === 'function') return activarPruebaIA(req, res, next);
+  return res.status(501).json({ ok: false, error: 'Prueba IA no implementada' });
 });
 
 module.exports = router;

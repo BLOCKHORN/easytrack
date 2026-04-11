@@ -38,17 +38,11 @@ async function authFetch(path, opts = {}) {
 
 /* ----------------------------- API ----------------------------- */
 
-// Planes activos (para UI)
 export async function getPlans() {
   const r = await authFetch('/billing/plans');
   return Array.isArray(r?.plans) ? r.plans : (Array.isArray(r) ? r : []);
 }
 
-/**
- * Prefill opcional de datos de facturación.
- * Si tu backend no implementa /billing/prefill todavía, devolvemos true en 404
- * para no romper el flujo (el modal seguirá funcionando).
- */
 export async function prefillBilling(payload) {
   try {
     const body = {
@@ -61,12 +55,11 @@ export async function prefillBilling(payload) {
     });
     return r?.ok !== false;
   } catch (e) {
-    if (e?.status === 404) return true; // tolerante si no existe el endpoint
+    if (e?.status === 404) return true; 
     throw e;
   }
 }
 
-/** Arranca el Checkout y devuelve SIEMPRE un string URL válido */
 export async function startCheckout(payload) {
   const r = await authFetch('/billing/checkout', {
     method: 'POST',
@@ -78,22 +71,16 @@ export async function startCheckout(payload) {
   throw new Error('No se pudo iniciar el checkout (sin URL).');
 }
 
-/** Abre Stripe Billing Portal (URL) */
 export async function openBillingPortal() {
   const r = await authFetch('/billing/portal', { method: 'POST' });
   return r?.url || null;
 }
 
-/** Resumen de suscripción (Stripe → simplificado) */
 export async function getSubscription() {
   const r = await authFetch('/billing/subscription');
   return r?.subscription || null;
 }
 
-/**
- * Verifica una Checkout Session por ID (no requiere sesión)
- * Devuelve { sessionId, status, customerEmail, planCode, trialEndsAt, currentPeriodEnd }
- */
 export async function verifyCheckout(sessionId) {
   const url = `${API}/billing/checkout/verify?session_id=${encodeURIComponent(sessionId)}`;
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -109,27 +96,19 @@ export async function verifyCheckout(sessionId) {
   return body?.data || body;
 }
 
-/* ====== NUEVO: helpers para elegir periodo y gestionar renovación ====== */
-
-/** Opcional: lista de periodos y precios por periodo (si tu backend lo expone). */
 export async function getPeriodOptions() {
   try {
     const r = await authFetch('/billing/period-options');
-    // esperado: [{ key:'m1', price_month_cents, price_cents }, ...]
     if (Array.isArray(r)) return r;
     if (Array.isArray(r?.options)) return r.options;
     return null;
   } catch (e) {
-    if (e?.status === 404) return null; // no implementado → no pasa nada
+    if (e?.status === 404) return null;
     throw e;
   }
 }
 
-/**
- * El usuario elige periodo (m1|m3|m12) y se genera una URL (Checkout/gestión).
- * Devuelve siempre la URL (string) para redirigir.
- */
-export async function choosePeriod(period /* 'm1' | 'm3' | 'm12' */) {
+export async function choosePeriod(period) {
   const r = await authFetch('/billing/choose-period', {
     method: 'POST',
     body: JSON.stringify({ period }),
@@ -140,13 +119,11 @@ export async function choosePeriod(period /* 'm1' | 'm3' | 'm12' */) {
   throw new Error('No se pudo iniciar el cambio de periodo (sin URL).');
 }
 
-/** Cancelar renovación al final del periodo. */
 export async function cancelRenewal() {
   const r = await authFetch('/billing/cancel-renewal', { method: 'POST' });
   return r?.ok !== false;
 }
 
-/** Reanudar renovación automática. */
 export async function resumeRenewal() {
   const r = await authFetch('/billing/resume', { method: 'POST' });
   return r?.ok !== false;

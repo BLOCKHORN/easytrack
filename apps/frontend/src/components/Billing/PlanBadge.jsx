@@ -1,44 +1,44 @@
-import { useSubscription } from '../../hooks/useSubscription';
+import useSubscription from '../../hooks/useSubscription';
 
 export default function PlanBadge() {
   const { loading, entitlements } = useSubscription();
-  if (loading) return <span className="h-6 w-24 bg-zinc-100 animate-pulse rounded-md inline-block" />;
+  
+  if (loading) return <span className="h-6 w-20 bg-zinc-100 animate-pulse rounded-md inline-block" />;
 
-  const paid = !!entitlements?.subscriptionActive;
-  const trial = !!entitlements?.trial?.active;
+  const planId = entitlements?.plan_id || 'free';
+  const remaining = entitlements?.trial?.remaining || 0;
+  const isVip = entitlements?.features?.unlimitedPackages && planId === 'free'; // Para tus cuentas blindadas
 
-  if (paid) {
-    const cad = entitlements?.plan?.cadence || 'monthly';
-    const isAnnual = cad === 'annual';
-    
+  if (planId === 'pro') {
     return (
-      <span 
-        className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md bg-brand-50 text-brand-700 border border-brand-200 shadow-sm"
-        title={`Plan Premium ${isAnnual ? 'Anual' : 'Mensual'} Activo`}
-      >
-        PREMIUM {isAnnual ? 'ANUAL' : 'MENSUAL'}
+      <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md bg-zinc-950 text-white shadow-sm" title="Plan PRO Activo">
+        PRO
       </span>
     );
   }
 
-  if (trial && entitlements?.trial?.quota_ok) {
-    const restantes = entitlements.trial.remaining || 0;
+  if (planId === 'plus') {
     return (
-      <span 
-        className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm"
-        title={`Te quedan ${restantes} paquetes de prueba`}
-      >
-        PRUEBA ({restantes} RESTANTES)
+      <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md bg-brand-50 text-brand-700 border border-brand-200 shadow-sm" title="Plan Plus Activo">
+        PLUS
+      </span>
+    );
+  }
+
+  if (isVip) {
+    return (
+      <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md bg-amber-50 text-amber-700 border border-amber-200 shadow-sm" title="Cuenta VIP Ilimitada">
+        LIFETIME
       </span>
     );
   }
 
   return (
     <span 
-      className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md bg-red-50 text-red-600 border border-red-200 shadow-sm"
-      title="Sin plan activo o límite superado"
+      className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md bg-zinc-100 text-zinc-600 border border-zinc-200 shadow-sm" 
+      title={`Te quedan ${remaining} paquetes este mes`}
     >
-      SIN PLAN ACTIVO
+      FREEMIUM ({remaining})
     </span>
   );
 }

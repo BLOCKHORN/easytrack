@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../../utils/supabaseClient";
 import {
-  obtenerPaquetesBackend,
   eliminarPaqueteBackend,
   entregarPaqueteBackend,
   editarPaqueteBackend,
 } from "../../services/paquetesService";
 import { getTenantIdOrThrow } from "../../utils/tenant";
+
+const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
 
 const IconSearch = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>;
 const IconCheck = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>;
@@ -21,101 +22,15 @@ const RESULTADOS_POR_PAGINA = 10;
 const LS_KEY = "buscar_paquete_filtros_v12";
 const QUEUE_KEY = "easytrack_sync_queue";
 
-const normalize = (s = "") => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^\p{L}\p{N}\s'-]+/gu, " ").replace(/\s+/g, " ");
-const tokenize = (s = "") => normalize(s).split(" ").filter(Boolean);
-
-function jaroWinkler(a = "", b = "") {
-  a = normalize(a); b = normalize(b);
-  if (!a || !b) return 0;
-  const m = Math.floor(Math.max(a.length, b.length) / 2) - 1;
-  let matches = 0, transpositions = 0;
-  const aMatches = new Array(a.length).fill(false);
-  const bMatches = new Array(b.length).fill(false);
-  for (let i = 0; i < a.length; i++) {
-    const start = Math.max(0, i - m);
-    const end = Math.min(i + m + 1, b.length);
-    for (let j = start; j < end; j++) {
-      if (bMatches[j]) continue;
-      if (a[i] === b[j]) { aMatches[i] = true; bMatches[j] = true; matches++; break; }
-    }
-  }
-  if (matches === 0) return 0;
-  let k = 0;
-  for (let i = 0; i < a.length; i++) {
-    if (!aMatches[i]) continue;
-    while (!bMatches[k]) k++;
-    if (a[i] !== b[k]) transpositions++;
-    k++;
-  }
-  transpositions /= 2;
-  const j = (matches / a.length + matches / b.length + (matches - transpositions) / matches) / 3;
-  let prefix = 0;
-  for (let i = 0; i < Math.min(4, a.length, b.length); i++) { if (a[i] === b[i]) prefix++; else break; }
-  return j + prefix * 0.1 * (1 - j);
-}
-
-const fuzzyScore = (q, c) => {
-  const qn = normalize(q), cn = normalize(c);
-  if (!qn) return 1; if (!cn) return 0;
-  const qT = tokenize(qn), cT = tokenize(cn);
-  let sum = 0;
-  for (const qt of qT) {
-    let best = 0;
-    for (const ct of cT) {
-      if (ct === qt) { best = 1; break; }
-      if (ct.startsWith(qt)) best = Math.max(best, 0.95);
-      else if (ct.includes(qt)) best = Math.max(best, 0.8);
-      else best = Math.max(best, jaroWinkler(qt, ct) * 0.9);
-    }
-    sum += best;
-  }
-  const tokenScore = sum / qT.length;
-  const global = jaroWinkler(qn, cn);
-  return Math.max(global, tokenScore * 0.7 + global * 0.3);
-};
-
-const passesStrict = (q, c) => {
-  const qT = tokenize(q), cT = tokenize(c);
-  if (qT.length === 0) return true;
-  if (cT.length === 0) return false;
-  return qT.every(qt => {
-    const minJW = Math.min(0.93, 0.80 + Math.min(qt.length, 10) * 0.02);
-    return cT.some(ct => ct === qt || ct.startsWith(qt) || jaroWinkler(qt, ct) >= minJW);
-  });
-};
-
-function highlightApprox(name, query) {
-  const qTokens = tokenize(query);
-  if (qTokens.length === 0) return name;
-  const original = String(name);
-  const norm = normalize(original);
-  const ranges = [];
-  for (const t of qTokens) {
-    const idx = norm.indexOf(t);
-    if (idx !== -1) ranges.push([idx, idx + t.length]);
-  }
-  if (ranges.length === 0) return original;
-  ranges.sort((a, b) => a[0] - b[0]);
-  const merged = [];
-  let [s, e] = ranges[0];
-  for (let i = 1; i < ranges.length; i++) {
-    const [ns, ne] = ranges[i];
-    if (ns <= e) e = Math.max(e, ne);
-    else { merged.push([s, e]); [s, e] = [ns, ne]; }
-  }
-  merged.push([s, e]);
-  const parts = [];
-  let lastEnd = 0;
-  for (const [ms, me] of merged) {
-    parts.push({ type: "text", text: original.slice(lastEnd, ms) });
-    parts.push({ type: "mark", text: original.slice(ms, me) });
-    lastEnd = me;
-  }
-  parts.push({ type: "text", text: original.slice(lastEnd) });
+// Resaltador optimizado usando Regex (sin cargar memoria con JaroWinkler)
+function highlightExact(text, query) {
+  if (!query || !text) return text;
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = String(text).split(regex);
   return (
     <>
       {parts.map((p, i) =>
-        p.type === "mark" ? <mark key={i} className="bg-brand-200 text-brand-900 px-0.5 rounded-sm">{p.text}</mark> : <span key={i}>{p.text}</span>
+        regex.test(p) ? <mark key={i} className="bg-brand-200 text-brand-900 px-0.5 rounded-sm">{p}</mark> : <span key={i}>{p}</span>
       )}
     </>
   );
@@ -136,26 +51,13 @@ export default function BuscarPaquete() {
   const retryQueue = useRef(new Set());
   const isSyncing = useRef(false);
 
-  const isSelected = (id) => selectedIds.has(id);
-  const clearSelection = () => setSelectedIds(new Set());
-  const toggleSelectOne = (id) => {
-    setSelectedIds(prev => {
-      const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
-  };
-
-  const showToast = (msg, isError = false) => {
-    setToastMsg({ msg, isError });
-    setTimeout(() => setToastMsg(null), 3500);
-  };
-
   const [tenantId, setTenantId] = useState(null);
-  const [paquetes, setPaquetes] = useState([]);
+  const [paquetes, setPaquetes] = useState([]); // Solo los 10 de la página actual
+  const [totalResultados, setTotalResultados] = useState(0); // Total que coinciden con el filtro
+  const [kpiGlobal, setKpiGlobal] = useState({ total: 0, entregados: 0, pendientes: 0 }); // Total absoluto del negocio
+
   const [companias, setCompanias] = useState([]);
   const [ubicaciones, setUbicaciones] = useState([]); 
-  const [ubiIdToLabel, setUbiIdToLabel] = useState(() => new Map());
 
   const [paginaActual, setPaginaActual] = useState(1);
   const [cargando, setCargando] = useState(false);
@@ -168,6 +70,22 @@ export default function BuscarPaquete() {
 
   const searchDebounceRef = useRef(null);
 
+  const showToast = (msg, isError = false) => {
+    setToastMsg({ msg, isError });
+    setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  const isSelected = (id) => selectedIds.has(id);
+  const clearSelection = () => setSelectedIds(new Set());
+  const toggleSelectOne = (id) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  };
+
+  // --- SINCRONIZACIÓN OFFLINE ---
   const processSyncQueue = useCallback(async () => {
     if (isSyncing.current || retryQueue.current.size === 0) {
       localStorage.setItem(QUEUE_KEY, JSON.stringify(Array.from(retryQueue.current)));
@@ -184,8 +102,7 @@ export default function BuscarPaquete() {
           try {
             await entregarPaqueteBackend(id, session.access_token);
             retryQueue.current.delete(id);
-          } catch (e) {
-          }
+          } catch (e) {}
         }
       }
     } catch (e) {}
@@ -198,6 +115,81 @@ export default function BuscarPaquete() {
     }
   }, []);
 
+  // --- CARGA INICIAL DE DATOS ESTATICOS Y KPIs GLOBALES ---
+  const loadGlobalData = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const tId = await getTenantIdOrThrow();
+      setTenantId(tId);
+
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // KPIs Totales (Sin filtros)
+      const resKPI = await fetch(`${API_BASE}/api/paquetes/count`, { headers });
+      if (resKPI.ok) {
+        const dataKPI = await resKPI.json();
+        setKpiGlobal({ total: dataKPI.total || 0, entregados: dataKPI.entregados || 0, pendientes: dataKPI.pendientes || 0 });
+      }
+
+      // Dropdowns (Compañías y Ubicaciones)
+      const { data: empresas } = await supabase.from("empresas_transporte_tenant").select("nombre").eq("tenant_id", tId);
+      setCompanias((empresas || []).map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b)));
+
+      const { data: uRows } = await supabase.from("ubicaciones").select("id,label").eq("tenant_id", tId);
+      setUbicaciones((uRows || []).map(r => ({ id: r.id, label: String(r.label || "").toUpperCase() })));
+
+    } catch (e) {}
+  };
+
+  // --- CARGA DE PÁGINA ESPECÍFICA (SERVER-SIDE) ---
+  const fetchPage = async () => {
+    setCargando(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const params = new URLSearchParams({
+        limit: RESULTADOS_POR_PAGINA,
+        offset: (paginaActual - 1) * RESULTADOS_POR_PAGINA,
+        estado: estadoFiltro,
+        compania: companiaFiltro,
+        ubicacion: ubicacionFiltro,
+        search: busqueda,
+        order: 'fecha_llegada',
+        dir: 'desc'
+      });
+
+      const [resPkgs, resCount] = await Promise.all([
+        fetch(`${API_BASE}/api/paquetes?${params}`, { headers }),
+        fetch(`${API_BASE}/api/paquetes/count?${params}`, { headers })
+      ]);
+
+      if (resPkgs.ok && resCount.ok) {
+        const dataPkgs = await resPkgs.json();
+        const dataCount = await resCount.json();
+
+        const list = (dataPkgs.paquetes || []).map(p => ({
+          id: p.id,
+          nombre_cliente: p.nombre_cliente ?? "",
+          compania: p.empresa_transporte ?? p.compania ?? "",
+          entregado: !!p.entregado || retryQueue.current.has(p.id),
+          fecha_llegada: p.fecha_llegada ?? p.created_at ?? new Date().toISOString(),
+          ubicacion_id: p.ubicacion_id ?? null,
+          ubicacion_label: p.ubicacion_label || "",
+        }));
+
+        setPaquetes(list);
+        setTotalResultados(dataCount.total || 0);
+      }
+    } catch(e) {
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  // 1. Efecto inicial
   useEffect(() => {
     try {
       const rawFiltros = localStorage.getItem(LS_KEY);
@@ -216,107 +208,40 @@ export default function BuscarPaquete() {
         }
       }
     } catch {}
+    
+    loadGlobalData();
   }, [processSyncQueue]);
 
+  // 2. Efecto de guardado de filtros
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify({ estadoFiltro, companiaFiltro, ubicacionFiltro }));
   }, [estadoFiltro, companiaFiltro, ubicacionFiltro]);
 
+  // 3. Efecto de reseteo al cambiar filtros
   useEffect(() => {
-    let cancelado = false;
-    (async () => {
-      setCargando(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        const tId = await getTenantIdOrThrow();
-        if (cancelado) return;
-        
-        setTenantId(tId);
-
-        const paquetesAPI = await obtenerPaquetesBackend(token);
-        if (cancelado) return;
-
-        const { data: empresas } = await supabase.from("empresas_transporte_tenant").select("nombre").eq("tenant_id", tId);
-        setCompanias((empresas || []).map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b)));
-
-        const { data: uRows } = await supabase.from("ubicaciones").select("id,label").eq("tenant_id", tId);
-        const ubis = (uRows || []).map(r => ({ id: r.id, label: String(r.label || "").toUpperCase() }));
-        setUbicaciones(ubis);
-        
-        const mapU = new Map(ubis.map(u => [u.id, u.label]));
-        setUbiIdToLabel(mapU);
-
-        const list = (paquetesAPI || []).map(p => {
-          const label = (p.ubicacion_label && String(p.ubicacion_label).toUpperCase()) || (p.compartimento && String(p.compartimento).toUpperCase()) || (p.ubicacion_id && (mapU.get(p.ubicacion_id) || "")) || "";
-          let entregadoLocal = !!p.entregado;
-          if (retryQueue.current.has(p.id)) {
-            entregadoLocal = true;
-          }
-
-          return {
-            id: p.id,
-            nombre_cliente: p.nombre_cliente ?? "",
-            compania: p.empresa_transporte ?? p.compania ?? "",
-            entregado: entregadoLocal,
-            fecha_llegada: p.fecha_llegada ?? p.created_at ?? new Date().toISOString(),
-            ubicacion_id: p.ubicacion_id ?? null,
-            ubicacion_label: label || null,
-          };
-        });
-        setPaquetes(list);
-      } catch (e) {} finally {
-        if (!cancelado) setCargando(false);
-      }
-    })();
-    return () => { cancelado = true; };
-  }, []);
-
-  const companiasFiltradas = useMemo(() => ["todos", ...Array.from(new Set(paquetes.map(p => p.compania).filter(Boolean)))], [paquetes]);
-  const ubicacionesFiltradas = useMemo(() => {
-    const fromUbis = ubicaciones.map(u => u.label);
-    const fromPaquetes = paquetes.map(p => p.ubicacion_label).filter(Boolean);
-    const uniq = Array.from(new Set([...fromUbis, ...fromPaquetes])).sort((a,b)=> {
-      const ma = /^B(\d+)$/i.exec(String(a)); const mb = /^B(\d+)$/i.exec(String(b));
-      if (ma && mb) return parseInt(ma[1],10) - parseInt(mb[1],10);
-      return String(a).localeCompare(String(b));
-    });
-    return ["todas", ...uniq];
-  }, [ubicaciones, paquetes]);
-
-  useEffect(() => {
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => setPaginaActual(1), 200);
-    return () => clearTimeout(searchDebounceRef.current);
+    setSelectedIds(new Set());
+    setPaginaActual(1);
   }, [busqueda, estadoFiltro, companiaFiltro, ubicacionFiltro]);
 
-  const filtrados = useMemo(() => {
-    let base = paquetes
-      .filter(p => estadoFiltro === "pendiente" ? !p.entregado : estadoFiltro === "entregado" ? p.entregado : true)
-      .filter(p => companiaFiltro === "todos" || p.compania === companiaFiltro)
-      .filter(p => ubicacionFiltro === "todas" || (p.ubicacion_label || "") === ubicacionFiltro);
+  // 4. Efecto principal de carga (Debounced)
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      fetchPage();
+    }, 300);
+    return () => clearTimeout(searchDebounceRef.current);
+  }, [paginaActual, busqueda, estadoFiltro, companiaFiltro, ubicacionFiltro]);
 
-    const q = busqueda.trim();
-    const sortFn = (a, b) => new Date(b.fecha_llegada) - new Date(a.fecha_llegada);
+  const companiasFiltradas = ["todos", ...companias];
+  const ubicacionesFiltradas = ["todas", ...ubicaciones.map(u => u.label).sort((a,b)=> {
+    const ma = /^B(\d+)$/i.exec(String(a)); const mb = /^B(\d+)$/i.exec(String(b));
+    if (ma && mb) return parseInt(ma[1],10) - parseInt(mb[1],10);
+    return String(a).localeCompare(String(b));
+  })];
 
-    if (!q) return [...base].sort(sortFn);
-
-    return base
-      .filter(p => passesStrict(q, `${p.nombre_cliente} ${p.compania || ""}`))
-      .map(p => ({ p, s: fuzzyScore(q, `${p.nombre_cliente} ${p.compania || ""}`) }))
-      .sort((a,b)=>b.s-a.s || sortFn(a.p, b.p))
-      .map(x => x.p);
-  }, [paquetes, busqueda, estadoFiltro, companiaFiltro, ubicacionFiltro]);
-
-  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / RESULTADOS_POR_PAGINA));
-  const paginados = useMemo(() => filtrados.slice((paginaActual - 1) * RESULTADOS_POR_PAGINA, paginaActual * RESULTADOS_POR_PAGINA), [filtrados, paginaActual]);
-  
-  const cambiarPagina = (nueva) => {
-    if (nueva >= 1 && nueva <= totalPaginas) setPaginaActual(nueva);
-  };
-
-  const paginadosIds = paginados.map(p => p.id);
-  const allPageSelected = paginados.length > 0 && paginados.every(p => selectedIds.has(p.id));
+  const totalPaginas = Math.max(1, Math.ceil(totalResultados / RESULTADOS_POR_PAGINA));
+  const paginadosIds = paquetes.map(p => p.id);
+  const allPageSelected = paquetes.length > 0 && paquetes.every(p => selectedIds.has(p.id));
   const anySelected = selectedIds.size > 0;
   
   const toggleSelectAllPage = () => {
@@ -332,10 +257,13 @@ export default function BuscarPaquete() {
     return paquetes.filter(p => set.has(p.id) && !p.entregado).map(p => p.id);
   }, [selectedIds, paquetes]);
 
+  // --- ACCIONES ---
   const marcarEntregado = (id) => {
     setPaquetes(prev => prev.map(p => p.id === id ? { ...p, entregado: true } : p));
     retryQueue.current.add(id);
     processSyncQueue();
+    // Actualizamos KPI localmente para evitar otra petición de red
+    setKpiGlobal(prev => ({...prev, pendientes: Math.max(0, prev.pendientes - 1), entregados: prev.entregados + 1}));
     showToast("Paquete marcado como entregado.");
   };
 
@@ -347,6 +275,7 @@ export default function BuscarPaquete() {
     ids.forEach(id => retryQueue.current.add(id));
     clearSelection();
     processSyncQueue();
+    setKpiGlobal(prev => ({...prev, pendientes: Math.max(0, prev.pendientes - ids.length), entregados: prev.entregados + ids.length}));
     showToast(`${ids.length} paquetes marcados como entregados.`);
   };
 
@@ -355,15 +284,14 @@ export default function BuscarPaquete() {
     setConfirmState({ open: false, payload: null });
     if (!payload) return;
     
-    setPaquetes(prev => prev.filter(p => p.id !== payload.id));
-    
     try {
       const { data: { session } } = await supabase.auth.getSession();
       await eliminarPaqueteBackend(payload.id, session.access_token);
       setSelectedIds(prev => { const n = new Set(prev); n.delete(payload.id); return n; });
       showToast("Paquete eliminado permanentemente.");
+      fetchPage();
+      loadGlobalData();
     } catch (e) {
-      setPaquetes(prev => [...prev, payload]);
       showToast("Error de red. No se pudo eliminar.", true);
     }
   };
@@ -371,9 +299,6 @@ export default function BuscarPaquete() {
   const eliminarSeleccionados = async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    
-    const backup = paquetes.filter(p => ids.includes(p.id));
-    setPaquetes(prev => prev.filter(p => !ids.includes(p.id)));
     setConfirmBulk(false);
     
     try {
@@ -381,8 +306,9 @@ export default function BuscarPaquete() {
       await Promise.all(ids.map(id => eliminarPaqueteBackend(id, session.access_token)));
       clearSelection();
       showToast(`${ids.length} paquetes eliminados.`);
+      fetchPage();
+      loadGlobalData();
     } catch (e) {
-      setPaquetes(prev => [...prev, ...backup]);
       showToast("Error al eliminar el lote. Reinténtalo.", true);
     }
   };
@@ -394,20 +320,6 @@ export default function BuscarPaquete() {
       const { data: { session } } = await supabase.auth.getSession();
       const newLabel = String(paqueteEditando.ubicacion_label || "").toUpperCase().trim();
       const ubiRow = ubicaciones.find(u => u.label === newLabel) || null;
-
-      const originalPkg = paquetes.find(p => p.id === paqueteEditando.id);
-      const oldLabel = String(originalPkg?.ubicacion_label || "").toUpperCase().trim();
-
-      if (tenantId && oldLabel && newLabel && oldLabel !== newLabel) {
-        const countInOld = paquetes.filter(p => !p.entregado && String(p.ubicacion_label || "").toUpperCase() === oldLabel).length;
-        const nextThreshold = Math.max(0, countInOld - 1);
-        try {
-          const key = `ap_penalties_${tenantId}`;
-          const penalties = JSON.parse(localStorage.getItem(key)) || {};
-          penalties[oldLabel] = nextThreshold;
-          localStorage.setItem(key, JSON.stringify(penalties));
-        } catch(e) {}
-      }
       
       const payload = {
         id: paqueteEditando.id,
@@ -434,10 +346,7 @@ export default function BuscarPaquete() {
     }
   };
 
-  const totalKPI = paquetes.length;
-  const pendientesKPI = paquetes.filter(p => !p.entregado).length;
-  const entregadosKPI = totalKPI - pendientesKPI;
-  const progresoKPI = totalKPI ? Math.round((entregadosKPI / totalKPI) * 100) : 0;
+  const progresoKPI = kpiGlobal.total ? Math.round((kpiGlobal.entregados / kpiGlobal.total) * 100) : 0;
   const selectedPendingCount = selectedPendingIds.length;
 
   return (
@@ -468,15 +377,15 @@ export default function BuscarPaquete() {
         <div className="flex flex-wrap md:flex-nowrap gap-3">
           <div className="bg-white px-5 py-3 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-center flex-1">
             <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">Total</span>
-            <span className="text-3xl font-black text-zinc-950 mt-1">{totalKPI}</span>
+            <span className="text-3xl font-black text-zinc-950 mt-1">{kpiGlobal.total}</span>
           </div>
           <div className="bg-white px-5 py-3 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-center flex-1">
             <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">Pendientes</span>
-            <span className="text-3xl font-black text-amber-600 mt-1">{pendientesKPI}</span>
+            <span className="text-3xl font-black text-amber-600 mt-1">{kpiGlobal.pendientes}</span>
           </div>
           <div className="bg-white px-5 py-3 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-center flex-1">
             <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">Entregados</span>
-            <span className="text-3xl font-black text-emerald-600 mt-1">{entregadosKPI}</span>
+            <span className="text-3xl font-black text-emerald-600 mt-1">{kpiGlobal.entregados}</span>
           </div>
           <div className="bg-white px-5 py-3 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-center flex-1 w-full md:w-48">
             <div className="flex justify-between items-center mb-2">
@@ -493,7 +402,7 @@ export default function BuscarPaquete() {
       <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col xl:flex-row gap-4 justify-between items-center">
         <div className="relative w-full xl:w-96 flex-shrink-0">
           <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-zinc-400"><IconSearch /></div>
-          <input type="text" placeholder="Buscar nombre o compañía..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="w-full pl-12 pr-10 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-black text-lg text-zinc-950 transition-all placeholder:font-bold" />
+          <input type="text" placeholder="Buscar por nombre..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="w-full pl-12 pr-10 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-black text-lg text-zinc-950 transition-all placeholder:font-bold" />
           {busqueda && (
             <button onClick={() => setBusqueda("")} className="absolute inset-y-0 right-3 flex items-center justify-center text-zinc-400 hover:text-zinc-600">
               <IconTimes />
@@ -526,10 +435,10 @@ export default function BuscarPaquete() {
             [...Array(5)].map((_, i) => (
               <div key={i} className="p-6"><div className="h-20 bg-zinc-100 rounded-xl animate-pulse"></div></div>
             ))
-          ) : paginados.length === 0 ? (
+          ) : paquetes.length === 0 ? (
             <div className="py-16 text-center text-zinc-500 font-bold text-lg">No hay paquetes que coincidan.</div>
           ) : (
-            paginados.map(p => {
+            paquetes.map(p => {
               const revealed = revealAll || revealedSet.has(p.id);
               const checked = isSelected(p.id);
               return (
@@ -541,7 +450,7 @@ export default function BuscarPaquete() {
                         {checked && <IconCheck />}
                       </button>
                       <div className={`font-black text-2xl text-zinc-950 truncate transition-all ${revealed ? '' : 'blur-[6px] select-none'}`}>
-                        {busqueda ? highlightApprox(p.nombre_cliente, busqueda) : p.nombre_cliente}
+                        {busqueda ? highlightExact(p.nombre_cliente, busqueda) : p.nombre_cliente}
                       </div>
                     </div>
                     
@@ -600,13 +509,13 @@ export default function BuscarPaquete() {
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {cargando ? (
-                [...Array(5)].map((_, i) => (
+                [...Array(RESULTADOS_POR_PAGINA)].map((_, i) => (
                   <tr key={i}><td colSpan="7" className="py-8 px-6"><div className="h-6 bg-zinc-100 rounded w-full animate-pulse"></div></td></tr>
                 ))
-              ) : paginados.length === 0 ? (
+              ) : paquetes.length === 0 ? (
                 <tr><td colSpan="7" className="py-16 text-center text-zinc-500 font-bold text-lg">No hay paquetes que coincidan con la búsqueda.</td></tr>
               ) : (
-                paginados.map(p => {
+                paquetes.map(p => {
                   const revealed = revealAll || revealedSet.has(p.id);
                   const checked = isSelected(p.id);
                   
@@ -619,7 +528,7 @@ export default function BuscarPaquete() {
                       </td>
                       <td className="py-5 px-6">
                         <div className={`font-black text-xl text-zinc-950 transition-all ${revealed ? '' : 'blur-[5px] select-none'}`}>
-                          {busqueda ? highlightApprox(p.nombre_cliente, busqueda) : p.nombre_cliente}
+                          {busqueda ? highlightExact(p.nombre_cliente, busqueda) : p.nombre_cliente}
                         </div>
                       </td>
                       <td className="py-5 px-6 font-black text-zinc-700 text-lg">
@@ -671,15 +580,15 @@ export default function BuscarPaquete() {
             <span className="text-base font-bold text-zinc-600">Página <strong className="text-zinc-950 font-black">{paginaActual}</strong> de {totalPaginas}</span>
             <div className="flex gap-3">
               <button 
-                onClick={() => cambiarPagina(paginaActual - 1)} 
-                disabled={paginaActual === 1} 
+                onClick={() => setPaginaActual(p => Math.max(1, p - 1))} 
+                disabled={paginaActual === 1 || cargando} 
                 className="px-6 py-3 rounded-xl border border-zinc-200 bg-white text-base font-black text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
                 Anterior
               </button>
               <button 
-                onClick={() => cambiarPagina(paginaActual + 1)} 
-                disabled={paginaActual === totalPaginas} 
+                onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))} 
+                disabled={paginaActual === totalPaginas || cargando} 
                 className="px-6 py-3 rounded-xl border border-zinc-200 bg-white text-base font-black text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
                 Siguiente

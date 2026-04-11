@@ -58,6 +58,7 @@ function normalizePaquete(row = {}) {
     compania: empresa,
     entregado: !!row.entregado,
     fecha_llegada: row.fecha_llegada ?? row.created_at ?? null,
+    telefono: row.telefono ?? null, // <-- Aseguramos mapear el teléfono si existe
 
     ubicacion_id: ubiId,
     ubicacion_label: typeof ubiLabel === 'string' ? ubiLabel : null,
@@ -75,6 +76,19 @@ function normalizePaquete(row = {}) {
 
 /* ===== API ===== */
 
+// Llamada a la IA para escanear etiquetas
+export async function escanearEtiquetaIA(imageBase64, token) {
+  const url = `${API_URL}/ia/scan-label`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ imageBase64 }),
+  });
+  const body = await parseMaybeJson(resp);
+  ensureOk(resp, body, 'POST /ia/scan-label');
+  return body; // Devuelve { cliente, compania, telefono }
+}
+
 // Crear un nuevo paquete (el backend devuelve { paquete })
 export async function crearPaqueteBackend(datos, token) {
   const tid = datos?.tenant_id || await getTenantIdOrThrow();
@@ -83,6 +97,7 @@ export async function crearPaqueteBackend(datos, token) {
     tenant_id: tid,
     nombre_cliente: datos.nombre_cliente,
     empresa_transporte: datos.empresa_transporte,
+    telefono: datos.telefono || null, // <-- Enviamos teléfono al backend
   };
 
   // Preferimos NUEVO esquema
@@ -204,6 +219,7 @@ export async function editarPaqueteBackend(paquete, token) {
   const patch = {
     nombre_cliente: paquete?.nombre_cliente,
     empresa_transporte: paquete?.empresa_transporte,
+    telefono: paquete?.telefono || null,
     ubicacion_id: paquete?.ubicacion_id ?? paquete?.balda_id ?? null,
     ubicacion_label: paquete?.ubicacion_label ?? paquete?.compartimento ?? null,
   };

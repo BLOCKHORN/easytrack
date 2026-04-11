@@ -13,7 +13,6 @@ const subscriptionFirewall = require('./middlewares/subscriptionFirewall');
 
 const paquetesRoutes = require('./routes/paquetes.routes');
 const ubicacionesRoutes = require('./routes/ubicaciones.routes');
-const estantesRoutes = require('./routes/estantes.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const areaPersonalRoutes = require('./routes/areaPersonal.routes');
 const authRoutes = require('./routes/auth.routes');
@@ -36,6 +35,8 @@ const ticketsRoutes = require('./routes/tickets.routes');
 
 const adminBillingRoutes = require('./routes/admin.billing.routes');
 const adminTenantsRoutes = require('./routes/admin.tenants.routes');
+
+const iaRoutes = require('./routes/ia.routes');
 
 const envOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
   .split(',').map(s => s.trim()).filter(Boolean);
@@ -118,26 +119,34 @@ function authOnly(path, router) {
 }
 
 authOnly('/api/dashboard', dashboardRoutes);
-authOnly('/api/estantes', estantesRoutes);
 authOnly('/:tenantSlug/api/dashboard', dashboardRoutes);
-authOnly('/:tenantSlug/api/estantes', estantesRoutes);
 
 authOnly('/api/paquetes', paquetesRoutes);
-app.use('/api/ubicaciones', ubicacionesRoutes);
-authOnly('/api/area-personal', areaPersonalRoutes);
 authOnly('/:tenantSlug/api/paquetes', paquetesRoutes);
+
+authOnly('/api/area-personal', areaPersonalRoutes);
 authOnly('/:tenantSlug/api/area-personal', areaPersonalRoutes);
+
 authOnly('/api/import', importRoutes);
 authOnly('/:tenantSlug/api/import', importRoutes);
 
 authOnly('/api/limits', limitsRoutes);
 authOnly('/:tenantSlug/api/limits', limitsRoutes);
 
-gate('/api/tenants', tenantsRoutes);
-
 authOnly('/api/support', supportRoutes);
 authOnly('/:tenantSlug/api/support', supportRoutes);
 app.use('/api/tickets', ticketsRoutes);
+
+authOnly('/api/ubicaciones', ubicacionesRoutes);
+authOnly('/:tenantSlug/api/ubicaciones', ubicacionesRoutes);
+
+authOnly('/api/estantes', ubicacionesRoutes);
+authOnly('/:tenantSlug/api/estantes', ubicacionesRoutes);
+
+authOnly('/api/ia', iaRoutes);
+authOnly('/:tenantSlug/api/ia', iaRoutes);
+
+gate('/api/tenants', tenantsRoutes);
 
 app.use((req, res) => {
   if (req.path === '/favicon.ico') return res.status(204).end();

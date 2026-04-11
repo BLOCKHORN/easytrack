@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { usePasswordFirstGuard } from '../../hooks/usePasswordFirstGuard';
 import { hasNotice, subscribeNotice, setNotice, clearNotice } from '../../utils/supportNotice';
 import { listTickets } from '../../services/ticketsService';
@@ -14,21 +14,25 @@ const IconLogoRoute = () => (
   </svg>
 );
 
-const IconChart = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>;
-const IconPlus = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
-const IconSearch = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
-const IconGrid = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>;
-const IconUser = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
+const IconChart = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>;
+const IconPlus = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
+const IconSearch = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
+const IconGrid = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>;
+const IconUser = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
 const IconSupport = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></svg>;
 const IconSettings = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 const IconGlobe = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>;
 const IconLogout = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+const IconCreditCard = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>;
+const IconMenu = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
+const IconX = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 
 export default function DashboardLayout() {
   usePasswordFirstGuard();
   const location = useLocation();
   const navigate = useNavigate();
   const [supportNotice, setSupportNotice] = useState(hasNotice());
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pollingRef = useRef(null);
 
   useEffect(() => {
@@ -40,6 +44,10 @@ export default function DashboardLayout() {
     const inSupport = location.pathname.includes('/dashboard/soporte');
     if (inSupport && supportNotice) clearNotice();
   }, [location.pathname, supportNotice]);
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     let unmounted = false;
@@ -70,14 +78,38 @@ export default function DashboardLayout() {
 
   const bottomItems = [
     { label: 'Área financiera', path: 'personal', icon: <IconUser /> },
+    { label: 'Facturación', path: 'facturacion', icon: <IconCreditCard /> },
+    { label: 'Configuración', path: 'configuracion', icon: <IconSettings /> },
+    { label: 'Asistencia', path: 'soporte', icon: <IconSupport />, isSupport: true },
+  ];
+
+  const mobileNavLeft = [
+    { label: 'Inicio', path: '.', icon: <IconChart />, end: true },
+    { label: 'Buscar', path: 'buscar', icon: <IconSearch /> }
+  ];
+
+  const mobileNavRight = [
+    { label: 'Almacén', path: 'almacen', icon: <IconGrid /> },
+    { label: 'Finanzas', path: 'personal', icon: <IconUser /> }
+  ];
+
+  const mobileMenu = [
+    { label: 'Facturación', path: 'facturacion', icon: <IconCreditCard /> },
     { label: 'Configuración', path: 'configuracion', icon: <IconSettings /> },
     { label: 'Asistencia', path: 'soporte', icon: <IconSupport />, isSupport: true },
   ];
 
   return (
     <div className="min-h-screen bg-[#fafafa] flex flex-col md:flex-row font-sans">
-      
-      {/* SIDEBAR DESKTOP */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes subtleGlow {
+          0%, 100% { box-shadow: 0 0 15px rgba(20, 184, 166, 0.4), inset 0 0 0px rgba(255,255,255,0.2); }
+          50% { box-shadow: 0 0 25px rgba(20, 184, 166, 0.7), inset 0 0 4px rgba(255,255,255,0.5); }
+        }
+        .pro-fab { animation: subtleGlow 3s ease-in-out infinite; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+      `}} />
+
       <aside className="hidden md:flex flex-col w-[260px] bg-zinc-950 border-r border-zinc-900 sticky top-0 h-screen overflow-y-auto">
         <div className="p-7 flex items-center gap-2.5 cursor-pointer group" onClick={() => navigate('.')}>
           <div className="text-brand-500 transition-transform duration-300 group-hover:scale-105">
@@ -122,7 +154,6 @@ export default function DashboardLayout() {
           ))}
         </nav>
 
-        {/* ACCIONES GLOBALES FOOTER */}
         <div className="mt-auto p-4 border-t border-zinc-900">
           <a href="/" className="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm text-zinc-500 hover:bg-zinc-900 hover:text-white transition-all">
             <IconGlobe />
@@ -135,27 +166,74 @@ export default function DashboardLayout() {
         </div>
       </aside>
 
-      {/* HEADER MOBILE */}
-      <header className="md:hidden sticky top-0 z-40 bg-zinc-950 flex items-center justify-between p-4 shadow-md">
-        <div className="flex items-center gap-2">
+      <header className="md:hidden sticky top-0 z-40 bg-zinc-950 flex items-center justify-between p-4 px-5 shadow-lg border-b border-zinc-800/50">
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('.')}>
           <div className="text-brand-500"><IconLogoRoute /></div>
           <span className="text-xl tracking-tighter select-none flex items-center">
             <span className="font-medium text-zinc-300">easy</span>
             <span className="font-black text-white">track</span>
           </span>
         </div>
-        <div className="flex items-center gap-1">
-          <a href="/" className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-white rounded-lg transition-colors">
-            <IconGlobe />
-          </a>
-          <button onClick={handleLogout} className="w-10 h-10 flex items-center justify-center text-zinc-500 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-colors">
-            <IconLogout />
-          </button>
-        </div>
+        <button 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+          className="relative w-10 h-10 flex items-center justify-center text-zinc-300 hover:text-white transition-colors"
+        >
+          {isMobileMenuOpen ? <IconX /> : <IconMenu />}
+          {!isMobileMenuOpen && supportNotice && (
+            <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 border-2 border-zinc-950 rounded-full" />
+          )}
+        </button>
       </header>
 
-      {/* MAIN VIEW */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden relative pb-24 md:pb-0">
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+            className="md:hidden fixed top-[72px] left-0 right-0 z-30 bg-zinc-950 border-b border-zinc-800/50 shadow-2xl p-5 px-6 pb-8"
+          >
+            <div className="flex flex-col gap-2">
+              <div className="text-[11px] font-black text-zinc-500 uppercase tracking-widest mb-2 pl-2">Gestión</div>
+              {mobileMenu.map(item => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => {
+                    if (item.isSupport) clearNotice();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={({ isActive }) => `relative flex items-center gap-4 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all ${isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}
+                >
+                  <div className={item.isSupport && supportNotice ? "text-white" : ""}>{item.icon}</div>
+                  <span className={item.isSupport && supportNotice ? "text-white" : ""}>{item.label}</span>
+                  {item.isSupport && supportNotice && (
+                    <span className="ml-auto w-2.5 h-2.5 bg-red-500 rounded-full" />
+                  )}
+                </NavLink>
+              ))}
+              
+              <div className="w-full h-px bg-zinc-800/50 my-4" />
+              
+              <a href="/" className="flex items-center gap-4 px-4 py-3.5 rounded-2xl font-bold text-sm text-zinc-400 hover:bg-zinc-900 hover:text-white transition-all">
+                <IconGlobe /> Volver a la Web
+              </a>
+              <button onClick={handleLogout} className="flex items-center gap-4 px-4 py-3.5 rounded-2xl font-bold text-sm text-red-400 hover:bg-red-500/10 transition-all text-left">
+                <IconLogout /> Cerrar Sesión
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden relative pb-[88px] md:pb-0">
+        {isMobileMenuOpen && (
+          <div 
+            className="md:hidden fixed inset-0 z-20 bg-black/40 backdrop-blur-sm"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
         <motion.div
           key={location.pathname}
           initial={{ opacity: 0, y: 5 }}
@@ -167,21 +245,47 @@ export default function DashboardLayout() {
         </motion.div>
       </main>
 
-      {/* BOTTOM NAV MOBILE */}
-      <nav className="md:hidden fixed bottom-4 left-4 right-4 z-50">
-        <div className="bg-zinc-950 rounded-2xl p-2.5 flex justify-between items-center shadow-2xl">
-          {[...navItems.slice(0,3), ...bottomItems].map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              onClick={() => item.isSupport && clearNotice()}
-              className={({ isActive }) => `relative flex flex-col items-center justify-center w-12 sm:w-14 h-12 sm:h-14 rounded-xl transition-colors ${isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-              title={item.label}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-800/80 pb-safe">
+        <div className="flex items-end justify-between px-6 py-2">
+          
+          <div className="flex flex-1 justify-between pr-4">
+            {mobileNavLeft.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={item.end}
+                className={({ isActive }) => `flex flex-col items-center justify-center w-14 transition-colors ${isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                <div className="mb-1.5">{item.icon}</div>
+                <span className="text-[9px] font-black uppercase tracking-wider">{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
+
+          <div className="relative shrink-0 flex justify-center -mt-8">
+            <NavLink 
+              to="anadir" 
+              className={({ isActive }) => `relative flex flex-col items-center justify-center transition-transform active:scale-95 ${isActive ? '' : 'hover:-translate-y-1'}`}
             >
-              {item.icon}
-              {item.isSupport && supportNotice && <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full" />}
+              <div className="w-[60px] h-[60px] bg-gradient-to-tr from-brand-500 to-brand-400 rounded-full flex items-center justify-center text-white pro-fab shadow-xl">
+                <IconPlus />
+              </div>
             </NavLink>
-          ))}
+          </div>
+
+          <div className="flex flex-1 justify-between pl-4">
+            {mobileNavRight.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) => `flex flex-col items-center justify-center w-14 transition-colors ${isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                <div className="mb-1.5">{item.icon}</div>
+                <span className="text-[9px] font-black uppercase tracking-wider">{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
+
         </div>
       </nav>
     </div>

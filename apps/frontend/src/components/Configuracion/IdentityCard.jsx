@@ -20,7 +20,7 @@ export default function IdentityCard({ nombre, setNombre }) {
             type="text" 
             value={nombre} 
             onChange={(e) => setNombre(e.target.value)}
-            placeholder="Ej: Estanco Benidoleig"
+            placeholder="Ej: Papeleria El Buen Papel S.A."
             className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-bold text-zinc-900 transition-all"
           />
           <p className="text-xs text-zinc-400 mt-2">Este nombre se usará para todas las comunicaciones automáticas con clientes.</p>
