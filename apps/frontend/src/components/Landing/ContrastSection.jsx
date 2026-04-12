@@ -112,6 +112,7 @@ export default function ContrastSection() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
           
+          {/* LADO A: EL CAOS */}
           <div 
             ref={containerRef}
             onMouseMove={handleMouseMove}
@@ -138,6 +139,7 @@ export default function ContrastSection() {
             </div>
           </div>
 
+          {/* LADO B: EASYTRACK */}
           <div className="relative bg-zinc-950 rounded-[2.5rem] p-8 md:p-12 overflow-hidden shadow-2xl flex flex-col">
             <div className="absolute top-0 right-0 w-80 h-80 bg-brand-500/10 blur-[100px] rounded-full pointer-events-none" />
             
@@ -152,7 +154,7 @@ export default function ContrastSection() {
                     whileHover={{ scale: 1.05, backgroundColor: "rgba(20, 184, 166, 0.15)", borderColor: "#14b8a6" }}
                     className="h-10 md:h-12 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-center text-[10px] font-black text-zinc-600 transition-colors"
                   >
-                    {String.fromCharCode(65 + Math.floor(i/4))}{(i%4)+1}
+                    B{i + 1}
                   </motion.div>
                 ))}
                 <motion.div 
@@ -165,7 +167,7 @@ export default function ContrastSection() {
               <ul className="space-y-4 mt-10">
                 <li className="flex items-start gap-3 text-zinc-300 font-bold leading-tight"><div className="mt-0.5 shrink-0"><IconCheck /></div> Localización instantánea por estante</li>
                 <li className="flex items-start gap-3 text-zinc-300 font-bold leading-tight"><div className="mt-0.5 shrink-0"><IconCheck /></div> 90% menos de tiempo de entrega</li>
-                <li className="flex items-start gap-3 text-zinc-300 font-bold leading-tight"><div className="mt-0.5 shrink-0"><IconCheck /></div> Personal chill y clientes felices</li>
+                <li className="flex items-start gap-3 text-zinc-300 font-bold leading-tight"><div className="mt-0.5 shrink-0"><IconCheck /></div> Personal contento y clientes felices</li>
               </ul>
             </div>
           </div>
