@@ -22,7 +22,6 @@ const RESULTADOS_POR_PAGINA = 10;
 const LS_KEY = "buscar_paquete_filtros_v12";
 const QUEUE_KEY = "easytrack_sync_queue";
 
-// Resaltador optimizado usando Regex (sin cargar memoria con JaroWinkler)
 function highlightExact(text, query) {
   if (!query || !text) return text;
   const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
@@ -52,9 +51,9 @@ export default function BuscarPaquete() {
   const isSyncing = useRef(false);
 
   const [tenantId, setTenantId] = useState(null);
-  const [paquetes, setPaquetes] = useState([]); // Solo los 10 de la página actual
-  const [totalResultados, setTotalResultados] = useState(0); // Total que coinciden con el filtro
-  const [kpiGlobal, setKpiGlobal] = useState({ total: 0, entregados: 0, pendientes: 0 }); // Total absoluto del negocio
+  const [paquetes, setPaquetes] = useState([]);
+  const [totalResultados, setTotalResultados] = useState(0);
+  const [kpiGlobal, setKpiGlobal] = useState({ total: 0, entregados: 0, pendientes: 0 });
 
   const [companias, setCompanias] = useState([]);
   const [ubicaciones, setUbicaciones] = useState([]); 
@@ -85,7 +84,6 @@ export default function BuscarPaquete() {
     });
   };
 
-  // --- SINCRONIZACIÓN OFFLINE ---
   const processSyncQueue = useCallback(async () => {
     if (isSyncing.current || retryQueue.current.size === 0) {
       localStorage.setItem(QUEUE_KEY, JSON.stringify(Array.from(retryQueue.current)));
@@ -115,7 +113,6 @@ export default function BuscarPaquete() {
     }
   }, []);
 
-  // --- CARGA INICIAL DE DATOS ESTATICOS Y KPIs GLOBALES ---
   const loadGlobalData = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -125,14 +122,12 @@ export default function BuscarPaquete() {
 
       const headers = { Authorization: `Bearer ${token}` };
 
-      // KPIs Totales (Sin filtros)
       const resKPI = await fetch(`${API_BASE}/api/paquetes/count`, { headers });
       if (resKPI.ok) {
         const dataKPI = await resKPI.json();
         setKpiGlobal({ total: dataKPI.total || 0, entregados: dataKPI.entregados || 0, pendientes: dataKPI.pendientes || 0 });
       }
 
-      // Dropdowns (Compañías y Ubicaciones)
       const { data: empresas } = await supabase.from("empresas_transporte_tenant").select("nombre").eq("tenant_id", tId);
       setCompanias((empresas || []).map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b)));
 
@@ -142,7 +137,6 @@ export default function BuscarPaquete() {
     } catch (e) {}
   };
 
-  // --- CARGA DE PÁGINA ESPECÍFICA (SERVER-SIDE) ---
   const fetchPage = async () => {
     setCargando(true);
     try {
@@ -189,7 +183,6 @@ export default function BuscarPaquete() {
     }
   };
 
-  // 1. Efecto inicial
   useEffect(() => {
     try {
       const rawFiltros = localStorage.getItem(LS_KEY);
@@ -212,18 +205,15 @@ export default function BuscarPaquete() {
     loadGlobalData();
   }, [processSyncQueue]);
 
-  // 2. Efecto de guardado de filtros
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify({ estadoFiltro, companiaFiltro, ubicacionFiltro }));
   }, [estadoFiltro, companiaFiltro, ubicacionFiltro]);
 
-  // 3. Efecto de reseteo al cambiar filtros
   useEffect(() => {
     setSelectedIds(new Set());
     setPaginaActual(1);
   }, [busqueda, estadoFiltro, companiaFiltro, ubicacionFiltro]);
 
-  // 4. Efecto principal de carga (Debounced)
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
@@ -257,12 +247,17 @@ export default function BuscarPaquete() {
     return paquetes.filter(p => set.has(p.id) && !p.entregado).map(p => p.id);
   }, [selectedIds, paquetes]);
 
-  // --- ACCIONES ---
+  // LOGICA OPTIMIZADA DE ENTREGA
   const marcarEntregado = (id) => {
-    setPaquetes(prev => prev.map(p => p.id === id ? { ...p, entregado: true } : p));
+    if (estadoFiltro === "pendiente") {
+      setPaquetes(prev => prev.filter(p => p.id !== id));
+      setTotalResultados(prev => Math.max(0, prev - 1));
+    } else {
+      setPaquetes(prev => prev.map(p => p.id === id ? { ...p, entregado: true } : p));
+    }
+    
     retryQueue.current.add(id);
     processSyncQueue();
-    // Actualizamos KPI localmente para evitar otra petición de red
     setKpiGlobal(prev => ({...prev, pendientes: Math.max(0, prev.pendientes - 1), entregados: prev.entregados + 1}));
     showToast("Paquete marcado como entregado.");
   };
@@ -271,7 +266,13 @@ export default function BuscarPaquete() {
     const ids = selectedPendingIds;
     if (ids.length === 0) return;
     
-    setPaquetes(prev => prev.map(p => ids.includes(p.id) ? { ...p, entregado: true } : p));
+    if (estadoFiltro === "pendiente") {
+      setPaquetes(prev => prev.filter(p => !ids.includes(p.id)));
+      setTotalResultados(prev => Math.max(0, prev - ids.length));
+    } else {
+      setPaquetes(prev => prev.map(p => ids.includes(p.id) ? { ...p, entregado: true } : p));
+    }
+    
     ids.forEach(id => retryQueue.current.add(id));
     clearSelection();
     processSyncQueue();
@@ -309,7 +310,7 @@ export default function BuscarPaquete() {
       fetchPage();
       loadGlobalData();
     } catch (e) {
-      showToast("Error al eliminar el lote. Reinténtalo.", true);
+      showToast("Error al eliminar el lote. Reintentalo.", true);
     }
   };
 
@@ -371,7 +372,7 @@ export default function BuscarPaquete() {
           <h1 className="text-4xl font-black text-zinc-950 tracking-tight flex items-center gap-3">
              <IconSearch /> Localizador
           </h1>
-          <p className="text-base font-bold text-zinc-600 mt-1">Encuentra y gestiona el histórico de paquetes.</p>
+          <p className="text-base font-bold text-zinc-600 mt-1">Encuentra y gestiona el historico de paquetes.</p>
         </div>
         
         <div className="flex flex-wrap md:flex-nowrap gap-3">
@@ -417,7 +418,7 @@ export default function BuscarPaquete() {
             <option value="todos">Todos los Estados</option>
           </select>
           <select value={companiaFiltro} onChange={e => setCompaniaFiltro(e.target.value)} className="px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-base font-black text-zinc-800 outline-none focus:ring-2 focus:ring-brand-500">
-            {companiasFiltradas.map(c => <option key={c} value={c}>{c === 'todos' ? 'Cualquier Compañía' : c}</option>)}
+            {companiasFiltradas.map(c => <option key={c} value={c}>{c === 'todos' ? 'Cualquier Compañia' : c}</option>)}
           </select>
           <select value={ubicacionFiltro} onChange={e => setUbicacionFiltro(e.target.value)} className="px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-base font-black text-zinc-800 outline-none focus:ring-2 focus:ring-brand-500">
             {ubicacionesFiltradas.map(u => <option key={u} value={u}>{u === 'todas' ? 'Todas las Ubicaciones' : u}</option>)}
@@ -500,8 +501,8 @@ export default function BuscarPaquete() {
                   </button>
                 </th>
                 <th className="py-5 px-6">Cliente</th>
-                <th className="py-5 px-6">Compañía</th>
-                <th className="py-5 px-6 text-center">Ubicación</th>
+                <th className="py-5 px-6">Compañia</th>
+                <th className="py-5 px-6 text-center">Ubicacion</th>
                 <th className="py-5 px-6">Fecha</th>
                 <th className="py-5 px-6">Estado</th>
                 <th className="py-5 px-6 text-right">Acciones</th>
@@ -513,7 +514,7 @@ export default function BuscarPaquete() {
                   <tr key={i}><td colSpan="7" className="py-8 px-6"><div className="h-6 bg-zinc-100 rounded w-full animate-pulse"></div></td></tr>
                 ))
               ) : paquetes.length === 0 ? (
-                <tr><td colSpan="7" className="py-16 text-center text-zinc-500 font-bold text-lg">No hay paquetes que coincidan con la búsqueda.</td></tr>
+                <tr><td colSpan="7" className="py-16 text-center text-zinc-500 font-bold text-lg">No hay paquetes que coincidan con la busqueda.</td></tr>
               ) : (
                 paquetes.map(p => {
                   const revealed = revealAll || revealedSet.has(p.id);
@@ -577,7 +578,7 @@ export default function BuscarPaquete() {
 
         {totalPaginas > 1 && (
           <div className="flex items-center justify-between px-8 py-5 border-t border-zinc-200 bg-zinc-50">
-            <span className="text-base font-bold text-zinc-600">Página <strong className="text-zinc-950 font-black">{paginaActual}</strong> de {totalPaginas}</span>
+            <span className="text-base font-bold text-zinc-600">Pagina <strong className="text-zinc-950 font-black">{paginaActual}</strong> de {totalPaginas}</span>
             <div className="flex gap-3">
               <button 
                 onClick={() => setPaginaActual(p => Math.max(1, p - 1))} 
@@ -630,13 +631,13 @@ export default function BuscarPaquete() {
                   <input type="text" value={paqueteEditando.nombre_cliente} onChange={e => setPaqueteEditando(p => ({ ...p, nombre_cliente: e.target.value }))} className="w-full px-5 py-4 bg-white border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 outline-none font-black text-xl text-zinc-950" />
                 </div>
                 <div>
-                  <label className="text-sm font-black text-zinc-500 uppercase tracking-widest mb-2 block">Compañía</label>
+                  <label className="text-sm font-black text-zinc-500 uppercase tracking-widest mb-2 block">Compañia</label>
                   <select value={paqueteEditando.compania} onChange={e => setPaqueteEditando(p => ({ ...p, compania: e.target.value }))} className="w-full px-5 py-4 bg-white border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 outline-none font-black text-xl text-zinc-950">
                     {companias.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-black text-zinc-500 uppercase tracking-widest mb-2 block">Ubicación</label>
+                  <label className="text-sm font-black text-zinc-500 uppercase tracking-widest mb-2 block">Ubicacion</label>
                   <select value={paqueteEditando.ubicacion_label} onChange={e => setPaqueteEditando(p => ({ ...p, ubicacion_label: e.target.value }))} className="w-full px-5 py-4 bg-white border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 outline-none font-black text-xl text-zinc-950">
                     {ubicaciones.map(u => <option key={u.id} value={u.label}>{u.label}</option>)}
                   </select>
@@ -664,12 +665,12 @@ export default function BuscarPaquete() {
               <h3 className="text-3xl font-black text-zinc-950 mb-3">Eliminar paquete{confirmBulk ? 's' : ''}</h3>
               <p className="text-lg font-bold text-zinc-500 mb-10 leading-relaxed">
                 {confirmBulk 
-                  ? `Estás a punto de eliminar ${selectedIds.size} paquetes de forma irreversible.` 
-                  : `¿Seguro que deseas eliminar el paquete de ${confirmState.payload?.nombre_cliente}? Esta acción no se puede deshacer.`}
+                  ? `Estas a punto de eliminar ${selectedIds.size} paquetes de forma irreversible.` 
+                  : `¿Seguro que deseas eliminar el paquete de ${confirmState.payload?.nombre_cliente}? Esta accion no se puede deshacer.`}
               </p>
               <div className="flex gap-4">
                 <button onClick={() => {setConfirmState({open:false, payload:null}); setConfirmBulk(false);}} className="flex-1 py-4 rounded-xl font-black text-lg text-zinc-700 bg-zinc-100 hover:bg-zinc-200 transition-colors">Cancelar</button>
-                <button onClick={confirmBulk ? eliminarSeleccionados : confirmarEliminar} className="flex-1 py-4 rounded-xl font-black text-lg text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all active:scale-95">Sí, Eliminar</button>
+                <button onClick={confirmBulk ? eliminarSeleccionados : confirmarEliminar} className="flex-1 py-4 rounded-xl font-black text-lg text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all active:scale-95">Si, Eliminar</button>
               </div>
             </motion.div>
           </div>
