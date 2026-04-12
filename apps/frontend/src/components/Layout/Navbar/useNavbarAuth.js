@@ -15,8 +15,13 @@ export default function useNavbarAuth(navigate) {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    // Forzamos el logout ignorando si el token ya era inválido en el servidor
+    try { await supabase.auth.signOut(); } catch (e) {}
+    localStorage.clear();
+    sessionStorage.clear();
+    setIsLoggedIn(false);
     navigate('/', { replace: true });
+    window.location.reload(); // Limpieza absoluta de memoria
   };
 
   useEffect(() => {

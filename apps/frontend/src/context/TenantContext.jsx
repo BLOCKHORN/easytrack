@@ -8,7 +8,7 @@ export function TenantProvider({ children }) {
   const [tenant, setTenant] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const fetchTenant = async (session) => {
+const fetchTenant = async (session) => {
     if (!session) {
       setTenant(null)
       setLoading(false)
@@ -19,6 +19,15 @@ export function TenantProvider({ children }) {
       const r = await fetch(`${API_BASE}/api/tenants/me`, {
         headers: { Authorization: `Bearer ${session.access_token}` }
       })
+      
+      // Si el servidor rechaza el token (Sesión Zombi), destruimos la sesión local
+      if (r.status === 401) {
+        try { await supabase.auth.signOut(); } catch(e) {}
+        localStorage.clear();
+        window.location.href = '/';
+        return;
+      }
+
       if (!r.ok) {
         setTenant(null)
       } else {

@@ -22,6 +22,7 @@ const billingRoutes = require('./routes/billing.routes');
 const { stripeWebhook } = require('./routes/stripe.webhook');
 const limitsRoutes = require('./routes/limits.routes');
 const importRoutes = require('./routes/import.routes');
+const metricsRouter = require('./routes/metrics.routes');
 const activationRoutes = require('./routes/auth.activation.routes');
 const supportRoutes = require('./routes/support.routes');
 const ticketsRoutes = require('./routes/tickets.routes');
@@ -83,6 +84,8 @@ app.post('/webhooks/stripe', rawJson, stripeWebhook);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+app.use('/api/metrics', metricsRouter); 
 
 app.use('/api/auth', authRoutes);
 app.use('/api/verificar-usuario', verificarUsuarioRoutes);

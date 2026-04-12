@@ -1,12 +1,9 @@
 import { motion } from 'framer-motion';
 import { FaChevronRight, FaBarcode, FaObjectGroup, FaUserCircle } from 'react-icons/fa';
 
-// --- MICRO-ILUSTRACIONES ANIMADAS (Estilo Custom, World-Class) ---
-
 function ShelvingVisual() {
   return (
     <div className="relative w-full h-40 mb-10 flex items-center justify-center overflow-hidden">
-      {/* Fondo difuminado de marca */}
       <div className="absolute w-32 h-32 bg-brand-500/10 blur-3xl rounded-full" />
       
       <motion.div 
@@ -72,7 +69,6 @@ function StockVisual() {
   );
 }
 
-
 export default function Benefits() {
   const item = {
     hidden: { opacity: 0, y: 30 },
@@ -80,7 +76,7 @@ export default function Benefits() {
   };
 
   return (
-    <section id="features" className="relative pt-12 pb-32 bg-white px-4 sm:px-6 lg:px-8 overflow-hidden">
+    <section id="features" className="relative pt-12 pb-32 bg-slate-50 px-4 sm:px-6 lg:px-8 overflow-hidden">
       <div className="max-w-7xl mx-auto mt-20">
         <div className="text-center max-w-3xl mx-auto mb-20 relative z-10">
           <motion.h2 
@@ -104,7 +100,6 @@ export default function Benefits() {
           transition={{ staggerChildren: 0.15 }}
           className="grid grid-cols-1 md:grid-cols-3 gap-10"
         >
-          {/* Feature 1 - Ubicaciones */}
           <motion.div variants={item} className="bg-white rounded-3xl p-8 border border-slate-100 shadow-xl shadow-slate-200/40 flex flex-col h-full group transition-all duration-300 hover:shadow-brand-300/30">
             <ShelvingVisual />
             <h3 className="text-2xl font-bold text-slate-900 mb-4 tracking-tight group-hover:text-brand-600">Ubicaciones Reales</h3>
@@ -113,7 +108,6 @@ export default function Benefits() {
             </p>
           </motion.div>
 
-          {/* Feature 2 - Búsqueda */}
           <motion.div variants={item} className="bg-white rounded-3xl p-8 border border-slate-100 shadow-xl shadow-slate-200/40 flex flex-col h-full group transition-all duration-300 hover:shadow-brand-300/30">
             <ScanningVisual />
             <h3 className="text-2xl font-bold text-slate-900 mb-4 tracking-tight group-hover:text-brand-600">Búsqueda Ultrasónica</h3>
@@ -122,7 +116,6 @@ export default function Benefits() {
             </p>
           </motion.div>
 
-          {/* Feature 3 - Stock */}
           <motion.div variants={item} className="bg-white rounded-3xl p-8 border border-slate-100 shadow-xl shadow-slate-200/40 flex flex-col h-full group transition-all duration-300 hover:shadow-brand-300/30">
             <StockVisual />
             <h3 className="text-2xl font-bold text-slate-900 mb-4 tracking-tight group-hover:text-brand-600">Control de Stock</h3>
