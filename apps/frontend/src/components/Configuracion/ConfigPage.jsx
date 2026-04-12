@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../utils/supabaseClient';
-import { ensureTenantResolved } from '../../utils/ensureTenant';
+import { ensureTenantResolved } from '../../utils/tenant';
 import Toast from '../../components/UI/Toast';
 
 import IdentityCard from './IdentityCard';

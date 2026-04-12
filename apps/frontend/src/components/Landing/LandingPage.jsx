@@ -6,6 +6,7 @@ import ROI from './ROI';
 import Testimonials from './Testimonials';
 import Pricing from './Pricing';
 import WhatsAppFab from './WhatsAppFab';
+import ContrastSection from './ContrastSection';
 
 export default function LandingPage() {
   const location = useLocation();
@@ -15,6 +16,7 @@ export default function LandingPage() {
       <Hero />
       <Benefits />
       <HowItWorks />
+      <ContrastSection />
       <ROI />
       <Testimonials />
       <Pricing />

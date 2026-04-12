@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useModal } from "../../../context/ModalContext";
-import { useTenant } from "../../../context/TenantContext";
+import { useModal } from "../../context/ModalContext";
+import { useTenant } from "../../context/TenantContext";
 import useNavbarAuth from './useNavbarAuth';
 
 const IconMenu = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
-import { apiPath } from '../utils/apiBase';
+import { apiPath } from '../utils/fetcher';
 
 export default function useSubscription() {
   const [state, setState] = useState({
@@ -11,61 +11,36 @@ export default function useSubscription() {
   });
 
   useEffect(() => {
-    let cancelled = false;
+    let isMounted = true;
 
-    async function checkSubscription() {
+    async function fetchLimits() {
       try {
-        const { data: sdata } = await supabase.auth.getSession();
-        const token = sdata?.session?.access_token;
-        if (!token) throw new Error('UNAUTHENTICATED');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('UNAUTHENTICATED');
 
-        const opts = {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
-        };
-
+        const opts = { headers: { 'Authorization': `Bearer ${session.access_token}` } };
         const ts = Date.now();
+        
         let res = await fetch(apiPath(`/api/limits/me?ts=${ts}`), opts);
-        
-        if (!res.ok) {
-          res = await fetch(apiPath(`/api/tenants/me?ts=${ts}`), opts);
-        }
+        if (!res.ok) res = await fetch(apiPath(`/api/tenants/me?ts=${ts}`), opts);
+        if (!res.ok) throw new Error('FAILED_FETCH');
 
-        if (res.ok) {
-          const data = await res.json();
-          const ent = data?.entitlements || data;
+        const data = await res.json();
+        const ent = data?.entitlements || data;
 
-          if (!cancelled && ent) {
-            setState({
-              loading: false,
-              active: !!ent.canUseApp,
-              reason: ent.reason || null,
-              entitlements: ent
-            });
-            return;
-          }
+        if (isMounted && ent) {
+          setState({ loading: false, active: !!ent.canUseApp, reason: ent.reason || null, entitlements: ent });
         }
-        
-        throw new Error('FAILED_TO_FETCH_ENTITLEMENTS');
       } catch (e) {
-        if (!cancelled) {
-          setState({
-            loading: false,
-            active: false,
-            reason: 'error',
-            entitlements: null
-          });
+        if (isMounted) {
+          setState({ loading: false, active: false, reason: 'error', entitlements: null });
         }
       }
     }
 
-    checkSubscription();
-
-    return () => {
-      cancelled = true;
-    };
+    fetchLimits();
+    
+    return () => { isMounted = false; };
   }, []);
 
   return state;

@@ -17,7 +17,7 @@ function computeEntitlements({ tenant = null, subscription = null } = {}) {
   const planId = tenant?.plan_id || 'free';
   const softBlocked = !!tenant?.soft_blocked;
   
-  const VIP_TENANTS = ['463e2871-32de-4880-bddc-e1072acb7f59', '9934a0b9-6603-42ed-8d32-9aa7d32de1e2'];
+  const VIP_TENANTS = ['463e2871-32de-4880-bddc-e1072acb7f59'];
   const isVip = VIP_TENANTS.includes(tenant?.id);
   
   const trialQuota = isVip ? 1000000 : (Number.isFinite(tenant?.trial_quota) ? tenant.trial_quota : 250);

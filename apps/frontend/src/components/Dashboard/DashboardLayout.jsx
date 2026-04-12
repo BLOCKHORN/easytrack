@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { usePasswordFirstGuard } from '../../hooks/usePasswordFirstGuard';
 import { hasNotice, subscribeNotice, setNotice, clearNotice } from '../../utils/supportNotice';
 import { listTickets } from '../../services/ticketsService';
 import { supabase } from '../../utils/supabaseClient';
@@ -28,7 +27,6 @@ const IconMenu = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="non
 const IconX = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 
 export default function DashboardLayout() {
-  usePasswordFirstGuard();
   const location = useLocation();
   const navigate = useNavigate();
   const [supportNotice, setSupportNotice] = useState(hasNotice());

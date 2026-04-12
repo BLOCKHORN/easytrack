@@ -30,10 +30,10 @@ import Privacidad from './components/Legal/Privacidad';
 import Terminos from './components/Legal/Terminos';
 import CookiesPage from './components/Legal/Cookies';
 
-import Navbar from './components/Layout/Navbar/Navbar';
-import Footer from './components/Layout/Footer';
+import Navbar from './components/Landing/Navbar';
+import Footer from './components/Landing/Footer';
 
-import RequireActive from './components/Routing/RequireActive';
+import ProtectedRoute from './components/Routing/ProtectedRoute';
 import { useModal } from './context/ModalContext';
 import { useTenant } from './context/TenantContext';
 
@@ -63,44 +63,21 @@ function LandingSection({ sectionId }) {
   return <LandingPage />;
 }
 
-function RedirectToMyTenant() {
+// Sustituto interno para RedirectToMyTenant
+function RedirectToDashboard() {
   const navigate = useNavigate();
-  const loc = useLocation();
   const { tenant, loading } = useTenant();
 
   useEffect(() => {
     if (loading) return;
     if (!tenant?.slug) {
       navigate('/', { replace: true });
-      return;
+    } else {
+      navigate(`/${tenant.slug}/dashboard`, { replace: true });
     }
-    navigate(`/${tenant.slug}/dashboard${loc.search || ''}${loc.hash || ''}`, { replace: true });
-  }, [tenant, loading, navigate, loc.search, loc.hash]);
+  }, [tenant, loading, navigate]);
 
   return null;
-}
-
-function ProtectedRoute({ children }) {
-  const navigate = useNavigate();
-  const { tenantSlug } = useParams();
-  const location = useLocation();
-  const { tenant, loading } = useTenant();
-
-  useEffect(() => {
-    if (loading) return;
-    if (!tenant?.slug) {
-      navigate('/', { replace: true });
-      return;
-    }
-    if (!tenantSlug || tenantSlug !== tenant.slug) {
-      const tail = location.pathname.replace(/^\/[^/]+/, '');
-      const cleanTail = tail.startsWith('/') ? tail : '/' + tail;
-      navigate(`/${tenant.slug}${cleanTail}`, { replace: true });
-    }
-  }, [tenant, loading, tenantSlug, navigate, location.pathname]);
-
-  if (loading || !tenant) return null;
-  return children;
 }
 
 function NotFound() {
@@ -150,25 +127,25 @@ function PublicLayout() {
   );
 }
 
-function RedirectShortToSlug({ subpath }) {
-  const navigate = useNavigate();
-  const { tenant, loading } = useTenant();
-  useEffect(() => {
-    if (loading) return;
-    if (!tenant?.slug) { navigate('/', { replace: true }); return; }
-    navigate(`/${tenant.slug}${subpath}`, { replace: true });
-  }, [tenant, loading, navigate, subpath]);
-  return null;
-}
-
 export default function App() {
   const { modal, openLogin, closeModal } = useModal();
 
   useEffect(() => {
+    // Control del Modal de Login
     window.__openLoginModal = () => { if (typeof openLogin === 'function') openLogin(); };
     const handler = () => { if (typeof openLogin === 'function') openLogin(); };
     window.addEventListener('login:open', handler);
-    return () => window.removeEventListener('login:open', handler);
+
+    // Keepalive global integrado
+    const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
+    const keepAliveId = setInterval(() => {
+      fetch(`${API_BASE}/health`, { method: "GET", cache: "no-store" }).catch(() => {});
+    }, 4 * 60 * 1000);
+
+    return () => {
+      window.removeEventListener('login:open', handler);
+      clearInterval(keepAliveId);
+    };
   }, [openLogin]);
 
   return (
@@ -191,24 +168,21 @@ export default function App() {
           <Route path="/login" element={<LoginRoute />} />
         </Route>
 
-        {/* STRIPE / BILLING GATES (No llevan el layout del dashboard) */}
+        {/* STRIPE / BILLING GATES */}
         <Route path="/upgrade/success" element={<UpgradeSuccess />} />
         <Route path="/upgrade/cancel" element={<CheckoutCancel />} />
         <Route path="/gate" element={<SubscriptionGate />} />
         <Route path="/portal" element={<PortalBridge />} />
 
         {/* SHORTCUT REDIRECTS */}
-        <Route path="/dashboard" element={<RedirectToMyTenant />} />
-        <Route path="/configuracion" element={<RedirectShortToSlug subpath="/dashboard/configuracion" />} />
+        <Route path="/dashboard" element={<RedirectToDashboard />} />
 
         {/* PROTECTED DASHBOARD ROUTES */}
         <Route
           path="/:tenantSlug/dashboard"
           element={
             <ProtectedRoute>
-              <RequireActive>
-                <DashboardLayout />
-              </RequireActive>
+               <DashboardLayout />
             </ProtectedRoute>
           }
         >
@@ -218,7 +192,7 @@ export default function App() {
           <Route path="almacen" element={<VerEstantes />} />
           <Route path="personal" element={<AreaPersonal />} />
           
-          <Route path="facturacion" element={<Billing />} /> {/* NUEVO MÓDULO */}
+          <Route path="facturacion" element={<Billing />} />
           <Route path="configuracion" element={<ConfigPage />} />
           <Route path="soporte" element={<SoporteInterno />} />
         </Route>
