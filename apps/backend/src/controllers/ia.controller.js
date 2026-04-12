@@ -2,6 +2,10 @@
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
+if (!process.env.GEMINI_API_KEY) {
+  console.error('[IA Scanner] CRITICO: GEMINI_API_KEY no configurada.');
+}
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 exports.escanearEtiqueta = async (req, res) => {
@@ -12,10 +16,10 @@ exports.escanearEtiqueta = async (req, res) => {
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
     const imagePart = { inlineData: { data: base64Data, mimeType: "image/jpeg" } };
 
-    const prompt = `
+    const promptText = `
       Eres un experto operario de almacén logístico.
       Analiza TODA LA IMAGEN (cartón, logotipos y cinta adhesiva) y extrae 3 datos.
-      Devuelve ÚNICAMENTE un JSON válido, sin texto adicional ni markdown.
+      Devuelve ÚNICAMENTE un JSON válido.
 
       INSTRUCCIÓN CRÍTICA PARA EL NOMBRE:
       Las etiquetas suelen tener arrugas o mala impresión. Corrige errores ópticos obvios causados por dobleces (ej: "Iberra" -> "Ibarra"). 
@@ -29,38 +33,28 @@ exports.escanearEtiqueta = async (req, res) => {
       }
     `;
 
-    // Ponemos FLASH primero porque es drásticamente más rápido para el escáner en vivo.
-    const modelosDisponibles = [
-      "gemini-2.5-flash",
-      "gemini-2.5-pro",
-      "gemini-1.5-flash"
-    ];
+    // Vamos directos al 2.5 Flash que tienes habilitado y con cuota
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash",
+      generationConfig: { responseMimeType: "application/json" }
+    });
 
-    let result = null;
-
-    for (const modelName of modelosDisponibles) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelName });
-        result = await model.generateContent([prompt, imagePart]);
-        console.log(`[IA Scanner] Usando modelo: ${modelName}`);
-        break;
-      } catch (err) {
-        console.warn(`[IA Scanner] Fallo con ${modelName}:`, err.message);
-      }
-    }
-
-    if (!result) {
-      return res.status(503).json({ error: 'Los servidores de IA están saturados en este momento.' });
-    }
+    const result = await model.generateContent([promptText, imagePart]);
+    const response = await result.response;
+    const textOutput = response.text();
     
-    let responseText = result.response.text();
-    console.log("[IA Scanner] Respuesta cruda de Gemini:", responseText);
-    
-    responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    return res.json(JSON.parse(textOutput));
 
-    return res.json(JSON.parse(responseText));
   } catch (error) {
-    console.error("[IA Scanner] Error critico:", error.message);
-    return res.status(500).json({ error: 'Error interno procesando la etiqueta con IA.' });
+    console.error("[IA Scanner] Error critico:", error);
+    
+    if (error.message && error.message.includes('API key not valid')) {
+      return res.status(500).json({ error: 'Clave de API de Gemini no valida.' });
+    }
+    if (error.message && (error.message.includes('quota') || error.message.includes('429'))) {
+       return res.status(429).json({ error: 'Limite de peticiones a la IA alcanzado.' });
+    }
+
+    return res.status(500).json({ error: 'Error interno analizando la etiqueta.' });
   }
 };
