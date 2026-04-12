@@ -1,4 +1,4 @@
-import { motion, useMotionValue, useSpring } from "framer-motion";
+import { motion, useMotionValue } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
 const IconCheck = () => (
@@ -26,47 +26,51 @@ function FloatingBox({ mouseX, mouseY, containerRef }) {
   const [pos, setPos] = useState({ 
     x: Math.random() * 100, 
     y: Math.random() * 100,
-    vx: (Math.random() - 0.5) * 0.1,
-    vy: (Math.random() - 0.5) * 0.1 
+    vx: (Math.random() - 0.5) * 0.15,
+    vy: (Math.random() - 0.5) * 0.15 
   });
 
   useEffect(() => {
     let frame;
-    const MAX_SPEED = 0.4;
-    const FRICTION = 0.98; // Frena las cajas poco a poco
+    const MAX_SPEED = 0.35;
+    const MIN_SPEED = 0.05;
 
     const update = () => {
       setPos(prev => {
-        // 1. Aplicamos velocidad y fricción
-        let nvx = prev.vx * FRICTION;
-        let nvy = prev.vy * FRICTION;
-        let nx = prev.x + nvx;
-        let ny = prev.y + nvy;
+        let nvx = prev.vx;
+        let nvy = prev.vy;
 
-        // 2. Lógica de teletransporte (infinito)
-        if (nx > 105) nx = -5; if (nx < -5) nx = 105;
-        if (ny > 105) ny = -5; if (ny < -5) ny = 105;
-
-        // 3. Repulsión con el ratón
         if (containerRef.current) {
           const rect = containerRef.current.getBoundingClientRect();
           const mX = ((mouseX.get() - rect.left) / rect.width) * 100;
           const mY = ((mouseY.get() - rect.top) / rect.height) * 100;
 
-          const dx = nx - mX;
-          const dy = ny - mY;
+          const dx = prev.x - mX;
+          const dy = prev.y - mY;
           const dist = Math.sqrt(dx * dx + dy * dy);
 
-          if (dist < 15) { // Radio de repulsión
-            const force = (15 - dist) * 0.015;
+          if (dist < 18) {
+            const force = (18 - dist) * 0.02;
             nvx += (dx / dist) * force;
             nvy += (dy / dist) * force;
           }
         }
 
-        // 4. Capar velocidad máxima para que no se vuelvan locas
-        nvx = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, nvx));
-        nvy = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, nvy));
+        const currentSpeed = Math.sqrt(nvx * nvx + nvy * nvy);
+        if (currentSpeed > MAX_SPEED) {
+          nvx = (nvx / currentSpeed) * MAX_SPEED;
+          nvy = (nvy / currentSpeed) * MAX_SPEED;
+        } else if (currentSpeed < MIN_SPEED) {
+          const angle = Math.atan2(nvy, nvx);
+          nvx = Math.cos(angle) * MIN_SPEED;
+          nvy = Math.sin(angle) * MIN_SPEED;
+        }
+
+        let nx = prev.x + nvx;
+        let ny = prev.y + nvy;
+
+        if (nx > 110) nx = -10; if (nx < -10) nx = 110;
+        if (ny > 110) ny = -10; if (ny < -10) ny = 110;
 
         return { x: nx, y: ny, vx: nvx, vy: nvy };
       });
@@ -88,8 +92,8 @@ function FloatingBox({ mouseX, mouseY, containerRef }) {
 
 export default function ContrastSection() {
   const containerRef = useRef(null);
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
+  const mouseX = useMotionValue(-1000);
+  const mouseY = useMotionValue(-1000);
 
   const handleMouseMove = (e) => {
     mouseX.set(e.clientX);
@@ -111,7 +115,8 @@ export default function ContrastSection() {
           <div 
             ref={containerRef}
             onMouseMove={handleMouseMove}
-            className="relative bg-zinc-50 rounded-[2.5rem] p-8 md:p-12 overflow-hidden border border-zinc-200 min-h-[520px] flex flex-col"
+            onMouseLeave={() => { mouseX.set(-1000); mouseY.set(-1000); }}
+            className="relative bg-zinc-50 rounded-[2.5rem] p-8 md:p-12 overflow-hidden border border-zinc-200 min-h-[550px] flex flex-col"
           >
             <div className="relative z-30 pointer-events-none">
               <span className="inline-block px-4 py-1 bg-red-100 text-red-600 rounded-full text-[10px] font-black uppercase tracking-wider mb-4">Sin EasyTrack</span>
