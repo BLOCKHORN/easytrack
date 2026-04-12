@@ -18,24 +18,13 @@ const areaPersonalRoutes = require('./routes/areaPersonal.routes');
 const authRoutes = require('./routes/auth.routes');
 const verificarUsuarioRoutes = require('./routes/verificar.usuario');
 const tenantsRoutes = require('./routes/tenants.routes');
-const metricsRouter = require('./routes/metrics.routes');
 const billingRoutes = require('./routes/billing.routes');
 const { stripeWebhook } = require('./routes/stripe.webhook');
 const limitsRoutes = require('./routes/limits.routes');
-const adminRoutes = require('./routes/admin.routes');
-const adminCountersRoutes = require('./routes/admin.counters.routes');
-const adminSupportRoutes = require('./routes/admin.support.routes');
 const importRoutes = require('./routes/import.routes');
-
 const activationRoutes = require('./routes/auth.activation.routes');
-const geoRoutes = require('./routes/geo.routes');
-
 const supportRoutes = require('./routes/support.routes');
 const ticketsRoutes = require('./routes/tickets.routes');
-
-const adminBillingRoutes = require('./routes/admin.billing.routes');
-const adminTenantsRoutes = require('./routes/admin.tenants.routes');
-
 const iaRoutes = require('./routes/ia.routes');
 
 const envOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
@@ -69,7 +58,7 @@ function originChecker(origin, cb) {
       host.endsWith('.onrender.com');
     return cb(null, ok);
   } catch {}
-  return cb(new Error('Not allowed by CORS'));
+  return cb(new Error('CORS_NOT_ALLOWED'));
 }
 
 const corsOptions = {
@@ -97,65 +86,44 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/verificar-usuario', verificarUsuarioRoutes);
-app.use('/api/metrics', metricsRouter);
 app.use('/api', activationRoutes);
-
-app.use('/admin', adminRoutes);
-app.use('/admin', adminCountersRoutes);
-app.use('/api/geo', geoRoutes);
-app.use('/admin', adminSupportRoutes);
-
-app.use('/billing', billingRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/billing', billingRoutes);
 
-app.use('/admin', adminBillingRoutes);
-app.use('/admin/tenants', adminTenantsRoutes);
-
-function gate(path, router) {
-  app.use(path, requireAuth, subscriptionFirewall(), router);
-}
 function authOnly(path, router) {
   app.use(path, requireAuth, router);
 }
 
 authOnly('/api/dashboard', dashboardRoutes);
 authOnly('/:tenantSlug/api/dashboard', dashboardRoutes);
-
 authOnly('/api/paquetes', paquetesRoutes);
 authOnly('/:tenantSlug/api/paquetes', paquetesRoutes);
-
 authOnly('/api/area-personal', areaPersonalRoutes);
 authOnly('/:tenantSlug/api/area-personal', areaPersonalRoutes);
-
 authOnly('/api/import', importRoutes);
 authOnly('/:tenantSlug/api/import', importRoutes);
-
 authOnly('/api/limits', limitsRoutes);
 authOnly('/:tenantSlug/api/limits', limitsRoutes);
-
 authOnly('/api/support', supportRoutes);
 authOnly('/:tenantSlug/api/support', supportRoutes);
 app.use('/api/tickets', ticketsRoutes);
-
 authOnly('/api/ubicaciones', ubicacionesRoutes);
 authOnly('/:tenantSlug/api/ubicaciones', ubicacionesRoutes);
-
 authOnly('/api/estantes', ubicacionesRoutes);
 authOnly('/:tenantSlug/api/estantes', ubicacionesRoutes);
-
 authOnly('/api/ia', iaRoutes);
 authOnly('/:tenantSlug/api/ia', iaRoutes);
 
-gate('/api/tenants', tenantsRoutes);
+app.use('/api/tenants', requireAuth, subscriptionFirewall(), tenantsRoutes);
 
 app.use((req, res) => {
   if (req.path === '/favicon.ico') return res.status(204).end();
-  return res.status(404).json({ ok: false, error: 'Not found' });
+  return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
 });
 
 app.use((err, _req, res, _next) => {
   const status = err.status || 500;
-  res.status(status).json({ ok: false, error: err.message || 'Internal error' });
+  res.status(status).json({ ok: false, error: err.message || 'INTERNAL_ERROR' });
 });
 
 const PORT = process.env.PORT || 3001;
@@ -165,7 +133,6 @@ app.listen(PORT, '0.0.0.0', () => {
     'SUPABASE_SERVICE_ROLE_KEY',
     'SUPABASE_ANON_KEY',
     'SUPABASE_JWT_SECRET',
-    'APP_BASE_URL',
     'FRONTEND_URL',
     'STRIPE_SECRET_KEY',
     'STRIPE_WEBHOOK_SECRET',

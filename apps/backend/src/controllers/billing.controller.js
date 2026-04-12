@@ -2,7 +2,7 @@
 
 const Stripe = require('stripe');
 const { supabase } = require('../utils/supabaseClient');
-const { slugifyBase, uniqueSlug } = require('../helpers/slug');
+const { slugifyBase, uniqueSlug } = require('../utils/slug');
 
 const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
 const stripe = STRIPE_KEY ? new Stripe(STRIPE_KEY, { apiVersion: '2024-06-20' }) : null;

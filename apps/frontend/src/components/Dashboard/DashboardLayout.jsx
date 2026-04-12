@@ -70,7 +70,7 @@ export default function DashboardLayout() {
   };
 
   const navItems = [
-    { label: 'Overview', path: '.', icon: <IconChart />, end: true },
+    { label: 'Inicio', path: '.', icon: <IconChart />, end: true },
     { label: 'Entrada', path: 'anadir', icon: <IconPlus /> },
     { label: 'Localizador', path: 'buscar', icon: <IconSearch /> },
     { label: 'Infraestructura', path: 'almacen', icon: <IconGrid /> },

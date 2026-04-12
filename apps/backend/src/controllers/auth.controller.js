@@ -2,7 +2,7 @@
 
 const { z } = require('zod');
 const { supabaseAuth, supabase } = require('../utils/supabaseClient');
-const { slugifyBase, uniqueSlug } = require('../helpers/slug');
+const { slugifyBase, uniqueSlug } = require('../utils/slug');
 
 const APP_BASE = (process.env.APP_BASE_URL || 'http://localhost:5173').replace(/\/$/, '');
 

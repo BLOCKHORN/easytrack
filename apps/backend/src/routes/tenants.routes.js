@@ -19,7 +19,7 @@ try {
 const dbAdmin = supabaseAdmin || supabase;
 
 const { fetchSubscriptionForTenant } = require('../utils/subscription');
-const { slugifyBase, uniqueSlug } = require('../helpers/slug');
+const { slugifyBase, uniqueSlug } = require('../utils/slug');
 
 let actualizarTenantMe = null;
 let activarPruebaIA = null;
