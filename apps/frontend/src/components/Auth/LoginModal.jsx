@@ -64,25 +64,32 @@ export default function LoginModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" onClick={onClose} />
+      {/* Fondo sólido semitransparente. SIN blur para evitar lag en iOS/Safari */}
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        transition={{ duration: 0.2 }}
+        className="absolute inset-0 bg-zinc-950/70" 
+        onClick={onClose} 
+      />
       
       <motion.div 
         initial={{ scale: 0.95, opacity: 0, y: 10 }} 
         animate={{ scale: 1, opacity: 1, y: 0 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
-        className="relative bg-white w-full max-w-[420px] rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] overflow-hidden p-8 md:p-10"
+        className="relative bg-white w-full max-w-[420px] rounded-3xl shadow-2xl overflow-hidden p-8 md:p-10 border border-zinc-100 will-change-transform"
       >
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-slate-900 mb-1">Inicia sesión en tu cuenta</h2>
+          <h2 className="text-2xl font-black text-zinc-950 mb-1 tracking-tight">Inicia sesión en tu cuenta</h2>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Correo electrónico</label>
+            <label className="block text-sm font-bold text-zinc-700 mb-1.5">Correo electrónico</label>
             <input 
               required 
               type="email" 
-              className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all text-slate-900 shadow-sm" 
+              className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all text-zinc-950 font-medium" 
               value={email} 
               onChange={(e) => setEmail(e.target.value)} 
             />
@@ -90,37 +97,37 @@ export default function LoginModal({ onClose }) {
           
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-sm font-semibold text-slate-700">Contraseña</label>
-              <button type="button" onClick={goToRecovery} className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors">¿No recuerdas la contraseña?</button>
+              <label className="block text-sm font-bold text-zinc-700">Contraseña</label>
+              <button type="button" onClick={goToRecovery} className="text-sm font-bold text-brand-600 hover:text-brand-700 transition-colors">¿Olvidaste la contraseña?</button>
             </div>
             <input 
               required 
               type="password" 
-              className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all text-slate-900 shadow-sm" 
+              className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all text-zinc-950 font-medium" 
               value={password} 
               onChange={(e) => setPassword(e.target.value)} 
             />
           </div>
 
-          {error && <div className="p-3 bg-red-50 text-red-600 text-sm font-medium rounded-lg border border-red-100">{error}</div>}
+          {error && <div className="p-4 bg-red-50 text-red-700 text-sm font-bold rounded-xl border border-red-100">{error}</div>}
 
-          <button disabled={loading} className="w-full py-2.5 mt-2 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-700 transition-all shadow-sm disabled:bg-slate-300 active:scale-[0.98]">
+          <button disabled={loading} className="w-full py-3.5 mt-2 bg-zinc-950 text-white font-black text-lg rounded-xl hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-950/10 disabled:bg-zinc-300 disabled:shadow-none active:scale-95">
             {loading ? "Iniciando sesión..." : "Iniciar sesión"}
           </button>
         </form>
 
         <div className="relative my-8">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
-          <div className="relative flex justify-center text-xs font-medium text-slate-500"><span className="bg-white px-4">O iniciar sesión con</span></div>
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200"></div></div>
+          <div className="relative flex justify-center text-xs font-black text-zinc-400 uppercase tracking-widest"><span className="bg-white px-4">O continuar con</span></div>
         </div>
 
-        <button onClick={handleGoogle} className="w-full py-2.5 bg-white border border-slate-300 rounded-lg font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
+        <button onClick={handleGoogle} className="w-full py-3.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 transition-all flex items-center justify-center gap-3 shadow-sm active:scale-95">
           <GoogleIcon /> Google
         </button>
 
-        <div className="mt-8 text-center bg-slate-50 -mx-8 -mb-10 p-6 border-t border-slate-100">
-          <p className="text-sm text-slate-500">
-            ¿Eres nuevo en EasyTrack? <button onClick={() => { onClose(); navigate('/registro'); }} className="font-semibold text-brand-600 hover:text-brand-700 transition-colors">Crea una cuenta</button>
+        <div className="mt-10 text-center bg-zinc-50 -mx-8 -mb-10 p-6 border-t border-zinc-100">
+          <p className="text-sm font-medium text-zinc-500">
+            ¿Eres nuevo en EasyTrack? <button onClick={() => { onClose(); navigate('/registro'); }} className="font-black text-zinc-950 hover:text-brand-600 transition-colors">Crea una cuenta</button>
           </p>
         </div>
       </motion.div>
