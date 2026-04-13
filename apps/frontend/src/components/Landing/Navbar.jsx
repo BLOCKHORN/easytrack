@@ -63,7 +63,7 @@ export default function Navbar() {
   const goConfig = () => {
     setAccountOpen(false);
     setMobileOpen(false);
-    navigate(slug ? `/${slug}/configuracion` : '/configuracion');
+    navigate(slug ? `/${slug}/dashboard/configuracion` : '/dashboard/configuracion');
   };
 
   return (
