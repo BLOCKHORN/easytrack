@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from "../../utils/supabaseClient";
 
 export default function useNavbarAuth(navigate) {
@@ -15,6 +15,29 @@ export default function useNavbarAuth(navigate) {
     return base.charAt(0).toUpperCase() + base.slice(1);
   };
 
+  // Función para procesar los datos del usuario sin bloquear la UI
+  const updateUserState = useCallback(async (user) => {
+    if (!user) {
+      setIsLoggedIn(false);
+      setUserEmail('');
+      setAvatarUrl(null);
+      setDisplayName('Usuario');
+      setIsAdmin(false);
+      return;
+    }
+
+    const email = user.email || '';
+    setIsLoggedIn(true);
+    setUserEmail(email);
+    setAvatarUrl(user.user_metadata?.avatar_url || null);
+    setDisplayName(user.user_metadata?.full_name || user.user_metadata?.name || nameFromEmail(email));
+
+    // Verificamos admin en SEGUNDO PLANO sin esperar el await para soltar la UI
+    supabase.rpc('is_superadmin').then(({ data }) => {
+      setIsAdmin(!!data);
+    }).catch(() => setIsAdmin(false));
+  }, []);
+
   const handleLogout = async () => {
     try { await supabase.auth.signOut(); } catch (e) {}
     localStorage.clear();
@@ -26,67 +49,30 @@ export default function useNavbarAuth(navigate) {
   };
 
   useEffect(() => {
-    let unsub = null;
-
     const init = async () => {
+      // getSession es rápido porque lee de la memoria local/cookies primero
       const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user || null;
-      const email = user?.email || '';
+      await updateUserState(session?.user || null);
       
-      setIsLoggedIn(!!user);
-      setUserEmail(email);
-      setAvatarUrl(user?.user_metadata?.avatar_url || null);
-      setDisplayName(user?.user_metadata?.full_name || user?.user_metadata?.name || nameFromEmail(email));
-      
-      if (user) {
-        try {
-          const { data } = await supabase.rpc('is_superadmin');
-          setIsAdmin(!!data);
-        } catch {
-          setIsAdmin(false);
-        }
-      } else {
-        setIsAdmin(false);
-      }
-
+      // SOLTAMOS LA UI INMEDIATAMENTE
       setChecking(false);
 
+      // Suscripción para cambios futuros
       const { data: subscription } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_OUT') {
-          setIsLoggedIn(false);
-          setUserEmail('');
-          setAvatarUrl(null);
-          setDisplayName('Usuario');
-          setIsAdmin(false);
+          await updateUserState(null);
           navigate('/', { replace: true });
-          return;
-        }
-
-        const u = session?.user || null;
-        const e = u?.email || '';
-        setIsLoggedIn(!!u);
-        setUserEmail(e);
-        setAvatarUrl(u?.user_metadata?.avatar_url || null);
-        setDisplayName(u?.user_metadata?.full_name || u?.user_metadata?.name || nameFromEmail(e));
-
-        if (u) {
-          try {
-            const { data } = await supabase.rpc('is_superadmin');
-            setIsAdmin(!!data);
-          } catch {
-            setIsAdmin(false);
-          }
-        } else {
-          setIsAdmin(false);
+        } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+          await updateUserState(session?.user || null);
         }
       });
-      
-      unsub = subscription?.subscription?.unsubscribe;
+
+      return subscription?.subscription?.unsubscribe;
     };
     
-    init();
-    return () => { if (unsub) unsub(); };
-  }, [navigate]);
+    const unsubPromise = init();
+    return () => { unsubPromise.then(unsub => unsub && unsub()); };
+  }, [navigate, updateUserState]);
 
   return { checking, isLoggedIn, userEmail, avatarUrl, displayName, isAdmin, handleLogout };
 }

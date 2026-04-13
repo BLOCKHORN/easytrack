@@ -81,7 +81,7 @@ export default function Pricing() {
                   <div className="mt-1 shrink-0"><IconUsers /></div>
                   <div>
                     <p className="font-black text-white text-sm">Auditoría y Analítica Avanzada</p>
-                    <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">Métricas de facturación en tiempo real y registro de manipulaciones por empleado.</p>
+                    <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">Métricas de facturación en tiempo real.</p>
                   </div>
                 </div>
 

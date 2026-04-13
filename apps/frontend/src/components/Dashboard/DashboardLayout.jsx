@@ -5,13 +5,21 @@ import { hasNotice, subscribeNotice, setNotice, clearNotice } from '../../utils/
 import { listTickets } from '../../services/ticketsService';
 import { supabase } from '../../utils/supabaseClient';
 
-const IconLogoRoute = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="5" cy="18" r="3"/>
-    <circle cx="19" cy="6" r="3"/>
-    <path d="M5 15v-4a4 4 0 0 1 4-4h6a4 4 0 0 0 4-4V6"/>
-  </svg>
-);
+// --- LOGO TYPEWRITER UNIFICADO ---
+const TypewriterLogo = ({ size = "text-2xl", cursorHeight = "h-6" }) => {
+  const text = "easytrack";
+  return (
+    <div className={`flex items-center ${size} font-black tracking-tighter text-white select-none`}>
+      {text.split("").map((char, index) => (
+        <motion.span key={index} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.06, duration: 0.1 }}>
+          {char}
+        </motion.span>
+      ))}
+      <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: text.length * 0.06, duration: 0.1 }} className="text-brand-500">.</motion.span>
+      <motion.span animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity, duration: 0.8 }} className={`w-1.5 ${cursorHeight} bg-brand-500 ml-1 inline-block`} />
+    </div>
+  );
+};
 
 const IconChart = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>;
 const IconPlus = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
@@ -78,7 +86,6 @@ export default function DashboardLayout() {
     { label: 'Área financiera', path: 'personal', icon: <IconUser /> },
     { label: 'Facturación', path: 'facturacion', icon: <IconCreditCard /> },
     { label: 'Configuración', path: 'configuracion', icon: <IconSettings /> },
-    { label: 'Asistencia', path: 'soporte', icon: <IconSupport />, isSupport: true },
   ];
 
   const mobileNavLeft = [
@@ -94,7 +101,6 @@ export default function DashboardLayout() {
   const mobileMenu = [
     { label: 'Facturación', path: 'facturacion', icon: <IconCreditCard /> },
     { label: 'Configuración', path: 'configuracion', icon: <IconSettings /> },
-    { label: 'Asistencia', path: 'soporte', icon: <IconSupport />, isSupport: true },
   ];
 
   return (
@@ -109,14 +115,9 @@ export default function DashboardLayout() {
       `}} />
 
       <aside className="hidden md:flex flex-col w-[260px] bg-zinc-950 border-r border-zinc-900 sticky top-0 h-screen overflow-y-auto">
-        <div className="p-7 flex items-center gap-2.5 cursor-pointer group" onClick={() => navigate('.')}>
-          <div className="text-brand-500 transition-transform duration-300 group-hover:scale-105">
-            <IconLogoRoute />
-          </div>
-          <span className="text-[1.35rem] tracking-tighter select-none flex items-center">
-            <span className="font-medium text-zinc-300">easy</span>
-            <span className="font-black text-white">track</span>
-          </span>
+        {/* LOGO TYPEWRITER SIDEBAR */}
+        <div className="p-8 cursor-pointer" onClick={() => navigate('.')}>
+          <TypewriterLogo size="text-2xl" cursorHeight="h-6" />
         </div>
 
         <nav className="flex-1 px-4 space-y-1.5">
@@ -164,13 +165,10 @@ export default function DashboardLayout() {
         </div>
       </aside>
 
+      {/* HEADER MOBILE CON LOGO TYPEWRITER */}
       <header className="md:hidden sticky top-0 z-40 bg-zinc-950 flex items-center justify-between p-4 px-5 shadow-lg border-b border-zinc-800/50">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('.')}>
-          <div className="text-brand-500"><IconLogoRoute /></div>
-          <span className="text-xl tracking-tighter select-none flex items-center">
-            <span className="font-medium text-zinc-300">easy</span>
-            <span className="font-black text-white">track</span>
-          </span>
+        <div className="cursor-pointer" onClick={() => navigate('.')}>
+          <TypewriterLogo size="text-xl" cursorHeight="h-5" />
         </div>
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 

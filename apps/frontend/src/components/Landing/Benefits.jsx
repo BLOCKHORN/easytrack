@@ -110,7 +110,7 @@ export default function Benefits() {
             <ShelvingVisual />
             <h3 className="text-2xl font-bold text-slate-900 mb-4 tracking-tight group-hover:text-brand-600 transition-colors">Ubicaciones Reales</h3>
             <p className="text-slate-600 leading-relaxed flex-grow font-medium text-sm md:text-base">
-              Replica tus estanterías (Ej: A1, B4). El sistema te dice el hueco óptimo al recibir un paquete nuevo.
+              Replica tus estanterías (Ej: B1, B4). El sistema te dice el hueco óptimo al recibir un paquete nuevo.
             </p>
           </motion.div>
 

@@ -1,16 +1,13 @@
 import { Link } from 'react-router-dom';
 import { FaTwitter, FaLinkedin, FaGithub, FaArrowUp } from 'react-icons/fa';
 
-// Usamos exactamente el mismo icono que en el Navbar para unificar el Branding
-const IconLogoRoute = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand-500">
-    <circle cx="5" cy="18" r="3"/>
-    <circle cx="19" cy="6" r="3"/>
-    <path d="M5 15v-4a4 4 0 0 1 4-4h6a4 4 0 0 0 4-4V6"/>
-  </svg>
+// --- LOGO ESTÁTICO Y LIMPIO ---
+const StaticLogo = () => (
+  <div className="flex items-center text-2xl font-black tracking-tighter text-white select-none">
+    easytrack<span className="text-brand-500">.</span>
+  </div>
 );
 
-// Extraemos los datos estáticos fuera del componente para mejor rendimiento
 const FOOTER_LINKS = {
   producto: [
     { to: '/#features', label: 'Características' },
@@ -32,39 +29,41 @@ const FOOTER_LINKS = {
 
 export default function Footer() {
   const year = new Date().getFullYear();
-
   const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   return (
-    <footer className="relative bg-zinc-950 border-t border-zinc-900 pt-24 pb-12 overflow-hidden">
-      
-      {/* Resplandor optimizado sin blur costoso */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[300px] bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.1)_0%,transparent_60%)] pointer-events-none" />
+    <footer className="relative bg-zinc-950 border-t border-zinc-900 pt-24 pb-12 overflow-hidden font-sans">
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[300px] bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.05)_0%,transparent_60%)] pointer-events-none" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-12 lg:gap-8 mb-20">
           
           <div className="lg:col-span-5 flex flex-col gap-6">
-            <Link to="/" className="inline-flex items-center gap-2 group">
-              <div className="transition-transform duration-300 group-hover:scale-105">
-                <IconLogoRoute />
-              </div>
-              <span className="text-2xl font-black tracking-tighter select-none flex items-center">
-                <span className="font-medium text-zinc-300">easy</span>
-                <span className="font-black text-white">track</span>
-              </span>
+            <Link to="/" className="inline-flex items-center group outline-none">
+              <StaticLogo />
             </Link>
             
             <p className="text-zinc-400 text-sm font-medium leading-relaxed max-w-sm">
               La infraestructura logística definitiva para transformar el caos de tu punto de recogida en ingresos escalables y controlados.
             </p>
             
-            <div className="inline-flex items-center gap-3 bg-zinc-900/80 border border-zinc-800 rounded-full px-4 py-2 w-fit shadow-inner">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-xs font-bold text-zinc-300 tracking-wide">Sistemas operacionales al 99.9%</span>
+            {/* STATUS & BETA INFO (Sin píldoras, estilo técnico) */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-[0.2em]">
+                  Status Operacional: 99.9% <span className="text-zinc-800 mx-2">|</span> Latencia: 24ms
+                </span>
+              </div>
+
+              <div className="text-[10px] font-mono text-zinc-600 uppercase tracking-[0.25em] flex items-center gap-2">
+                <span className="text-zinc-400 font-black">Release v1.2.4-BETA</span>
+                <span className="text-zinc-800">/</span>
+                <span className="text-zinc-500">Continuous Deployment Cycle</span>
+              </div>
             </div>
           </div>
 
@@ -110,9 +109,9 @@ export default function Footer() {
               &copy; {year} EasyTrack. Todos los derechos reservados.
             </p>
             
-            <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg">
-              <span className="text-xs font-bold text-zinc-500">Una solución de</span>
-              <div className="flex items-center gap-1.5 opacity-80 hover:opacity-100 transition-opacity cursor-default">
+            <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg opacity-80">
+              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Desarrollado por</span>
+              <div className="flex items-center gap-1.5 cursor-default">
                 <img src="/blockhorn.png" alt="Blockhorn" className="h-4 w-4 rounded-sm" loading="lazy" />
                 <span className="text-xs font-black text-white tracking-wide">Blockhorn</span>
               </div>

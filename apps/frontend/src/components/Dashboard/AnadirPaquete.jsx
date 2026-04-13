@@ -6,6 +6,7 @@ import { getTenantIdOrThrow } from '../../utils/tenant';
 import { crearPaqueteBackend, obtenerPaquetesBackend } from '../../services/paquetesService';
 import { cargarUbicaciones } from '../../services/ubicacionesService';
 
+// --- ICONOS (Se mantienen igual) ---
 const IconBox = () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
 const IconCheck = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>;
 const IconLayers = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
@@ -13,7 +14,7 @@ const IconSparkles = ({ className = "w-[18px] h-[18px]" }) => <svg className={cl
 const IconInfo = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
 const IconLightbulb = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.2 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>;
 const IconCheckCircle = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
-const IconLock = () => <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand-500"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+const IconLock = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
 const IconScan = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.5-1.5"/></svg>;
 const IconPhone = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
 const IconSpinner = ({ className = "animate-spin h-5 w-5 text-current" }) => <svg className={className} viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>;
@@ -194,7 +195,6 @@ const CameraScanner = ({ onCapture, onClose }) => {
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
 
-    // ESCALADO FORZADO PARA IPHONE: Garantizamos que la imagen NUNCA sea mayor a 800px
     const MAX_DIMENSION = 800;
     let width = video.videoWidth;
     let height = video.videoHeight;
@@ -223,7 +223,6 @@ const CameraScanner = ({ onCapture, onClose }) => {
   return (
     <div className="fixed inset-0 z-[200] bg-black flex flex-col">
       <div className="relative flex-1 flex items-center justify-center overflow-hidden">
-        {/* ATRIBUTO MUTED OBLIGATORIO EN IOS PARA EVITAR BLOQUEOS */}
         <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
         <div className="relative w-64 h-64 border-2 border-brand-400 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
            <div className="absolute inset-0 flex items-center justify-center">
@@ -249,9 +248,10 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const navigate = useNavigate();
   const { tenantSlug } = useParams();
 
+  // --- ESTADOS DE CARGA UNIFICADOS ---
+  const [isInitializing, setIsInitializing] = useState(true);
   const [tenant, setTenant] = useState(null);
   const [aiStatus, setAiStatus] = useState('locked');
-  const [isCheckingPlan, setIsCheckingPlan] = useState(true);
   
   const [companias, setCompanias] = useState([]);
   const [compania, setCompania]   = useState('');
@@ -282,11 +282,6 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const [isScanning, setIsScanning] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
 
-  const { visual: ubicaciones, cols } = useMemo(
-    () => makeVisualUbicaciones(rawUbicaciones, metaUbi),
-    [rawUbicaciones, metaUbi]
-  );
-
   const [paquetesLocales, setPaquetesLocales] = useState([]);
   const paquetes = propsPaquetes || paquetesLocales;
 
@@ -299,6 +294,11 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
 
   const inputClienteRef = useRef(null);
   const flyLayerRef = useRef(null);
+
+  const { visual: ubicaciones, cols } = useMemo(
+    () => makeVisualUbicaciones(rawUbicaciones, metaUbi),
+    [rawUbicaciones, metaUbi]
+  );
 
   const extraStyles = `
   @keyframes flyCurve {
@@ -316,68 +316,65 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   .fly-parcel.animate { animation: flyCurve 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
   `;
 
+  // --- INICIALIZACIÓN OPTIMIZADA (SIN SALTOS) ---
   useEffect(() => {
     let cancel = false;
     (async () => {
       try {
         const tid = await getTenantIdOrThrow();
-        if (cancel) return;
-
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
 
-        let localEmpresaName = '';
+        // LANZAMOS TODO EN PARALELO PARA EVITAR LA CASCADA
+        const [limitsRes, companiesRes, ubiData, pkgsData] = await Promise.all([
+          fetch(`${API_URL}/api/limits/me`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({})),
+          supabase.from('empresas_transporte_tenant').select('nombre').eq('tenant_id', tid).then(r => r.data || []),
+          cargarUbicaciones(token, tid).catch(() => ({})),
+          propsPaquetes ? Promise.resolve(null) : obtenerPaquetesBackend(token, { estado: 'pendiente', all: 1 }).catch(() => [])
+        ]);
 
-        try {
-          const res = await fetch(`${API_URL}/api/limits/me`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const limitsData = await res.json();
-          setAiStatus(limitsData?.entitlements?.features?.aiStatus || 'locked');
-          localEmpresaName = limitsData?.tenant?.nombre_empresa || '';
-        } catch(e) {
-          setAiStatus('locked');
-        } finally {
-          setIsCheckingPlan(false);
-        }
+        if (cancel) return;
 
-        if (!localEmpresaName) {
-          const { data: tData } = await supabase.from('tenants').select('nombre_empresa').eq('id', tid).maybeSingle();
-          localEmpresaName = tData?.nombre_empresa || '';
-        }
-
-        setTenant({ id: tid, nombre_empresa: localEmpresaName });
+        // --- ACTUALIZACIÓN DE ESTADOS EN UN SOLO BLOQUE ---
+        const limitsData = limitsRes;
+        setAiStatus(limitsData?.entitlements?.features?.aiStatus || 'locked');
+        
+        const nombreEmpresa = limitsData?.tenant?.nombre_empresa || '';
+        setTenant({ id: tid, nombre_empresa: nombreEmpresa });
 
         try {
           const storedPenalties = JSON.parse(localStorage.getItem(`ap_penalties_${tid}`)) || {};
           setPenalizedSlots(storedPenalties);
         } catch(e) {}
 
-        const { data } = await supabase.from('empresas_transporte_tenant').select('nombre').eq('tenant_id', tid);
-        const lista = (data || []).map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b));
-        setCompanias(lista);
+        const listaCompanias = companiesRes.map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+        setCompanias(listaCompanias);
         
         const lastCompany = localStorage.getItem('ap_last_company');
-        const defaultCompany = (lastCompany && lista.includes(lastCompany)) ? lastCompany : (lista[0] || '');
+        const defaultCompany = (lastCompany && listaCompanias.includes(lastCompany)) ? lastCompany : (listaCompanias[0] || '');
         setCompania(defaultCompany);
         setBatchCompany(defaultCompany);
         setMultiCompanies(prev => prev.map(v => v || defaultCompany));
 
-        const ub = await cargarUbicaciones(token, tid);
-        if (cancel) return;
-        
-        setRawUbicaciones(Array.isArray(ub?.ubicaciones) ? ub.ubicaciones : []);
-        setMetaUbi({ cols: ub?.meta?.cols ?? 5, order: ub?.meta?.order ?? ub?.meta?.orden ?? 'horizontal' });
+        setRawUbicaciones(Array.isArray(ubiData?.ubicaciones) ? ubiData.ubicaciones : []);
+        setMetaUbi({ 
+          cols: ubiData?.meta?.cols ?? 5, 
+          order: ubiData?.meta?.order ?? ubiData?.meta?.orden ?? 'horizontal' 
+        });
 
-        if (!propsPaquetes) {
-          const pk = await obtenerPaquetesBackend(token, { estado: 'pendiente', all: 1 }).catch(() => []);
-          setPaquetesLocales(Array.isArray(pk) ? pk : []);
+        if (!propsPaquetes && pkgsData) {
+          setPaquetesLocales(Array.isArray(pkgsData) ? pkgsData : []);
         }
 
-        startTransition(() => inputClienteRef.current?.focus());
+        // LIBERAMOS LA UI SOLO CUANDO TODO ESTÁ CARGADO
+        setIsInitializing(false);
+
+        // Autofocus después del renderizado completo
+        setTimeout(() => inputClienteRef.current?.focus(), 50);
+
       } catch (e) {
-        setIsCheckingPlan(false);
+        if (!cancel) setIsInitializing(false);
       }
     })();
     return () => { cancel = true; };
@@ -497,6 +494,8 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   }, [activeTab]);
 
   useEffect(() => {
+    if (isInitializing) return; // Evitamos lógica innecesaria durante la carga inicial
+    
     const pendientes = paquetes.filter(p => !p.entregado);
     const sug = bestClientSuggestion(leadingName, pendientes);
     setSugCliente(sug);
@@ -518,7 +517,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
     } else {
       setMatchInfo(null);
     }
-  }, [leadingName, paquetes, seleccionManual, pickForClient, getMostEmptySlot]);
+  }, [leadingName, paquetes, seleccionManual, pickForClient, getMostEmptySlot, isInitializing]);
 
   const suggestedLabel = useMemo(() => {
     const s = pickForClient(leadingName) || getMostEmptySlot();
@@ -784,21 +783,34 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const suggestionPulse = !!(sugCliente || matchInfo?.label);
   const selectedPulse   = !!(seleccionManual || sugCliente || matchInfo?.label);
 
-  const renderScannerButton = () => {
-    if (isCheckingPlan) {
-      return <><IconSpinner /> Cargando...</>;
-    }
+const renderScannerButton = () => {
     switch (aiStatus) {
       case 'unlimited':
         return <><IconScan /> Escáner en Vivo</>;
       case 'trial_active':
         return <><IconScan /> Escáner IA (Prueba)</>;
       case 'trial_available':
-        return <><IconSparkles className="w-[18px] h-[18px]" /> Probar Pistoleo IA Gratis</>;
+        return <><IconSparkles className="w-4 h-4 text-brand-400" /> Probar Escáner IA Gratis</>;
       default:
-        return <><IconSparkles className="w-[18px] h-[18px]" /> Pistoleo Inteligente IA <IconLock /></>;
+        return (
+          <div className="flex items-center gap-2">
+            <IconSparkles className="w-4 h-4 text-zinc-500" /> 
+            <span>Pistoleo Inteligente IA</span>
+            <div className="ml-1 opacity-50"><IconLock /></div>
+          </div>
+        );
     }
   };
+
+  // --- RENDERING CONDICIONAL DE CARGA ---
+  if (isInitializing) {
+    return (
+      <div className={`bg-white flex flex-col items-center justify-center ${modoRapido ? 'h-[400px]' : 'min-h-[60vh] rounded-[2rem] border border-zinc-200/80 mx-auto max-w-5xl'}`}>
+        <div className="w-10 h-10 border-4 border-zinc-200 border-t-brand-500 rounded-full animate-spin mb-4" />
+        <p className="text-zinc-400 font-bold text-sm uppercase tracking-widest">Sincronizando local...</p>
+      </div>
+    );
+  }
 
   return (
     <div className={`bg-white relative ${modoRapido ? '' : 'p-8 rounded-[2rem] border border-zinc-200/80 shadow-sm max-w-5xl mx-auto'}`}>
@@ -817,7 +829,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
             </div>
           </div>
           
-          <button 
+<button 
             type="button" 
             onClick={() => {
               document.activeElement?.blur();
@@ -825,13 +837,12 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
               else if (aiStatus === 'trial_available') setShowTrialModal(true);
               else setShowUpgradePro(true);
             }}
-            disabled={isCheckingPlan}
-            className={`flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-black text-sm transition-all shadow-md active:scale-95 ${
-              isCheckingPlan || ['unlimited', 'trial_active'].includes(aiStatus)
-                ? 'bg-brand-500 hover:bg-brand-400 text-white shadow-brand-500/30'
+            className={`flex items-center justify-center gap-3 px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-[0.15em] transition-all active:scale-95 ${
+              ['unlimited', 'trial_active'].includes(aiStatus)
+                ? 'bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/20'
                 : aiStatus === 'trial_available'
-                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
-                  : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-amber-950 shadow-amber-500/20'
+                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20'
+                  : 'bg-zinc-950 text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-200 shadow-xl'
             }`}
           >
             {renderScannerButton()}
@@ -1093,29 +1104,69 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showUpgradePro && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" />
-            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 text-center border border-zinc-200 overflow-hidden">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/20 blur-[60px] rounded-full pointer-events-none" />
-              <div className="relative z-10">
-                <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-amber-100 text-amber-500"><IconSparkles className="w-[18px] h-[18px]" /></div>
-                <h3 className="text-3xl font-black text-zinc-950 tracking-tight mb-3">Pistoleo IA</h3>
-                <p className="text-zinc-500 font-bold mb-8 leading-relaxed">
-                  {aiStatus === 'trial_expired' 
-                    ? "Tu prueba gratuita de 7 días ha finalizado. Mejora al plan PRO para seguir usando el escáner inteligente sin límites." 
-                    : "Escanea etiquetas con la cámara y autocompleta el formulario en un segundo. Exclusivo del plan PRO."}
-                </p>
-                <div className="flex flex-col gap-3">
-                  <button onClick={() => navigate(tenantSlug ? `/${tenantSlug}/dashboard/facturacion` : '/dashboard/facturacion')} className="w-full py-4 bg-brand-500 hover:bg-brand-400 text-white font-black text-lg rounded-xl shadow-lg shadow-brand-500/30 transition-all active:scale-95">Mejorar a PRO</button>
-                  <button onClick={() => setShowUpgradePro(false)} className="w-full py-4 bg-zinc-100 text-zinc-600 font-bold text-base rounded-xl hover:bg-zinc-200 transition-colors">Volver al escáner manual</button>
-                </div>
-              </div>
-            </motion.div>
+<AnimatePresence>
+  {showUpgradePro && (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      {/* Fondo con desenfoque técnico */}
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        exit={{ opacity: 0 }} 
+        className="absolute inset-0 bg-zinc-950/80 backdrop-blur-md" 
+        onClick={() => setShowUpgradePro(false)}
+      />
+      
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0, y: 30 }} 
+        animate={{ scale: 1, opacity: 1, y: 0 }} 
+        exit={{ scale: 0.9, opacity: 0, y: 30 }} 
+        className="relative bg-zinc-950 border border-zinc-800 rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 text-center overflow-hidden"
+      >
+        {/* Efecto de luz ambiental en la esquina */}
+        <div className="absolute top-0 right-0 w-40 h-40 bg-brand-500/10 blur-[80px] rounded-full pointer-events-none" />
+        
+        <div className="relative z-10">
+          {/* Icono más técnico */}
+          <div className="w-20 h-20 bg-zinc-900 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-zinc-800 shadow-inner group">
+            <div className="text-brand-400">
+              <IconSparkles className="w-10 h-10" />
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+
+          <p className="text-[10px] font-black text-brand-500 uppercase tracking-[0.3em] mb-3">Feature_Locked</p>
+          <h3 className="text-3xl font-black text-white tracking-tighter mb-4">Pistoleo Inteligente</h3>
+          
+          <p className="text-zinc-400 font-medium mb-10 leading-relaxed text-sm">
+            {aiStatus === 'trial_expired' 
+              ? "Tu acceso de prueba ha caducado. Actualiza a una licencia PRO para restaurar el escáner de red neuronal y el autocompletado." 
+              : "Utiliza el motor de visión artificial para procesar etiquetas en milisegundos. Función reservada para funciones PRO."}
+          </p>
+
+          <div className="flex flex-col gap-3">
+            <button 
+              onClick={() => navigate(tenantSlug ? `/${tenantSlug}/dashboard/facturacion` : '/dashboard/facturacion')} 
+              className="w-full py-4 bg-brand-500 hover:bg-brand-400 text-zinc-950 font-black text-sm uppercase tracking-widest rounded-2xl shadow-lg shadow-brand-500/20 transition-all active:scale-95"
+            >
+              Mejorar a PRO
+            </button>
+            
+            <button 
+              onClick={() => setShowUpgradePro(false)} 
+              className="w-full py-4 bg-transparent text-zinc-500 hover:text-white font-bold text-xs uppercase tracking-widest transition-colors"
+            >
+              Volver al modo manual
+            </button>
+          </div>
+        </div>
+        
+        {/* Decoración de código sutil en el fondo */}
+        <div className="absolute bottom-4 left-0 right-0 opacity-[0.03] font-mono text-[8px] text-white pointer-events-none select-none">
+          AI_ENGINE_V3 // NEURAL_LINK_STABLE // ROOT_ACCESS_REQUIRED
+        </div>
+      </motion.div>
+    </div>
+  )}
+</AnimatePresence>
 
       <AnimatePresence>
         {exito && (
