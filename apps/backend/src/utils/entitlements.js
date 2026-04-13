@@ -24,35 +24,21 @@ function computeEntitlements({ tenant = null, subscription = null } = {}) {
   const trialUsed = Number(tenant?.trial_used ?? 0);
   const quotaOk = trialUsed < trialQuota;
 
-  const now = new Date();
-  const aiTrialEnds = tenant?.ai_trial_ends_at ? new Date(tenant.ai_trial_ends_at) : null;
-  const aiTrialUsed = !!tenant?.ai_trial_used;
-
-  let aiStatus = 'locked';
-  if (planId === 'pro' || isVip) {
-    aiStatus = 'unlimited';
-  } else if (planId === 'plus') {
-    if (!aiTrialUsed) {
-      aiStatus = 'trial_available';
-    } else if (aiTrialEnds && now < aiTrialEnds) {
-      aiStatus = 'trial_active';
-    } else {
-      aiStatus = 'trial_expired';
-    }
-  }
-  
-  const features = {
-    canViewFinancialArea: planId !== 'free' || isVip,
-    canUseWhatsAppClient: planId !== 'free' || isVip,
-    aiStatus,
-    supportType: (planId === 'pro' || isVip) ? 'direct_whatsapp' : (planId === 'plus' ? 'ticket' : 'none'),
-    unlimitedPackages: planId !== 'free' || isVip
-  };
+  const isPaidPlan = planId === 'pro' || isVip;
 
   const subStatus = String(subscription?.status || '').toLowerCase();
   const hasActiveStripeSub = ['active', 'trialing', 'past_due'].includes(subStatus);
-  const isPaidPlan = planId === 'pro' || planId === 'plus' || isVip;
   const subscriptionActive = hasActiveStripeSub || isPaidPlan;
+
+  const aiStatus = subscriptionActive ? 'unlimited' : 'locked';
+
+  const features = {
+    canViewFinancialArea: subscriptionActive,
+    canUseWhatsAppClient: subscriptionActive,
+    aiStatus,
+    supportType: subscriptionActive ? 'direct_whatsapp' : 'none',
+    unlimitedPackages: subscriptionActive
+  };
 
   const hasStripeInvolved = !!tenant?.stripe_customer_id || !!subscription?.provider_subscription_id;
   const isManualOverride = isPaidPlan && !hasStripeInvolved;
@@ -63,7 +49,7 @@ function computeEntitlements({ tenant = null, subscription = null } = {}) {
   
   const planInfo = subscriptionActive ? {
     id: subscription?.provider_subscription_id || subscription?.id || 'manual-override',
-    name: pickPlanName({ ...subscription, price, product }) || (planId === 'pro' ? 'Pro' : (planId === 'plus' ? 'Plus' : 'VIP')),
+    name: pickPlanName({ ...subscription, price, product }) || (planId === 'pro' ? 'Pro' : 'VIP'),
     status: isManualOverride ? 'manual' : (subStatus || 'active'),
     cancel_at_period_end: !!subscription?.cancel_at_period_end,
     currency: price?.currency || subscription?.currency || 'EUR',
@@ -72,13 +58,13 @@ function computeEntitlements({ tenant = null, subscription = null } = {}) {
   } : null;
 
   return {
-    plan_id: planId,
+    plan_id: subscriptionActive ? 'pro' : 'free',
     canUseApp: !softBlocked,
     canCreatePackage: !softBlocked && (features.unlimitedPackages || quotaOk),
     features,
     subscriptionActive,
     is_paid: subscriptionActive,
-    trial: { active: planId === 'free' && !isVip, quota: trialQuota, used: trialUsed, remaining: Math.max(0, trialQuota - trialUsed), quota_ok: quotaOk },
+    trial: { active: !subscriptionActive && !isVip, quota: trialQuota, used: trialUsed, remaining: Math.max(0, trialQuota - trialUsed), quota_ok: quotaOk },
     soft_blocked: softBlocked,
     reason: softBlocked ? 'blocked' : (!(features.unlimitedPackages || quotaOk) ? 'quota_exceeded' : null),
     plan: planInfo

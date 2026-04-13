@@ -7,20 +7,12 @@ export default function PlanBadge() {
 
   const planId = entitlements?.plan_id || 'free';
   const remaining = entitlements?.trial?.remaining || 0;
-  const isVip = entitlements?.features?.unlimitedPackages && planId === 'free'; // Para tus cuentas blindadas
+  const isVip = entitlements?.features?.unlimitedPackages && planId === 'free'; // Para cuentas blindadas (admin)
 
   if (planId === 'pro') {
     return (
       <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md bg-zinc-950 text-white shadow-sm" title="Plan PRO Activo">
         PRO
-      </span>
-    );
-  }
-
-  if (planId === 'plus') {
-    return (
-      <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md bg-brand-50 text-brand-700 border border-brand-200 shadow-sm" title="Plan Plus Activo">
-        PLUS
       </span>
     );
   }

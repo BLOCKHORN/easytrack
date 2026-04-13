@@ -18,9 +18,7 @@ async function safeLogEvent(provider, evt) {
       payload: evt || {},
       event_id: evt?.id || null
     }]);
-  } catch (e) {
-    console.warn('[stripe.webhook] Fallo al guardar en payment_events:', e?.message || e);
-  }
+  } catch (e) {}
 }
 
 async function findTenantByCustomer(customerId) {
@@ -32,7 +30,6 @@ async function findTenantByCustomer(customerId) {
     .limit(1)
     .maybeSingle();
   if (error) {
-    console.error('[stripe.webhook] Error buscando tenant por customer:', error);
     throw error;
   }
   return data?.id || null;
@@ -56,7 +53,6 @@ async function resolvePlanIdFromPrice(priceId) {
     .select('id')
     .eq('stripe_price_id', priceId)
     .maybeSingle();
-  if (error) console.error('[stripe.webhook] Error resolviendo Plan ID:', error);
   return data?.id || null;
 }
 
@@ -65,7 +61,6 @@ const toISO = (sec) => (sec ? new Date(sec * 1000).toISOString() : null);
 
 async function upsertSubscription(tenantId, stripeSub, forcedPlanTier = null) {
   if (!tenantId || !stripeSub) {
-    console.warn('[stripe.webhook] Faltan datos para el upsert');
     return;
   }
 
@@ -77,13 +72,7 @@ async function upsertSubscription(tenantId, stripeSub, forcedPlanTier = null) {
 
   let tenantPlanTier = 'free';
   if (isActive) {
-    const { data: planData } = await supabase.from('billing_plans').select('code').eq('id', planIdInternal).maybeSingle();
-    
-    if (planData?.code) {
-      tenantPlanTier = planData.code.includes('pro') ? 'pro' : 'plus';
-    } else if (forcedPlanTier) {
-      tenantPlanTier = forcedPlanTier.includes('pro') ? 'pro' : 'plus';
-    }
+    tenantPlanTier = 'pro';
   }
 
   const row = {
@@ -95,14 +84,13 @@ async function upsertSubscription(tenantId, stripeSub, forcedPlanTier = null) {
     status: subStatus,
     current_period_start: toISO(stripeSub.current_period_start),
     current_period_end:   toISO(stripeSub.current_period_end),
-    trial_ends_at:         toISO(stripeSub.trial_end),
+    trial_ends_at:        toISO(stripeSub.trial_end),
     cancel_at_period_end: !!stripeSub.cancel_at_period_end,
     updated_at: new Date().toISOString(),
   };
 
   const { error: upsertErr } = await supabase.from('subscriptions').upsert(row, { onConflict: 'provider,provider_subscription_id' });
   if (upsertErr) {
-    console.error('[stripe.webhook] Error al insertar en tabla subscriptions:', upsertErr);
     throw upsertErr;
   }
 
@@ -112,16 +100,12 @@ async function upsertSubscription(tenantId, stripeSub, forcedPlanTier = null) {
     .eq('id', tenantId);
     
   if (tenantErr) {
-    console.error('[stripe.webhook] Error al actualizar plan_id en tabla tenants:', tenantErr);
     throw tenantErr;
   }
-  
-  console.log(`[stripe.webhook] Tenant ${tenantId} actualizado a plan: ${tenantPlanTier}`);
 }
 
 async function handleEvent(evt) {
   await safeLogEvent('stripe', evt);
-  console.log(`[stripe.webhook] Procesando evento: ${evt.type}`);
 
   switch (evt.type) {
     case 'checkout.session.completed': {
@@ -130,7 +114,6 @@ async function handleEvent(evt) {
       const planCode = session.metadata?.plan_code; 
 
       if (!tenantId || !isId(session.subscription, 'sub')) {
-        console.warn('[stripe.webhook] Sesion completada, pero falta tenantId o subscription ID.');
         return;
       }
 
@@ -146,7 +129,6 @@ async function handleEvent(evt) {
       const planCode = sub.metadata?.plan_code;
 
       if (!tenantId) {
-        console.warn(`[stripe.webhook] Subscripcion actualizada, no se encontro tenant: ${sub.customer}`);
         return;
       }
       await upsertSubscription(tenantId, sub, planCode);
@@ -158,11 +140,6 @@ async function handleEvent(evt) {
       const tenantId = await findTenantByCustomer(sub.customer);
       if (!tenantId) return;
       const { error: delErr } = await supabase.from('tenants').update({ plan_id: 'free' }).eq('id', tenantId);
-      if (delErr) {
-        console.error('[stripe.webhook] Error al devolver tenant a free tras cancelacion:', delErr);
-      } else {
-        console.log(`[stripe.webhook] Tenant ${tenantId} devuelto a Freemium por cancelacion.`);
-      }
       break;
     }
 
@@ -184,7 +161,6 @@ async function stripeWebhook(req, res) {
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, WEBHOOK_KEY);
   } catch (err) {
-    console.error(`[stripe.webhook] Fallo de verificacion de firma: ${err.message}`);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -192,7 +168,6 @@ async function stripeWebhook(req, res) {
     await handleEvent(event);
     return res.json({ received: true });
   } catch (err) {
-    console.error(`[stripe.webhook] Fallo procesando el evento: ${err.message}`);
     return res.status(200).send('Event received but processing failed');
   }
 }

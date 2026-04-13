@@ -11,8 +11,6 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').repla
 const toEmail = (v) => String(v || '').trim().toLowerCase();
 
 const PRICE_MAP = {
-  'plus_monthly': process.env.STRIPE_PRICE_PLUS_MONTHLY,
-  'plus_annual': process.env.STRIPE_PRICE_PLUS_ANNUAL,
   'pro_monthly': process.env.STRIPE_PRICE_PRO_MONTHLY,
   'pro_annual': process.env.STRIPE_PRICE_PRO_ANNUAL
 };
@@ -158,7 +156,10 @@ exports.createCheckout = async (req, res) => {
       customer: stripeCustomerId,
       line_items: [{ price: priceId, quantity: 1 }],
       allow_promotion_codes: true,
-      subscription_data: { metadata },
+      subscription_data: { 
+        metadata,
+        trial_period_days: 7
+      },
       automatic_tax: { enabled: true },
       tax_id_collection: { enabled: true },
       billing_address_collection: 'auto',

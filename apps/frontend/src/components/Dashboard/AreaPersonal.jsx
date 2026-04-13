@@ -20,7 +20,7 @@ const IconBuilding = () => <svg width="20" height="20" viewBox="0 0 24 24" fill=
 const IconEdit = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>;
 const IconSave = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>;
 const IconHistory = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>;
-const IconLock = () => <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+const IconSparkles = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>;
 
 const toLocalDate = (d) => new Date(d);
 const inLastNDays = (dateLike, n) => {
@@ -30,7 +30,7 @@ const inLastNDays = (dateLike, n) => {
   return d >= start && d <= end;
 };
 
-const COLORS = ["#14b8a6", "#6366f1", "#f59e0b", "#ec4899", "#8b5cf6", "#0ea5e9", "#10b981", "#f43f5e"];
+const COLORS = ["#14b8a6", "#6366f1", "#f59e0b", "#ec4899", "#8b5cf6", "#0ea5e9", "#10b981", "#f43f5e", "#84cc16", "#a855f7"];
 
 export default function AreaPersonal() {
   const { tenantSlug } = useParams();
@@ -117,7 +117,6 @@ export default function AreaPersonal() {
 
   const canView = entitlements?.features?.canViewFinancialArea ?? true;
 
-  // CÁLCULOS REALES
   const lastActiveMonthData = mensualSrv.length > 0 ? mensualSrv[mensualSrv.length - 1] : null;
   const prevActiveMonthData = mensualSrv.length > 1 ? mensualSrv[mensualSrv.length - 2] : null;
   const activeYear = lastActiveMonthData ? String(lastActiveMonthData.mes).slice(0, 4) : String(new Date().getFullYear());
@@ -173,23 +172,50 @@ export default function AreaPersonal() {
     return <span className={`flex items-center gap-1 text-xs font-bold ${up ? "text-emerald-500" : "text-red-500"}`}><Icon /> {Math.abs(value).toFixed(1)}%</span>;
   };
 
-  // ==========================================
-  // BLINDAJE: DUMMY DATA PARA EL PAYWALL F12
-  // ==========================================
-  const d_ingresosMesActual = canView ? ingresosMesActual : 345.50;
-  const d_deltaMoM          = canView ? deltaMoM : 12.5;
-  const d_ingresos30d       = canView ? ingresos30d : 410.00;
-  const d_entregas30d       = canView ? entregas30d : 82;
-  const d_ticketMedioTotal  = canView ? ticketMedioTotal : 4.50;
-  const d_ticketMedio30d    = canView ? ticketMedio30d : 5.00;
-  const d_facturacionYTD    = canView ? facturacionYTD : 1250.00;
-  const d_objetivoAnual     = canView ? objetivoAnual : 3000.00;
-  const d_progresoObjetivo  = canView ? progresoObjetivo : 41;
-  const d_mensualSrv        = canView ? mensualSrv : [{ mes: "Ene", total_ingresos: 200 }, { mes: "Feb", total_ingresos: 345 }];
-  const d_empresas          = canView ? empresas : [{ empresa_transporte: "Correos", pct: 60, total: 200, color: COLORS[0] }, { empresa_transporte: "SEUR", pct: 40, total: 145, color: COLORS[1] }];
-  const d_topClientes       = canView ? topClientes : [{ nombre_cliente: "Cliente Oculto A", total_entregas: 15, total_ingresos: 75.00 }, { nombre_cliente: "Cliente Oculto B", total_entregas: 10, total_ingresos: 50.00 }];
-  const d_weekdayAgg        = canView ? weekdayAgg : [{ dia: "Lun", ingresos: 50 }, { dia: "Mar", ingresos: 80 }, { dia: "Mié", ingresos: 40 }];
-  // ==========================================
+  const d_ingresosMesActual = canView ? ingresosMesActual : 675.50;
+  const d_deltaMoM          = canView ? deltaMoM : 24.5;
+  const d_ingresos30d       = canView ? ingresos30d : 675.50;
+  const d_entregas30d       = canView ? entregas30d : 1512;
+  const d_ticketMedioTotal  = canView ? ticketMedioTotal : 0.44;
+  const d_ticketMedio30d    = canView ? ticketMedio30d : 0.45;
+  const d_facturacionYTD    = canView ? facturacionYTD : 4150.00;
+  const d_objetivoAnual     = canView ? objetivoAnual : 8000.00;
+  const d_progresoObjetivo  = canView ? progresoObjetivo : 51;
+  const d_mensualSrv        = canView ? mensualSrv : [
+    { mes: "Ene", total_ingresos: 310 },
+    { mes: "Feb", total_ingresos: 420 },
+    { mes: "Mar", total_ingresos: 540 },
+    { mes: "Abr", total_ingresos: 675 }
+  ];
+  const d_empresas          = canView ? empresas : [
+    { empresa_transporte: "Celeritas", pct: 35, total: 236.42, color: COLORS[0] },
+    { empresa_transporte: "Amazon Logistics", pct: 20, total: 135.10, color: COLORS[1] },
+    { empresa_transporte: "InPost", pct: 15, total: 101.32, color: COLORS[2] },
+    { empresa_transporte: "SEUR", pct: 10, total: 67.55, color: COLORS[3] },
+    { empresa_transporte: "Correos Express", pct: 5, total: 33.77, color: COLORS[4] },
+    { empresa_transporte: "GLS", pct: 5, total: 33.77, color: COLORS[5] },
+    { empresa_transporte: "MRW", pct: 4, total: 27.02, color: COLORS[6] },
+    { empresa_transporte: "Nacex", pct: 3, total: 20.26, color: COLORS[7] },
+    { empresa_transporte: "UPS", pct: 2, total: 13.51, color: COLORS[8] },
+    { empresa_transporte: "CTT Express", pct: 1, total: 6.75, color: COLORS[9] }
+  ];
+  const d_topClientes       = canView ? topClientes : [
+    { nombre_cliente: "María García", total_entregas: 82, total_ingresos: 36.90 },
+    { nombre_cliente: "David Smith", total_entregas: 65, total_ingresos: 29.25 },
+    { nombre_cliente: "Laura Martínez", total_entregas: 58, total_ingresos: 26.10 },
+    { nombre_cliente: "John Doe", total_entregas: 50, total_ingresos: 22.50 },
+    { nombre_cliente: "Carlos Ruiz", total_entregas: 42, total_ingresos: 18.90 },
+    { nombre_cliente: "Anna Müller", total_entregas: 38, total_ingresos: 17.10 },
+    { nombre_cliente: "Elena Gómez", total_entregas: 31, total_ingresos: 13.95 },
+    { nombre_cliente: "Sophie Martin", total_entregas: 28, total_ingresos: 12.60 },
+    { nombre_cliente: "Pedro Sánchez", total_entregas: 22, total_ingresos: 9.90 },
+    { nombre_cliente: "Lucas Fernández", total_entregas: 19, total_ingresos: 8.55 }
+  ];
+  const d_weekdayAgg        = canView ? weekdayAgg : [
+    { dia: "Lun", ingresos: 120 }, { dia: "Mar", ingresos: 95 }, { dia: "Mié", ingresos: 110 },
+    { dia: "Jue", ingresos: 105 }, { dia: "Vie", ingresos: 145 }, { dia: "Sáb", ingresos: 70 },
+    { dia: "Dom", ingresos: 30 }
+  ];
 
   const saveGoal = async () => {
     try {
@@ -251,33 +277,42 @@ export default function AreaPersonal() {
           </div>
         </div>
 
+        {!canView && !loading && !error && (
+          <div className="bg-gradient-to-r from-zinc-900 via-zinc-900 to-zinc-950 rounded-3xl p-8 shadow-2xl border border-brand-500/30 text-white relative overflow-hidden animate-in fade-in slide-in-from-bottom-4">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-500/10 blur-[80px] rounded-full pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row gap-8 items-center justify-between">
+              <div className="max-w-2xl">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/20 border border-brand-500/30 text-brand-300 text-xs font-black uppercase tracking-widest mb-4">
+                  <IconSparkles /> Modo Demo Activo
+                </div>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight mb-3">Descubre el poder de tus datos</h2>
+                <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed mb-4">
+                  Estás viendo una simulación basada en un local promedio que registra <strong className="text-white">1.500 paquetes mensuales</strong>. 
+                  Con el plan PRO, estos gráficos se llenarán con la realidad de tu negocio en tiempo real.
+                  <br/><br/>
+                  <span className="text-brand-400 font-bold">💡 Consejo estratégico:</span> Nuestros clientes usan esta exactitud analítica para auditar qué agencias son rentables y exigir aumentos. Varios locales han pasado de cobrar 0,30€ a <strong>0,70€ por paquete</strong> demostrando su volumen real a empresas como Celeritas.
+                </p>
+              </div>
+              <div className="w-full md:w-auto shrink-0 flex flex-col gap-3">
+                <button 
+                  onClick={() => navigate(tenantSlug ? `/${tenantSlug}/dashboard/facturacion` : '/dashboard/facturacion')}
+                  className="w-full px-8 py-4 bg-brand-500 hover:bg-brand-400 text-white font-black rounded-2xl shadow-xl shadow-brand-500/20 active:scale-95 transition-all text-center"
+                >
+                  Desbloquear mi Analítica
+                </button>
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold text-center">Incluido en Plan PRO</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-zinc-200 border-t-brand-500 rounded-full animate-spin" /></div>
         ) : error ? (
           <div className="p-6 bg-red-50 text-red-700 border border-red-200 rounded-2xl font-bold">{error}</div>
         ) : (
           <div className="relative">
-            {!canView && (
-              <div className="absolute inset-0 z-50 flex items-start justify-center pt-32 bg-white/30 backdrop-blur-[8px] rounded-3xl border border-white/50">
-                <div className="bg-white p-10 rounded-[2rem] shadow-2xl border border-zinc-200/80 max-w-md text-center transform transition-all">
-                  <div className="w-20 h-20 bg-brand-50 rounded-full flex items-center justify-center text-brand-500 mx-auto mb-6">
-                    <IconLock />
-                  </div>
-                  <h2 className="text-3xl font-black text-zinc-950 tracking-tight mb-3">Toma el control</h2>
-                  <p className="text-zinc-500 font-bold mb-8">
-                    El Área Financiera está reservada para cuentas Plus y Pro. Descubre tu ticket medio, proyecciones anuales y rendimiento por transportista.
-                  </p>
-                  <button 
-                    onClick={() => navigate(tenantSlug ? `/${tenantSlug}/dashboard/facturacion` : '/dashboard/facturacion')} 
-                    className="w-full py-4 bg-zinc-950 hover:bg-zinc-800 text-white font-black rounded-xl shadow-xl shadow-zinc-950/20 active:scale-95 transition-all"
-                  >
-                    Mejorar a Plus
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className={!canView ? "opacity-60 pointer-events-none select-none blur-[4px] transition-all duration-500" : ""}>
+            <div>
               <AnimatePresence mode="wait">
                 {tab === "actual" ? (
                   <motion.div key="actual" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
@@ -461,7 +496,7 @@ export default function AreaPersonal() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-zinc-50">
-                            {d_topClientes.slice(0, 10).map((c, i) => (
+                            {d_topClientes.map((c, i) => (
                               <tr key={i} className="hover:bg-zinc-50/50 transition-colors">
                                 <td className="py-4 px-6 font-bold text-zinc-900 flex items-center gap-3">
                                   <span className="text-zinc-300 font-black text-sm w-4">{i + 1}.</span> {c.nombre_cliente}
@@ -486,12 +521,18 @@ export default function AreaPersonal() {
                           Filtrar Rango
                         </button>
                       </div>
-                      <button onClick={createSnapshotNow} className="w-full xl:w-auto px-6 py-3 bg-zinc-950 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
-                        <IconSave /> Generar Snapshot Ahora
-                      </button>
+                      {canView && (
+                        <button onClick={createSnapshotNow} className="w-full xl:w-auto px-6 py-3 bg-zinc-950 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
+                          <IconSave /> Generar Snapshot Ahora
+                        </button>
+                      )}
                     </div>
-
-                    {/* Si no pueden ver el histórico, mostramos bloqueos aquí también si hay datos */}
+                    
+                    {!canView && (
+                      <div className="p-8 text-center bg-zinc-50 rounded-3xl border border-zinc-200 border-dashed">
+                        <p className="text-zinc-500 font-bold">El histórico detallado (Snapshots) requiere el plan PRO.</p>
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
