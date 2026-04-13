@@ -193,18 +193,38 @@ const CameraScanner = ({ onCapture, onClose }) => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
+
+    // ESCALADO FORZADO PARA IPHONE: Garantizamos que la imagen NUNCA sea mayor a 800px
+    const MAX_DIMENSION = 800;
+    let width = video.videoWidth;
+    let height = video.videoHeight;
+
+    if (width > height) {
+      if (width > MAX_DIMENSION) {
+        height *= MAX_DIMENSION / width;
+        width = MAX_DIMENSION;
+      }
+    } else {
+      if (height > MAX_DIMENSION) {
+        width *= MAX_DIMENSION / height;
+        height = MAX_DIMENSION;
+      }
+    }
+
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext('2d');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
-    const data = canvas.toDataURL('image/jpeg', 0.4); 
+    ctx.drawImage(video, 0, 0, width, height);
+    
+    const data = canvas.toDataURL('image/jpeg', 0.5); 
     onCapture(data);
   };
 
   return (
     <div className="fixed inset-0 z-[200] bg-black flex flex-col">
       <div className="relative flex-1 flex items-center justify-center overflow-hidden">
-        <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover" />
+        {/* ATRIBUTO MUTED OBLIGATORIO EN IOS PARA EVITAR BLOQUEOS */}
+        <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
         <div className="relative w-64 h-64 border-2 border-brand-400 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
            <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-10 h-0.5 bg-brand-400/50" />
@@ -248,7 +268,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const [multiSaving, setMultiSaving] = useState(false);
 
   const [sugCliente, setSugCliente] = useState(null); 
-  const [matchInfo, setMatchInfo] = useState(null);   
+  const [matchInfo, setMatchInfo] = useState(null);  
 
   const [rawUbicaciones, setRawUbicaciones] = useState([]);
   const [metaUbi, setMetaUbi] = useState({ cols: 5, order: 'horizontal' });
