@@ -7,6 +7,7 @@ export default function useNavbarAuth(navigate) {
   const [userEmail, setUserEmail] = useState('');
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [displayName, setDisplayName] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const nameFromEmail = (email) => {
     if (!email) return 'Usuario';
@@ -19,6 +20,7 @@ export default function useNavbarAuth(navigate) {
     localStorage.clear();
     sessionStorage.clear();
     setIsLoggedIn(false);
+    setIsAdmin(false);
     navigate('/', { replace: true });
     window.location.reload();
   };
@@ -36,14 +38,26 @@ export default function useNavbarAuth(navigate) {
       setAvatarUrl(user?.user_metadata?.avatar_url || null);
       setDisplayName(user?.user_metadata?.full_name || user?.user_metadata?.name || nameFromEmail(email));
       
+      if (user) {
+        try {
+          const { data } = await supabase.rpc('is_superadmin');
+          setIsAdmin(!!data);
+        } catch {
+          setIsAdmin(false);
+        }
+      } else {
+        setIsAdmin(false);
+      }
+
       setChecking(false);
 
-      const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
+      const { data: subscription } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_OUT') {
           setIsLoggedIn(false);
           setUserEmail('');
           setAvatarUrl(null);
           setDisplayName('Usuario');
+          setIsAdmin(false);
           navigate('/', { replace: true });
           return;
         }
@@ -54,6 +68,17 @@ export default function useNavbarAuth(navigate) {
         setUserEmail(e);
         setAvatarUrl(u?.user_metadata?.avatar_url || null);
         setDisplayName(u?.user_metadata?.full_name || u?.user_metadata?.name || nameFromEmail(e));
+
+        if (u) {
+          try {
+            const { data } = await supabase.rpc('is_superadmin');
+            setIsAdmin(!!data);
+          } catch {
+            setIsAdmin(false);
+          }
+        } else {
+          setIsAdmin(false);
+        }
       });
       
       unsub = subscription?.subscription?.unsubscribe;
@@ -63,5 +88,5 @@ export default function useNavbarAuth(navigate) {
     return () => { if (unsub) unsub(); };
   }, [navigate]);
 
-  return { checking, isLoggedIn, userEmail, avatarUrl, displayName, handleLogout };
+  return { checking, isLoggedIn, userEmail, avatarUrl, displayName, isAdmin, handleLogout };
 }

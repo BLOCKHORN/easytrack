@@ -2,10 +2,6 @@
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-if (!process.env.GEMINI_API_KEY) {
-  console.error('[IA Scanner] CRITICO: GEMINI_API_KEY no configurada.');
-}
-
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 exports.escanearEtiqueta = async (req, res) => {
@@ -33,26 +29,49 @@ exports.escanearEtiqueta = async (req, res) => {
       }
     `;
 
-    // Vamos directos al 2.5 Flash que tienes habilitado y con cuota
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash",
-      generationConfig: { responseMimeType: "application/json" }
-    });
+    const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+    let result;
+    let lastError;
 
-    const result = await model.generateContent([promptText, imagePart]);
+    for (const modelName of models) {
+      try {
+        const model = genAI.getGenerativeModel({ 
+          model: modelName,
+          generationConfig: { responseMimeType: "application/json" }
+        });
+        result = await model.generateContent([promptText, imagePart]);
+        break; 
+      } catch (error) {
+        lastError = error;
+        if (error.status !== 503) {
+          throw error;
+        }
+      }
+    }
+
+    if (!result) {
+      throw lastError;
+    }
+
     const response = await result.response;
     const textOutput = response.text();
     
-    return res.json(JSON.parse(textOutput));
+    const cleanedText = textOutput.replace(/```json\s*|```/g, '').trim();
+    const parsedJson = JSON.parse(cleanedText);
+    
+    return res.json(parsedJson);
 
   } catch (error) {
-    console.error("[IA Scanner] Error critico:", error);
+    console.error("[IA Scanner] Error:", error);
     
+    if (error.status === 503) {
+      return res.status(503).json({ error: 'Servidores de IA saturados. Inténtalo de nuevo en unos segundos.' });
+    }
     if (error.message && error.message.includes('API key not valid')) {
       return res.status(500).json({ error: 'Clave de API de Gemini no valida.' });
     }
-    if (error.message && (error.message.includes('quota') || error.message.includes('429'))) {
-       return res.status(429).json({ error: 'Limite de peticiones a la IA alcanzado.' });
+    if (error.status === 429 || (error.message && error.message.includes('quota'))) {
+       return res.status(429).json({ error: 'Limite de peticiones a la IA alcanzado. Revisa tu facturacion.' });
     }
 
     return res.status(500).json({ error: 'Error interno analizando la etiqueta.' });

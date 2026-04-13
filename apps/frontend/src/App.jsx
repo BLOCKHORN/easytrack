@@ -33,7 +33,14 @@ import CookiesPage from './components/Legal/Cookies';
 import Navbar from './components/Landing/Navbar';
 import Footer from './components/Landing/Footer';
 
+// --- RUTAS Y GUARDIANES ---
 import ProtectedRoute from './components/Routing/ProtectedRoute';
+import AdminRoute from './components/Routing/AdminRoute';
+
+// --- MODO ADMIN (DIOS) ---
+import AdminLayout from './components/Admin/AdminLayout';
+import AdminDashboard from './components/Admin/AdminDashboard';
+
 import { useModal } from './context/ModalContext';
 import { useTenant } from './context/TenantContext';
 
@@ -166,6 +173,14 @@ export default function App() {
           <Route path="/registro" element={<Registro />} />
           <Route path="/auth/email-confirmado" element={<EmailConfirmado />} />
           <Route path="/login" element={<LoginRoute />} />
+        </Route>
+
+        {/* ZONA DE ADMINISTRACIÓN (MODO DIOS) */}
+        <Route path="/admin" element={<AdminRoute />}>
+          <Route element={<AdminLayout />}>
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="negocios" element={<AdminDashboard />} />
+          </Route>
         </Route>
 
         {/* STRIPE / BILLING GATES */}
