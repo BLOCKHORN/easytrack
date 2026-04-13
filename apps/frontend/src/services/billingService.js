@@ -1,4 +1,3 @@
-// src/services/billingService.js
 import { supabase } from '../utils/supabaseClient';
 
 const API_BASE =
@@ -68,17 +67,12 @@ export async function startCheckout(payload) {
   if (typeof r === 'string') return r;
   if (r?.url && typeof r.url === 'string') return r.url;
   if (r?.data?.url && typeof r.data.url === 'string') return r.data.url;
-  throw new Error('No se pudo iniciar el checkout (sin URL).');
+  throw new Error('No se pudo iniciar el checkout seguro.');
 }
 
 export async function openBillingPortal() {
   const r = await authFetch('/billing/portal', { method: 'POST' });
   return r?.url || null;
-}
-
-export async function getSubscription() {
-  const r = await authFetch('/billing/subscription');
-  return r?.subscription || null;
 }
 
 export async function verifyCheckout(sessionId) {
@@ -94,37 +88,4 @@ export async function verifyCheckout(sessionId) {
     throw err;
   }
   return body?.data || body;
-}
-
-export async function getPeriodOptions() {
-  try {
-    const r = await authFetch('/billing/period-options');
-    if (Array.isArray(r)) return r;
-    if (Array.isArray(r?.options)) return r.options;
-    return null;
-  } catch (e) {
-    if (e?.status === 404) return null;
-    throw e;
-  }
-}
-
-export async function choosePeriod(period) {
-  const r = await authFetch('/billing/choose-period', {
-    method: 'POST',
-    body: JSON.stringify({ period }),
-  });
-  if (typeof r === 'string') return r;
-  if (r?.url && typeof r.url === 'string') return r.url;
-  if (r?.data?.url && typeof r.data.url === 'string') return r.data.url;
-  throw new Error('No se pudo iniciar el cambio de periodo (sin URL).');
-}
-
-export async function cancelRenewal() {
-  const r = await authFetch('/billing/cancel-renewal', { method: 'POST' });
-  return r?.ok !== false;
-}
-
-export async function resumeRenewal() {
-  const r = await authFetch('/billing/resume', { method: 'POST' });
-  return r?.ok !== false;
 }
