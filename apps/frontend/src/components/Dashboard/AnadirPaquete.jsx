@@ -163,7 +163,7 @@ const CameraScanner = ({ onCapture, onClose }) => {
     async function startCamera() {
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: 'environment', width: { ideal: 1280 } } 
+          video: { facingMode: 'environment', width: { ideal: 720 } } 
         });
         if (videoRef.current) {
           videoRef.current.srcObject = localStream;
@@ -197,7 +197,7 @@ const CameraScanner = ({ onCapture, onClose }) => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
-    const data = canvas.toDataURL('image/jpeg', 0.6); 
+    const data = canvas.toDataURL('image/jpeg', 0.4); 
     onCapture(data);
   };
 
