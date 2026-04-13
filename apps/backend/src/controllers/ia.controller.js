@@ -4,6 +4,9 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+// Función auxiliar para pausar la ejecución (reintentos)
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 exports.escanearEtiqueta = async (req, res) => {
   try {
     const { imageBase64 } = req.body;
@@ -29,26 +32,46 @@ exports.escanearEtiqueta = async (req, res) => {
       }
     `;
 
-    const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+    // Strings oficiales exactos basados en tu panel de Google AI Studio
+    const models = ["gemini-2.5-flash", "gemini-2-flash"];
     let result;
     let lastError;
 
+    // Bucle de modelos
     for (const modelName of models) {
-      try {
-        const model = genAI.getGenerativeModel({ 
-          model: modelName,
-          generationConfig: { responseMimeType: "application/json" }
-        });
-        result = await model.generateContent([promptText, imagePart]);
-        break; 
-      } catch (error) {
-        lastError = error;
-        if (error.status !== 503) {
-          throw error;
+      let retries = 2; // Le damos 2 oportunidades a cada modelo si el servidor de Google está saturado
+      
+      while (retries > 0) {
+        try {
+          const model = genAI.getGenerativeModel({ 
+            model: modelName,
+            generationConfig: { responseMimeType: "application/json" }
+          });
+          
+          result = await model.generateContent([promptText, imagePart]);
+          break; // Éxito: rompemos el bucle 'while'
+          
+        } catch (error) {
+          lastError = error;
+          
+          if (error.status === 503) {
+            // Si es un 503 (Saturación), restamos un intento, esperamos 1.5s y volvemos a lanzar
+            console.warn(`[IA Scanner] ${modelName} saturado (503). Reintentando...`);
+            retries--;
+            if (retries > 0) await sleep(1500);
+          } else {
+            // Si es un 404 u otro error grave, rompemos el bucle 'while' para pasar al SIGUIENTE modelo del array
+            console.warn(`[IA Scanner] El modelo ${modelName} falló con error ${error.status}. Probando alternativa...`);
+            break;
+          }
         }
       }
+      
+      // Si ya obtuvimos resultado, rompemos el bucle de modelos (no necesitamos probar el fallback)
+      if (result) break;
     }
 
+    // Si después de probar todos los modelos y reintentos seguimos sin resultado, lanzamos el error
     if (!result) {
       throw lastError;
     }
@@ -62,18 +85,18 @@ exports.escanearEtiqueta = async (req, res) => {
     return res.json(parsedJson);
 
   } catch (error) {
-    console.error("[IA Scanner] Error:", error);
+    console.error("[IA Scanner] Error crítico final:", error);
     
-    if (error.status === 503) {
-      return res.status(503).json({ error: 'Servidores de IA saturados. Inténtalo de nuevo en unos segundos.' });
+    if (error?.status === 503) {
+      return res.status(503).json({ error: 'Nuestros servidores de IA están procesando demasiadas peticiones. Por favor, reintenta en 3 segundos.' });
     }
-    if (error.message && error.message.includes('API key not valid')) {
-      return res.status(500).json({ error: 'Clave de API de Gemini no valida.' });
+    if (error?.message && error.message.includes('API key not valid')) {
+      return res.status(500).json({ error: 'Clave de API de Gemini no válida o caducada.' });
     }
-    if (error.status === 429 || (error.message && error.message.includes('quota'))) {
-       return res.status(429).json({ error: 'Limite de peticiones a la IA alcanzado. Revisa tu facturacion.' });
+    if (error?.status === 429 || (error?.message && error.message.includes('quota'))) {
+       return res.status(429).json({ error: 'Límite de peticiones a la IA alcanzado. Revisa tu panel de facturación de Google.' });
     }
 
-    return res.status(500).json({ error: 'Error interno analizando la etiqueta.' });
+    return res.status(500).json({ error: 'Error interno de red analizando la etiqueta. Reintenta.' });
   }
 };
