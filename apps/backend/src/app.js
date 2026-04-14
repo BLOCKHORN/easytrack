@@ -112,8 +112,7 @@ authOnly('/:tenantSlug/api/support', supportRoutes);
 app.use('/api/tickets', ticketsRoutes);
 authOnly('/api/ubicaciones', ubicacionesRoutes);
 authOnly('/:tenantSlug/api/ubicaciones', ubicacionesRoutes);
-authOnly('/api/estantes', ubicacionesRoutes);
-authOnly('/:tenantSlug/api/estantes', ubicacionesRoutes);
+
 authOnly('/api/ia', iaRoutes);
 authOnly('/:tenantSlug/api/ia', iaRoutes);
 

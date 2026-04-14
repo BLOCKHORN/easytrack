@@ -15,12 +15,6 @@ if (!obtenerEstructura || !upsertUbicaciones || !patchMeta || !guardarCarriers) 
   throw new Error('[ubicaciones.routes] Controlador inválido: faltan exportaciones requeridas.');
 }
 
-router.use((req, _res, next) => {
-  const hasAuth = !!(req.headers.authorization || '').startsWith('Bearer ');
-  console.log(`[ubicaciones.routes] ${req.method} ${req.originalUrl} hasAuth=${hasAuth}`);
-  next();
-});
-
 router.get('/', obtenerEstructura);
 router.get('/estructura', obtenerEstructura);
 

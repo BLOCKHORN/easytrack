@@ -22,6 +22,18 @@ const RESULTADOS_POR_PAGINA = 10;
 const LS_KEY = "buscar_paquete_filtros_v12";
 const QUEUE_KEY = "easytrack_sync_queue";
 
+const formatearFechaLocal = (isoString) => {
+  if (!isoString) return "—";
+  return new Intl.DateTimeFormat("es-ES", {
+    timeZone: "Europe/Madrid",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(isoString)).replace(',', ' -');
+};
+
 function highlightExact(text, query) {
   if (!query || !text) return text;
   const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
@@ -247,7 +259,6 @@ export default function BuscarPaquete() {
     return paquetes.filter(p => set.has(p.id) && !p.entregado).map(p => p.id);
   }, [selectedIds, paquetes]);
 
-  // LOGICA OPTIMIZADA DE ENTREGA
   const marcarEntregado = (id) => {
     if (estadoFiltro === "pendiente") {
       setPaquetes(prev => prev.filter(p => p.id !== id));
@@ -446,23 +457,23 @@ export default function BuscarPaquete() {
                 <div key={p.id} className={`p-5 flex flex-col gap-4 transition-colors ${checked ? 'bg-brand-50/50' : 'bg-white hover:bg-zinc-50'}`}>
                   
                   <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4 overflow-hidden pt-1">
+                    <div className="flex items-start gap-4 overflow-hidden pt-1 w-full">
                       <button onClick={() => toggleSelectOne(p.id)} className={`shrink-0 w-7 h-7 rounded-md flex items-center justify-center border-2 transition-colors ${checked ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-zinc-300'}`}>
                         {checked && <IconCheck />}
                       </button>
-                      <div className={`font-black text-2xl text-zinc-950 truncate transition-all ${revealed ? '' : 'blur-[6px] select-none'}`}>
+                      <div className={`font-black text-lg text-zinc-950 break-words transition-all w-full ${revealed ? '' : 'blur-[6px] select-none'}`}>
                         {busqueda ? highlightExact(p.nombre_cliente, busqueda) : p.nombre_cliente}
                       </div>
                     </div>
                     
-                    <div className="shrink-0 flex items-center justify-center min-w-[4rem] px-4 py-2.5 bg-brand-100 border-2 border-brand-500 text-brand-950 text-3xl font-black rounded-2xl shadow-sm">
+                    <div className="shrink-0 flex items-center justify-center min-w-[3.5rem] px-3 py-2 bg-brand-100 border-2 border-brand-500 text-brand-950 text-xl font-black rounded-xl shadow-sm">
                       {p.ubicacion_label || "—"}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 text-sm font-bold text-zinc-600 pl-11">
                     <span className="bg-zinc-100 px-3 py-1.5 rounded-lg">{p.compania || "—"}</span>
-                    <span>{new Date(p.fecha_llegada).toLocaleDateString()}</span>
+                    <span>{formatearFechaLocal(p.fecha_llegada)}</span>
                     <span className={`px-3 py-1.5 rounded-full border ${p.entregado ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                       {p.entregado ? "Entregado" : "Pendiente"}
                     </span>
@@ -480,7 +491,7 @@ export default function BuscarPaquete() {
                     </button>
                     
                     {!p.entregado && (
-                      <button onClick={() => marcarEntregado(p.id)} className="ml-2 px-6 py-3 bg-brand-500 hover:bg-brand-400 text-white text-lg font-black rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-brand-500/20 active:scale-95">
+                      <button onClick={() => marcarEntregado(p.id)} className="ml-2 px-6 py-3 bg-brand-500 hover:bg-brand-400 text-white text-base font-black rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-brand-500/20 active:scale-95">
                         <IconCheck /> Entregar
                       </button>
                     )}
@@ -503,7 +514,7 @@ export default function BuscarPaquete() {
                 <th className="py-5 px-6">Cliente</th>
                 <th className="py-5 px-6">Compañia</th>
                 <th className="py-5 px-6 text-center">Ubicacion</th>
-                <th className="py-5 px-6">Fecha</th>
+                <th className="py-5 px-6">Fecha / Hora</th>
                 <th className="py-5 px-6">Estado</th>
                 <th className="py-5 px-6 text-right">Acciones</th>
               </tr>
@@ -528,20 +539,20 @@ export default function BuscarPaquete() {
                         </button>
                       </td>
                       <td className="py-5 px-6">
-                        <div className={`font-black text-xl text-zinc-950 transition-all ${revealed ? '' : 'blur-[5px] select-none'}`}>
+                        <div className={`font-black text-base text-zinc-950 transition-all ${revealed ? '' : 'blur-[5px] select-none'}`}>
                           {busqueda ? highlightExact(p.nombre_cliente, busqueda) : p.nombre_cliente}
                         </div>
                       </td>
-                      <td className="py-5 px-6 font-black text-zinc-700 text-lg">
+                      <td className="py-5 px-6 font-black text-zinc-700 text-base">
                         {p.compania || "—"}
                       </td>
                       <td className="py-5 px-6 text-center">
-                        <span className="inline-flex items-center justify-center min-w-[4.5rem] px-5 py-2.5 bg-brand-100 border-2 border-brand-500 text-brand-950 text-3xl font-black rounded-2xl shadow-sm">
+                        <span className="inline-flex items-center justify-center min-w-[4rem] px-4 py-2 bg-brand-100 border-2 border-brand-500 text-brand-950 text-xl font-black rounded-xl shadow-sm">
                           {p.ubicacion_label || "—"}
                         </span>
                       </td>
-                      <td className="py-5 px-6 text-base font-bold text-zinc-600">
-                        {new Date(p.fecha_llegada).toLocaleDateString()}
+                      <td className="py-5 px-6 text-sm font-bold text-zinc-600">
+                        {formatearFechaLocal(p.fecha_llegada)}
                       </td>
                       <td className="py-5 px-6">
                         <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-black border ${p.entregado ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
@@ -551,18 +562,18 @@ export default function BuscarPaquete() {
                       
                       <td className="py-5 px-6 text-right">
                         <div className="flex items-center justify-end gap-3">
-                          <button onClick={() => {setRevealAll(false); setRevealedSet(prev => {const n=new Set(prev); n.has(p.id)?n.delete(p.id):n.add(p.id); return n;})}} className="w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-colors" title="Mostrar/Ocultar nombre">
+                          <button onClick={() => {setRevealAll(false); setRevealedSet(prev => {const n=new Set(prev); n.has(p.id)?n.delete(p.id):n.add(p.id); return n;})}} className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-colors" title="Mostrar/Ocultar nombre">
                             {revealed ? <IconEyeSlash /> : <IconEye />}
                           </button>
-                          <button onClick={() => {setPaqueteEditando(p); setMostrarModal(true);}} className="w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors" title="Editar paquete">
+                          <button onClick={() => {setPaqueteEditando(p); setMostrarModal(true);}} className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors" title="Editar paquete">
                             <IconEdit />
                           </button>
-                          <button onClick={() => setConfirmState({ open: true, payload: p })} className="w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors" title="Eliminar paquete">
+                          <button onClick={() => setConfirmState({ open: true, payload: p })} className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors" title="Eliminar paquete">
                             <IconTrash />
                           </button>
                           
                           {!p.entregado && (
-                            <button onClick={() => marcarEntregado(p.id)} className="ml-3 px-6 py-3 bg-brand-500 hover:bg-brand-400 text-white text-base font-black rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-brand-500/20 active:scale-95">
+                            <button onClick={() => marcarEntregado(p.id)} className="ml-3 px-5 py-2.5 bg-brand-500 hover:bg-brand-400 text-white text-sm font-black rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-brand-500/20 active:scale-95">
                               <IconCheck /> Entregar
                             </button>
                           )}
@@ -578,19 +589,19 @@ export default function BuscarPaquete() {
 
         {totalPaginas > 1 && (
           <div className="flex items-center justify-between px-8 py-5 border-t border-zinc-200 bg-zinc-50">
-            <span className="text-base font-bold text-zinc-600">Pagina <strong className="text-zinc-950 font-black">{paginaActual}</strong> de {totalPaginas}</span>
+            <span className="text-sm font-bold text-zinc-600">Pagina <strong className="text-zinc-950 font-black">{paginaActual}</strong> de {totalPaginas}</span>
             <div className="flex gap-3">
               <button 
                 onClick={() => setPaginaActual(p => Math.max(1, p - 1))} 
                 disabled={paginaActual === 1 || cargando} 
-                className="px-6 py-3 rounded-xl border border-zinc-200 bg-white text-base font-black text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                className="px-5 py-2.5 rounded-xl border border-zinc-200 bg-white text-sm font-black text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
                 Anterior
               </button>
               <button 
                 onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))} 
                 disabled={paginaActual === totalPaginas || cargando} 
-                className="px-6 py-3 rounded-xl border border-zinc-200 bg-white text-base font-black text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                className="px-5 py-2.5 rounded-xl border border-zinc-200 bg-white text-sm font-black text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
                 Siguiente
               </button>
@@ -602,13 +613,13 @@ export default function BuscarPaquete() {
       <AnimatePresence>
         {anySelected && (
           <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-950 text-white px-6 py-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center gap-4 sm:gap-6 z-50 border border-zinc-800">
-            <div className="text-base font-black whitespace-nowrap">
-              <span className="text-brand-400 text-xl mr-2">{selectedIds.size}</span> seleccionados
+            <div className="text-sm font-black whitespace-nowrap">
+              <span className="text-brand-400 text-lg mr-2">{selectedIds.size}</span> seleccionados
             </div>
             <div className="flex items-center gap-3">
-              <button onClick={clearSelection} className="px-4 py-2.5 rounded-xl text-base font-bold text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">Cancelar</button>
-              <button onClick={() => setConfirmBulk(true)} className="px-4 py-2.5 rounded-xl text-base font-black text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-2"><IconTrash /> Eliminar</button>
-              <button onClick={entregarSeleccionados} disabled={selectedPendingCount === 0} className="px-6 py-3 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-lg font-black transition-colors flex items-center gap-2 shadow-lg shadow-brand-500/20">
+              <button onClick={clearSelection} className="px-4 py-2.5 rounded-xl text-sm font-bold text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">Cancelar</button>
+              <button onClick={() => setConfirmBulk(true)} className="px-4 py-2.5 rounded-xl text-sm font-black text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-2"><IconTrash /> Eliminar</button>
+              <button onClick={entregarSeleccionados} disabled={selectedPendingCount === 0} className="px-5 py-2.5 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-base font-black transition-colors flex items-center gap-2 shadow-lg shadow-brand-500/20">
                 <IconCheck /> Entregar {selectedPendingCount > 0 ? `(${selectedPendingCount})` : ''}
               </button>
             </div>

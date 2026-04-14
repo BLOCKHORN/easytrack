@@ -1,33 +1,70 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, Brush
+  Tooltip, ResponsiveContainer
 } from "recharts";
 import AnadirPaquete from "./AnadirPaquete";
 import { supabase } from "../../utils/supabaseClient";
 import PlanBadge from '../../components/Billing/PlanBadge';
 
-const IconPkgIn = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>;
-const IconPkgOut = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>;
-const IconStorage = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>;
-const IconAlert = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
 const IconPlus = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
 const IconClose = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
-const IconChart = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>;
-const IconSparkles = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>;
+const IconBoxIn = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/><path d="M12 8v4"/><path d="M8 4l8 4"/></svg>;
+const IconBoxOut = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/><polyline points="16 12 12 8 8 12"/></svg>;
+const IconStorage = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>;
+const IconAlert = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
+const IconPhone = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
+const IconCalendar = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+const IconGrid = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>;
+
+const formatEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(n || 0);
+
+const calcularDias = (fecha) => {
+  if (!fecha) return 0;
+  return Math.floor((new Date() - new Date(fecha)) / 86400000);
+};
 
 const ymd = (d) => { if (!d || isNaN(d)) return null; return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
-const startOfWeekMon = (d) => { const nd = new Date(d); nd.setDate(nd.getDate() - ((nd.getDay() + 6) % 7)); nd.setHours(0,0,0,0); return nd; };
 const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
 
-const mesesCorto = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-const diasCorto = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    const dateObj = new Date(label);
+    const dateStr = !isNaN(dateObj) ? dateObj.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }) : label;
+    
+    return (
+      <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-xl shadow-xl">
+        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">{dateStr}</p>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-3">
+            <span className="w-2 h-2 rounded-full bg-brand-500" />
+            <span className="text-xs font-bold text-zinc-300">Entradas: <span className="text-white font-mono">{payload[0].value}</span></span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-xs font-bold text-zinc-300">Salidas: <span className="text-white font-mono">{payload[1]?.value || 0}</span></span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
-export default function Dashboard({ paquetes, actualizarPaquetes }) {
+export default function Dashboard(props) {
   const location = useLocation();
   const navigate = useNavigate();
+  
+  const contextData = useOutletContext() || {};
+  const paquetes = contextData.paquetes || props.paquetes || [];
+  const actualizarPaquetes = contextData.actualizarPaquetes || props.actualizarPaquetes;
+
+  // FIX: Creamos un "hash" simple de los paquetes para estabilizar la dependencia del useEffect
+  const paquetesHash = useMemo(() => {
+    return paquetes.map(p => `${p.id}-${p.entregado}`).join('|');
+  }, [paquetes]);
 
   const apiBase = useMemo(() => {
     const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
@@ -42,29 +79,23 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
 
   const [mostrarModal, setMostrarModal] = useState(false);
   const [negocio, setNegocio] = useState(null);
-  const [entitlements, setEntitlements] = useState(null); // <-- Nuevo estado para controlar el plan
+  const [entitlements, setEntitlements] = useState(null);
   const [slug, setSlug] = useState(null);
   const [cargandoNegocio, setCargandoNegocio] = useState(true);
-  const [cargandoResumen, setCargandoResumen] = useState(true);
   const [configPendiente, setConfigPendiente] = useState(false);
 
-  const [rawDiario, setRawDiario] = useState([]);
-  const [resumen, setResumen] = useState({
+  const [diasHuerfano, setDiasHuerfano] = useState(7);
+
+  const [resumen, setResumen] = useState({ 
     recibidosHoy: 0, 
     entregadosHoy: 0, 
-    almacenActual: 0, 
-    estantesLlenos: 0,
-    mediaDiaria: 0,
-    mediaEntregados: 0,
-    recordRecibidos: 0, 
-    recordEntregados: 0
+    almacenActual: 0,
+    huecosOcupados: 0,
+    ocupacion: [],
+    huerfanosMaestros: [],
+    diario: []
   });
 
-  const vistas = ["anual", "mensual", "semanal", "diaria", "historial"];
-  const [vista, setVista] = useState("anual");
-  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
-
-  // Ruta inteligente que respeta si hay slug de tienda o no
   const go = (path) => { 
     if (slug) navigate(`/${slug}${path.startsWith("/") ? path : `/${path}`}`); 
     else navigate(path.startsWith("/") ? path : `/${path}`);
@@ -82,9 +113,9 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
       setCargandoNegocio(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error("Sin sesion.");
+        if (!session) throw new Error("AUTH_REQUIRED");
         const res = await fetch(`${apiBase}/negocio`, { headers: { Authorization: `Bearer ${session.access_token}` } });
-        if (!res.ok) throw new Error("Error negocio");
+        if (!res.ok) throw new Error("API_ERROR");
         const data = await res.json();
         if (cancel) return;
 
@@ -110,10 +141,10 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
     return () => { cancel = true; };
   }, [apiBase, apiRoot]);
 
+  // Actualización de Métricas usando el HASH estabilizado
   useEffect(() => {
     let cancel = false;
     (async () => {
-      setCargandoResumen(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
@@ -122,163 +153,43 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
           const d = await res.json(); 
           if (!cancel) {
             setResumen({
-              recibidosHoy: d.resumen?.hoy_recibidos ?? d.recibidosHoy ?? 0,
-              entregadosHoy: d.resumen?.hoy_entregados ?? d.entregadosHoy ?? 0,
-              almacenActual: d.resumen?.pendientes ?? d.almacenActual ?? 0,
-              estantesLlenos: d.estantesLlenos ?? 0,
-              mediaDiaria: d.mediaDiaria ?? 0,
-              mediaEntregados: d.mediaEntregados ?? 0,
-              recordRecibidos: d.recordRecibidos ?? 0,
-              recordEntregados: d.recordEntregados ?? 0
+              recibidosHoy: d.resumen?.hoy_recibidos ?? 0,
+              entregadosHoy: d.resumen?.hoy_entregados ?? 0,
+              almacenActual: d.resumen?.pendientes ?? 0,
+              huecosOcupados: d.huecosOcupados ?? 0,
+              ocupacion: d.ocupacion || [],
+              huerfanosMaestros: d.huerfanos || [],
+              diario: d.diario || []
             });
-            setRawDiario(d.diario || []);
           }
         }
-      } catch {} finally { if (!cancel) setCargandoResumen(false); }
+      } catch {} 
     })();
     return () => { cancel = true; };
-  }, [apiBase]);
+  }, [apiBase, paquetesHash]); // <-- FIX CRÍTICO: Usamos el Hash
 
-  const datosChart = useMemo(() => {
-    if (!rawDiario.length) return [];
-    
-    const bd = new Date(fecha + "T00:00:00");
-    const y = bd.getFullYear();
-    const m = bd.getMonth();
-    let cat = [];
+  const listaHuerfanos = useMemo(() => {
+    return resumen.huerfanosMaestros
+      .filter(p => calcularDias(p.fecha_llegada) >= diasHuerfano);
+  }, [resumen.huerfanosMaestros, diasHuerfano]);
 
-    if (vista === "anual") {
-      cat = mesesCorto.map((mes, i) => ({
-        key: `${y}-${String(i+1).padStart(2,"0")}`,
-        periodo: mes,
-        recibidos: 0, entregados: 0
-      }));
-      
-      rawDiario.forEach(d => {
-        if (d.fecha && d.fecha.startsWith(String(y))) {
-          const parts = d.fecha.split("T")[0].split("-");
-          if (parts.length >= 2) {
-            const mesIdx = parseInt(parts[1], 10) - 1;
-            if (cat[mesIdx]) {
-              cat[mesIdx].recibidos += d.recibidos || 0;
-              cat[mesIdx].entregados += d.entregados || 0;
-            }
-          }
-        }
-      });
-      return cat;
+  const chartData = useMemo(() => {
+    if (!resumen.diario || !resumen.diario.length) return [];
+    const bd = new Date();
+    const start = addDays(bd, -14);
+    const map = {};
+    for (let currentD = new Date(start); currentD <= bd; currentD = addDays(currentD, 1)) {
+      map[ymd(currentD)] = { periodo: ymd(currentD), in: 0, out: 0 };
     }
-
-    if (vista === "mensual") {
-      const daysInMonth = new Date(y, m + 1, 0).getDate();
-      const prefix = `${y}-${String(m+1).padStart(2,"0")}`;
-      
-      cat = Array.from({ length: daysInMonth }, (_, i) => ({
-        key: `${prefix}-${String(i+1).padStart(2,"0")}`,
-        periodo: String(i+1),
-        recibidos: 0, entregados: 0
-      }));
-
-      rawDiario.forEach(d => {
-        if (d.fecha && d.fecha.startsWith(prefix)) {
-          const parts = d.fecha.split("T")[0].split("-");
-          if (parts.length >= 3) {
-            const dayIdx = parseInt(parts[2], 10) - 1;
-            if (cat[dayIdx]) {
-              cat[dayIdx].recibidos += d.recibidos || 0;
-              cat[dayIdx].entregados += d.entregados || 0;
-            }
-          }
-        }
-      });
-      return cat;
-    }
-
-    if (vista === "semanal") {
-      const start = startOfWeekMon(bd);
-      const map = {};
-      
-      for (let i = 0; i < 7; i++) {
-        const currentD = addDays(start, i);
-        const k = ymd(currentD);
-        map[k] = { periodo: diasCorto[i], recibidos: 0, entregados: 0, _d: currentD };
+    resumen.diario.forEach(d => {
+      const dateKey = d.fecha ? d.fecha.split("T")[0] : null;
+      if (dateKey && map[dateKey]) {
+        map[dateKey].in += Number(d.recibidos) || 0;
+        map[dateKey].out += Number(d.entregados) || 0;
       }
-
-      rawDiario.forEach(d => {
-        const dateKey = d.fecha ? d.fecha.split("T")[0] : null;
-        if (dateKey && map[dateKey]) {
-          map[dateKey].recibidos += d.recibidos || 0;
-          map[dateKey].entregados += d.entregados || 0;
-        }
-      });
-      
-      return Object.values(map).sort((a,b) => a._d - b._d);
-    }
-
-    if (vista === "historial") {
-      const start = addDays(bd, -29);
-      const map = {};
-      
-      for (let currentD = new Date(start); currentD <= bd; currentD = addDays(currentD, 1)) {
-        const k = ymd(currentD);
-        map[k] = { periodo: k, recibidos: 0, entregados: 0, _d: new Date(currentD) };
-      }
-
-      rawDiario.forEach(d => {
-        const dateKey = d.fecha ? d.fecha.split("T")[0] : null;
-        if (dateKey && map[dateKey]) {
-          map[dateKey].recibidos += d.recibidos || 0;
-          map[dateKey].entregados += d.entregados || 0;
-        }
-      });
-      
-      return Object.values(map).sort((a,b) => a._d - b._d);
-    }
-
-    if (vista === "diaria") {
-      const prefix = ymd(bd);
-      cat = Array.from({ length: 24 }, (_, h) => ({
-        key: `${prefix}T${String(h).padStart(2,"0")}:00`,
-        periodo: String(h),
-        recibidos: 0, entregados: 0
-      }));
-
-      rawDiario.forEach(d => {
-        if (d.fecha && d.fecha.startsWith(prefix) && d.fecha.includes("T")) {
-          const hStr = d.fecha.split("T")[1].substring(0,2);
-          const hIdx = parseInt(hStr, 10);
-          if (cat[hIdx]) {
-            cat[hIdx].recibidos += d.recibidos || 0;
-            cat[hIdx].entregados += d.entregados || 0;
-          }
-        }
-      });
-      return cat;
-    }
-
-    return [];
-  }, [rawDiario, vista, fecha]);
-
-  const chartKPIs = useMemo(() => {
-    const totalRec = datosChart.reduce((a, b) => a + (Number(b.recibidos) || 0), 0);
-    const totalEnt = datosChart.reduce((a, b) => a + (Number(b.entregados) || 0), 0);
-    const points = Math.max(datosChart.length, 1);
-    return {
-      totalRec,
-      totalEnt,
-      avgRec: Math.round(totalRec / points),
-      avgEnt: Math.round(totalEnt / points),
-    };
-  }, [datosChart]);
-
-  const formatoEjeX = (tick) => {
-    if (vista === "diaria") return `${tick}h`;
-    if (vista === "historial") {
-      const d = new Date(tick);
-      return isNaN(d) ? tick : `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;
-    }
-    return tick;
-  };
+    });
+    return Object.values(map).sort((a,b) => new Date(a.periodo) - new Date(b.periodo));
+  }, [resumen.diario]);
 
   if (cargandoNegocio) {
     return (
@@ -289,226 +200,254 @@ export default function Dashboard({ paquetes, actualizarPaquetes }) {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-zinc-200/80">
+    <div className="space-y-8 font-sans pb-20">
+      
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-             <h1 className="text-3xl font-extrabold text-zinc-950 tracking-tight">{negocio?.nombre || negocio?.nombre_empresa || "Infraestructura"}</h1>
+             <h1 className="text-3xl font-extrabold text-zinc-950 tracking-tight">{negocio?.nombre || negocio?.nombre_empresa || "Local"}</h1>
              <PlanBadge />
           </div>
-          <p className="text-sm font-medium text-zinc-500">Métricas en tiempo real y registro de entradas.</p>
+          <p className="text-sm font-medium text-zinc-500">Mando central operativo y control de stock.</p>
         </div>
-        <button onClick={() => setMostrarModal(true)} className="flex items-center justify-center gap-2 bg-zinc-950 hover:bg-zinc-800 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95 w-full md:w-auto">
+        <button onClick={() => setMostrarModal(true)} className="flex items-center justify-center gap-2 bg-zinc-950 hover:bg-zinc-800 text-white px-8 py-3.5 rounded-xl font-black uppercase tracking-widest text-[11px] shadow-lg transition-all active:scale-95 w-full md:w-auto">
           <IconPlus /> Registrar Entrada
         </button>
       </div>
 
-      {configPendiente && (
-        <div className="bg-red-50/80 border border-red-200/80 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center text-red-600"><IconAlert /></div>
-            <div className="text-sm text-red-800 font-medium">
-              <strong className="block mb-0.5 text-red-950 font-bold">Configuración de local pendiente</strong>
-              Debes definir los estantes o baldas de tu almacén antes de gestionar paquetes.
+      {entitlements?.plan_id === 'free' && entitlements?.trial && (
+        <div className="bg-zinc-950 text-zinc-300 px-5 py-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs font-mono shadow-md border border-zinc-800">
+          <div className="flex items-center gap-4 w-full sm:w-1/2">
+            <span className="text-brand-400 font-black uppercase tracking-widest shrink-0">Free Tier</span>
+            <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+              <div 
+                className={`h-full rounded-full transition-all ${entitlements.trial.remaining < 20 ? 'bg-red-500' : 'bg-brand-500'}`} 
+                style={{ width: `${Math.min(100, (entitlements.trial.used / entitlements.trial.quota) * 100)}%` }} 
+              />
             </div>
+            <span className="shrink-0"><strong>{entitlements.trial.used}</strong> / {entitlements.trial.quota}</span>
           </div>
-          <button onClick={() => go("/dashboard/configuracion")} className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-colors w-full sm:w-auto shadow-sm shadow-red-600/20">
-            Configurar ahora
+          <button onClick={() => go('/dashboard/facturacion')} className="text-brand-400 hover:text-white font-black uppercase tracking-widest transition-colors shrink-0">
+            Desbloquear sin límites
           </button>
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* BANNER CTA: FREEMIUM UPGRADE GATILLO VISUAL */}
-      {/* ========================================================= */}
-      {entitlements?.plan_id === 'free' && entitlements?.trial && (
-        <div className="bg-gradient-to-r from-zinc-950 to-zinc-900 rounded-[2rem] p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-8 shadow-2xl border border-zinc-800 relative overflow-hidden">
-          {/* Brillo de fondo sutil */}
-          <div className="absolute top-0 left-0 w-64 h-64 bg-brand-500/10 blur-[80px] rounded-full pointer-events-none" />
-          
-          <div className="flex-1 w-full relative z-10">
-            <div className="flex items-center gap-3 mb-3">
-              <span className="bg-zinc-800/80 text-zinc-300 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-zinc-700">Límite de la cuenta</span>
-              <h3 className="text-xl md:text-2xl font-black text-white flex items-center gap-2">
-                Plan Free <span className="text-brand-400"><IconSparkles /></span>
-              </h3>
-            </div>
-            <p className="text-sm font-medium text-zinc-400 mb-5 max-w-2xl leading-relaxed">
-              Has consumido <strong className="text-white text-base">{entitlements.trial.used}</strong> de tus <strong className="text-white text-base">{entitlements.trial.quota}</strong> paquetes gratuitos. Pásate a Plus para eliminar los límites y desbloquear el Área Financiera completa.
-            </p>
-            
-            <div className="w-full bg-zinc-950/50 rounded-full h-3 mb-2 overflow-hidden shadow-inner border border-zinc-800/50">
-              <div 
-                className={`h-full rounded-full transition-all duration-1000 ease-out relative ${entitlements.trial.remaining < 20 ? 'bg-red-500' : 'bg-brand-500'}`} 
-                style={{ width: `${Math.min(100, (entitlements.trial.used / entitlements.trial.quota) * 100)}%` }}
-              >
-                <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]" />
-              </div>
-            </div>
-            
-            <div className="flex justify-between items-center text-xs font-bold px-1">
-              <span className="text-zinc-600">0</span>
-              <span className={entitlements.trial.remaining < 20 ? 'text-red-400 animate-pulse' : 'text-brand-400'}>
-                {entitlements.trial.remaining} restantes
-              </span>
+      {configPendiente && (
+        <div className="bg-red-50 border border-red-200 p-5 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="text-red-500"><IconAlert /></div>
+            <div className="text-sm text-red-800 font-medium">
+              <strong className="block text-red-950 font-bold">Configuración de local pendiente</strong>
+              Define los huecos de tu almacén antes de gestionar paquetes.
             </div>
           </div>
-          
-          <button 
-            onClick={() => go('/dashboard/facturacion')} 
-            className="shrink-0 w-full md:w-auto px-8 py-4 bg-brand-500 hover:bg-brand-400 text-white font-black text-base rounded-xl shadow-lg shadow-brand-500/20 transition-all active:scale-95 relative z-10"
-          >
-            Mejorar a Plus
+          <button onClick={() => go("/dashboard/configuracion")} className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm">
+            Configurar Almacén
           </button>
         </div>
       )}
-      {/* ========================================================= */}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-6">
-            <span className="text-zinc-500 font-bold text-xs tracking-widest uppercase">Recibidos Hoy</span>
-            <span className="text-brand-500"><IconPkgIn /></span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-black text-zinc-950 tracking-tight">{resumen.recibidosHoy}</span>
-            {resumen.recordRecibidos > 0 && <span className="text-[10px] font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full border border-brand-100">Record: {resumen.recordRecibidos}</span>}
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-6">
-            <span className="text-zinc-500 font-bold text-xs tracking-widest uppercase">Entregados Hoy</span>
-            <span className="text-indigo-500"><IconPkgOut /></span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-black text-zinc-950 tracking-tight">{resumen.entregadosHoy}</span>
-            {resumen.recordEntregados > 0 && <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">Record: {resumen.recordEntregados}</span>}
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-6">
-            <span className="text-zinc-500 font-bold text-xs tracking-widest uppercase">En Almacen</span>
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-between">
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-zinc-500 font-black text-[10px] tracking-[0.2em] uppercase">Paquetes Físicos</span>
             <span className="text-zinc-400"><IconStorage /></span>
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-black text-zinc-950 tracking-tight">{resumen.almacenActual}</span>
-          </div>
+          <div className="text-4xl font-black text-zinc-950 tracking-tight font-mono">{resumen.almacenActual}</div>
         </div>
 
-        <div className={`bg-white p-6 rounded-2xl border ${resumen.estantesLlenos > 0 ? 'border-red-200 shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'border-zinc-200/80 shadow-sm'} flex flex-col justify-between transition-all`}>
-          <div className="flex justify-between items-start mb-6">
-            <span className={`font-bold text-xs tracking-widest uppercase ${resumen.estantesLlenos > 0 ? 'text-red-500' : 'text-zinc-500'}`}>Estantes Saturados</span>
-            <span className={resumen.estantesLlenos > 0 ? 'text-red-500' : 'text-zinc-400'}><IconAlert /></span>
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-between">
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-zinc-500 font-black text-[10px] tracking-[0.2em] uppercase">Huecos en Uso</span>
+            <span className="text-zinc-400"><IconGrid /></span>
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className={`text-4xl font-black tracking-tight ${resumen.estantesLlenos > 0 ? 'text-red-600' : 'text-zinc-950'}`}>{resumen.estantesLlenos}</span>
+          <div className="text-4xl font-black text-zinc-950 tracking-tight font-mono">{resumen.huecosOcupados}</div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-between">
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-zinc-500 font-black text-[10px] tracking-[0.2em] uppercase">Entradas (Hoy)</span>
+            <span className="text-brand-400"><IconBoxIn /></span>
           </div>
+          <div className="text-4xl font-black text-brand-500 tracking-tight font-mono">+{resumen.recibidosHoy}</div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-between">
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-zinc-500 font-black text-[10px] tracking-[0.2em] uppercase">Salidas (Hoy)</span>
+            <span className="text-zinc-400"><IconBoxOut /></span>
+          </div>
+          <div className="text-4xl font-black text-zinc-900 tracking-tight font-mono">-{resumen.entregadosHoy}</div>
         </div>
       </div>
 
-      <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-200/80 shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-6">
-          <div>
-            <h3 className="text-xl font-extrabold text-zinc-950 flex items-center gap-2 mb-1">
-              <IconChart /> Analitica de Volumen
-            </h3>
-            <p className="text-zinc-500 text-sm font-medium">Evolucion historica de operativas en el local.</p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3 items-center">
-            <div className="flex bg-zinc-100/80 p-1 rounded-xl border border-zinc-200 w-full sm:w-auto">
-              {vistas.map(v => (
-                <button
-                  key={v}
-                  onClick={() => setVista(v)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold capitalize transition-all flex-1 sm:flex-none text-center ${vista === v ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-500 hover:text-zinc-900'}`}
-                >
-                  {v}
-                </button>
-              ))}
+      <div className="bg-white border border-zinc-200/80 shadow-sm rounded-3xl p-6 h-80 flex flex-col">
+        <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-6">Volumen Operativo (Últimos 14 Días)</h3>
+        <div className="flex-1 -ml-6">
+          {chartData.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-xs font-bold text-zinc-400 uppercase tracking-widest text-center px-4">
+              Recopilando datos históricos...
             </div>
-            {vista !== "anual" && (
-              <input 
-                type="date" 
-                value={fecha} 
-                onChange={(e) => setFecha(e.target.value)}
-                className="px-4 py-1.5 rounded-xl border border-zinc-200 bg-white text-zinc-800 text-sm font-bold focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none w-full sm:w-auto transition-all shadow-sm"
-              />
-            )}
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f4f4f5" />
+                <XAxis 
+                  dataKey="periodo" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 9, fill: '#a1a1aa', fontWeight: 700 }}
+                  tickFormatter={(val) => {
+                    const d = new Date(val);
+                    return isNaN(d) ? '' : `${d.getDate()} ${d.toLocaleString('es-ES', { month: 'short' }).toUpperCase()}`;
+                  }}
+                  dy={10}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 600 }}
+                  allowDecimals={false}
+                />
+                <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#e4e4e7', strokeWidth: 2, strokeDasharray: '5 5' }} />
+                {/* FIX CRÍTICO: isAnimationActive={false} para evitar el parpadeo infinito por re-renders de React */}
+                <Line isAnimationActive={false} name="Entradas" type="monotone" dataKey="in" stroke="#14b8a6" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+                <Line isAnimationActive={false} name="Salidas" type="monotone" dataKey="out" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <div className="lg:col-span-2 bg-white border border-zinc-200/80 shadow-sm rounded-3xl overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-zinc-100 bg-zinc-50/30 flex justify-between items-center">
+            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-widest flex items-center gap-2">
+              Auditoría de Stock
+              {listaHuerfanos.length > 0 && (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded uppercase tracking-widest border border-red-100 ml-2">
+                  <IconAlert /> {listaHuerfanos.length} Atascados
+                </span>
+              )}
+            </h3>
+            
+            <select 
+              value={diasHuerfano} 
+              onChange={e => setDiasHuerfano(Number(e.target.value))} 
+              className="bg-white border border-zinc-200 text-xs font-bold text-zinc-600 px-3 py-1.5 rounded-lg outline-none cursor-pointer focus:ring-1 focus:ring-brand-500"
+            >
+              <option value={1}>Atascados +1 Día</option>
+              <option value={3}>Atascados +3 Días</option>
+              <option value={7}>Atascados +7 Días</option>
+            </select>
+          </div>
+          
+          <div className="flex-1 overflow-x-auto max-h-[400px] overflow-y-auto">
+            <table className="w-full text-left whitespace-nowrap text-sm">
+              <thead className="sticky top-0 z-10 bg-zinc-50">
+                <tr className="text-[9px] uppercase tracking-widest font-black text-zinc-400 border-b border-zinc-100">
+                  <th className="py-3 px-6">Cliente</th>
+                  <th className="py-3 px-6">Agencia</th>
+                  <th className="py-3 px-6 text-center">Hueco</th>
+                  <th className="py-3 px-6 text-center">Días</th>
+                  <th className="py-3 px-6 text-right">Contacto</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-50">
+                {listaHuerfanos.length === 0 ? (
+                  <tr><td colSpan="5" className="py-12 text-center text-zinc-400 text-[10px] font-black uppercase tracking-[0.2em]">No hay paquetes atascados en este periodo.</td></tr>
+                ) : (
+                  listaHuerfanos.map((p) => {
+                    const dias = calcularDias(p.fecha_llegada);
+                    const telefonoLimpio = p.telefono ? p.telefono.replace(/\D/g, '') : '';
+                    const msjWa = encodeURIComponent(`Hola ${p.nombre_cliente}, tienes un paquete de ${p.empresa_transporte || 'una agencia'} esperando en nuestro local desde hace ${dias} días. Por favor, pasa a recogerlo pronto para evitar devoluciones. ¡Gracias!`);
+
+                    return (
+                      <tr key={p.id} className="hover:bg-red-50/10 transition-colors">
+                        <td className="py-3 px-6 font-bold text-zinc-900">{p.nombre_cliente || 'Desconocido'}</td>
+                        <td className="py-3 px-6 text-zinc-600 font-medium">{p.empresa_transporte || 'Otros'}</td>
+                        <td className="py-3 px-6 text-center">
+                          <span className="bg-zinc-100 text-zinc-800 font-black font-mono text-[10px] px-2 py-1 rounded border border-zinc-200">
+                            {p.ubicacion_label || '?'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-6 text-center text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center justify-center gap-1.5 mt-1.5">
+                          <IconCalendar /> {dias} días
+                        </td>
+                        <td className="py-3 px-6 text-right">
+                          {telefonoLimpio ? (
+                            <a 
+                              href={`https://wa.me/34${telefonoLimpio}?text=${msjWa}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 border border-[#25D366]/20 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors"
+                            >
+                              <IconPhone /> Avisar
+                            </a>
+                          ) : (
+                            <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">Sin Tel.</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {!cargandoResumen && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 bg-zinc-50/50 p-4 rounded-2xl border border-zinc-100">
-            <div>
-              <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Total Recibidos</div>
-              <div className="text-2xl font-black text-brand-600">{chartKPIs.totalRec.toLocaleString()}</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Total Entregados</div>
-              <div className="text-2xl font-black text-indigo-600">{chartKPIs.totalEnt.toLocaleString()}</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Media Recibidos</div>
-              <div className="text-xl font-bold text-zinc-700">{chartKPIs.avgRec.toLocaleString()} / periodo</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Media Entregados</div>
-              <div className="text-xl font-bold text-zinc-700">{chartKPIs.avgEnt.toLocaleString()} / periodo</div>
-            </div>
-          </div>
-        )}
+        <div className="space-y-6">
+          <div className="bg-white border border-zinc-200/80 shadow-sm rounded-3xl p-6">
+            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-widest mb-2">Apalancamiento de Espacio</h3>
+            <p className="text-[10px] text-zinc-500 font-medium mb-6 leading-relaxed">
+              Analiza qué porcentaje de tu almacén ocupa cada empresa vs el ticket que te pagan.
+            </p>
+            
+            <div className="space-y-5">
+              {resumen.ocupacion.length === 0 ? (
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 text-center py-4">Estanterías vacías</div>
+              ) : (
+                resumen.ocupacion.slice(0, 5).map((ag, i) => {
+                  const esParasito = ag.pct > 30 && Number(ag.precio) < 0.35;
 
-        {cargandoResumen ? (
-          <div className="h-[360px] w-full bg-zinc-50 rounded-2xl animate-pulse flex items-center justify-center border border-zinc-100">
-            <div className="w-8 h-8 border-2 border-zinc-200 border-t-brand-500 rounded-full animate-spin" />
+                  return (
+                    <div key={i}>
+                      <div className="flex justify-between items-end mb-1.5">
+                        <span className={`text-xs font-bold ${esParasito ? 'text-red-600' : 'text-zinc-700'}`}>
+                          {ag.name} <span className="text-zinc-400 font-normal">({ag.count} paq)</span>
+                        </span>
+                        <div className="text-right">
+                          <span className={`text-[10px] font-mono font-bold ${esParasito ? 'text-red-500' : 'text-zinc-500'}`}>{ag.pct.toFixed(0)}% Ocupado</span>
+                          <span className="text-[10px] font-mono font-black text-amber-500 ml-2 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">Ticket: {formatEUR(ag.precio)}</span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-zinc-100 rounded-full h-2 overflow-hidden">
+                        <div className={`h-full rounded-full ${esParasito ? 'bg-red-500' : 'bg-zinc-800'}`} style={{ width: `${ag.pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
-        ) : (
-          <div className="h-[360px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={datosChart} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRec" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#14b8a6" />
-                    <stop offset="100%" stopColor="#2dd4bf" />
-                  </linearGradient>
-                  <linearGradient id="colorEnt" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#6366f1" />
-                    <stop offset="100%" stopColor="#818cf8" />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f4f4f5" />
-                <XAxis dataKey="periodo" tickFormatter={formatoEjeX} tick={{ fill: '#a1a1aa', fontSize: 12, fontWeight: 600 }} axisLine={false} tickLine={false} dy={10} />
-                <YAxis tick={{ fill: '#a1a1aa', fontSize: 12, fontWeight: 600 }} axisLine={false} tickLine={false} dx={-10} allowDecimals={false} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #e4e4e7', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', backgroundColor: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(4px)' }}
-                  labelStyle={{ fontWeight: 'bold', color: '#09090b', marginBottom: '8px' }}
-                  itemStyle={{ fontWeight: 'bold' }}
-                />
-                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontWeight: '700', fontSize: '12px', color: '#52525b' }} />
-                <Line type="monotone" name="Recibidos" dataKey="recibidos" stroke="url(#colorRec)" strokeWidth={3} dot={{ r: 0 }} activeDot={{ r: 5, strokeWidth: 0 }} />
-                <Line type="monotone" name="Entregados" dataKey="entregados" stroke="url(#colorEnt)" strokeWidth={3} dot={{ r: 0 }} activeDot={{ r: 5, strokeWidth: 0 }} />
-                {vista === "historial" && <Brush dataKey="periodo" height={30} stroke="#e4e4e7" travellerWidth={10} fill="#fafafa" tickFormatter={formatoEjeX} />}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+        </div>
       </div>
 
       <AnimatePresence>
         {mostrarModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm" onClick={() => setMostrarModal(false)} />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" onClick={() => setMostrarModal(false)} />
             <motion.div initial={{ scale: 0.96, opacity: 0, y: 10 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.96, opacity: 0, y: 10 }} transition={{ type: 'spring', stiffness: 300, damping: 25 }} className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
-              <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
-                <h3 className="text-xl font-bold text-zinc-950">Registro Rapido</h3>
-                <button onClick={() => setMostrarModal(false)} className="w-8 h-8 flex items-center justify-center bg-zinc-100 text-zinc-500 hover:text-zinc-950 hover:bg-zinc-200 rounded-full transition-colors">
+              <div className="p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+                <h3 className="text-xl font-black text-zinc-950">Registro Rápido</h3>
+                <button onClick={() => setMostrarModal(false)} className="w-8 h-8 flex items-center justify-center bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-950 hover:border-zinc-400 rounded-full transition-all shadow-sm">
                   <IconClose />
                 </button>
               </div>
-              <div className="p-6 overflow-y-auto max-h-[80vh] bg-zinc-50/50">
+              <div className="p-6 overflow-y-auto max-h-[80vh]">
                 <AnadirPaquete modoRapido paquetes={paquetes} actualizarPaquetes={actualizarPaquetes} />
               </div>
             </motion.div>

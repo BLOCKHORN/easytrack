@@ -17,7 +17,8 @@ export async function guardarCarriers(carriersPayload, token, { sync = true } = 
     } catch {}
   }
 
-  const res = await fetch(`${API_URL}/estantes/carriers`, {
+  // 🔥 FIX: Actualizado a la nueva ruta /ubicaciones/carriers 🔥
+  const res = await fetch(`${API_URL}/ubicaciones/carriers`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

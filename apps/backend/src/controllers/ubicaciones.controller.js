@@ -307,8 +307,10 @@ exports.guardarCarriers = async (req, res) => {
     if (!tenantId) return res.status(403).json({ error: 'Tenant no resuelto' });
 
     const { carriers, sync = true } = req.body || {};
-    if (!Array.isArray(carriers) || carriers.length === 0) {
-      return res.status(400).json({ error: 'Payload inválido: carriers vacío' });
+    
+    // Solo comprobamos que sea un Array. Permitimos que esté vacío (length === 0).
+    if (!Array.isArray(carriers)) {
+      return res.status(400).json({ error: 'Payload inválido: carriers no es un array' });
     }
 
     const rows = carriers
@@ -322,17 +324,18 @@ exports.guardarCarriers = async (req, res) => {
       }))
       .filter(r => !!r.nombre);
 
-    if (!rows.length) return res.status(400).json({ error: 'No hay carriers válidos' });
+    // Si el usuario nos envía agencias, hacemos el upsert
+    if (rows.length > 0) {
+      const { error: upErr } = await supabase
+        .from('empresas_transporte_tenant')
+        .upsert(rows, { onConflict: 'tenant_id, nombre' });
+      if (upErr) throw upErr;
+    }
 
-    const { data: upserted, error: upErr } = await supabase
-      .from('empresas_transporte_tenant')
-      .upsert(rows, { onConflict: 'tenant_id, nombre' })
-      .select('*');
-      
-    if (upErr) throw upErr;
-
+    // Proceso Sync: Borrar de la BD las agencias que el usuario quitó del frontend
     if (sync) {
       const keep = new Set(rows.map(r => r.nombre));
+      
       const { data: existentes, error: exErr } = await supabase
         .from('empresas_transporte_tenant')
         .select('nombre')
@@ -341,6 +344,7 @@ exports.guardarCarriers = async (req, res) => {
       if (exErr) throw exErr;
 
       const toDelete = (existentes || []).map(e => e.nombre).filter(n => !keep.has(n));
+      
       if (toDelete.length > 0) {
         const { error: delErr } = await supabase
           .from('empresas_transporte_tenant')
@@ -352,8 +356,9 @@ exports.guardarCarriers = async (req, res) => {
       }
     }
 
-    res.json({ ok: true, carriers: upserted || [] });
+    res.json({ ok: true, carriers: rows });
   } catch (error) {
+    console.error("Error en guardarCarriers:", error);
     res.status(500).json({ error: 'No se pudieron guardar los carriers' });
   }
 };
