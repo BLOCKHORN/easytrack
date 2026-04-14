@@ -7,7 +7,6 @@ const CustomIconArrowLeft = () => <svg width="16" height="16" viewBox="0 0 24 24
 const CustomIconChart = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="4" y="14" width="4" height="6" rx="1" fill="currentColor" opacity="0.3"/><rect x="10" y="10" width="4" height="10" rx="1" fill="currentColor" opacity="0.6"/><rect x="16" y="4" width="4" height="16" rx="1" fill="currentColor"/><path d="M3 22H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
 const CustomIconLeak = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 21A9 9 0 1012 3a9 9 0 000 18z" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" opacity="0.4"/><path d="M12 7v6l3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeDasharray="4 8" transform="rotate(45 12 12)"/></svg>;
 const CustomIconAI = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3v3M12 18v3M4 12H7M17 12h3M6.5 6.5l2 2M15.5 15.5l2 2M6.5 17.5l2-2M15.5 6.5l2 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.3"/><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="2" strokeDasharray="2 4"/></svg>;
-const CustomIconWhatsApp = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" fill="currentColor" opacity="0.1"/></svg>;
 const CustomIconRadar = () => <svg width="64" height="64" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1" opacity="0.2"/><circle cx="12" cy="12" r="6" stroke="currentColor" strokeWidth="1" opacity="0.2"/><circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.5"/><path d="M12 12l8-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin-fast origin-center" /><path d="M12 12l8-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin-fast origin-center" opacity="0.5" style={{animationDelay: '-0.1s'}}/></svg>;
 
 const AGENCIAS = [
@@ -58,14 +57,21 @@ const TypewriterLogo = () => {
 export default function InteractiveAudit({ onComplete }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
-  const [agencia, setAgencia] = useState(null);
+  const [agencias, setAgencias] = useState([]);
   const [volumen, setVolumen] = useState(65); 
   const [tarifaActual, setTarifaActual] = useState(0.30);
   const [dineroPerdido, setDineroPerdido] = useState(0);
 
-  const tarifaObjetivo = Math.max(0.55, tarifaActual + 0.20);
-  const margenPerdido = tarifaObjetivo - tarifaActual;
-  const perdidaAcumuladaAnual = volumen * 30 * 12 * margenPerdido;
+  const tarifaObjetivo = Math.max(0.50, tarifaActual + 0.15);
+  const pctIncremento = tarifaActual > 0 ? ((tarifaObjetivo - tarifaActual) / tarifaActual) * 100 : 0;
+  
+  const ingresoMensualActual = volumen * 30 * tarifaActual;
+  const ingresoAnualActual = ingresoMensualActual * 12;
+  
+  const ingresoMensualOpt = volumen * 30 * tarifaObjetivo;
+  const ingresoAnualOpt = ingresoMensualOpt * 12;
+
+  const perdidaAcumuladaAnual = ingresoAnualOpt - ingresoAnualActual;
 
   useEffect(() => {
     if (step === 4) {
@@ -101,6 +107,16 @@ export default function InteractiveAudit({ onComplete }) {
     if (step > 0 && step !== 4) setStep(step - 1);
   };
 
+  const toggleAgencia = (nombre) => {
+    if (agencias.includes(nombre)) {
+      setAgencias(agencias.filter(a => a !== nombre));
+    } else {
+      if (agencias.length < 3) {
+        setAgencias([...agencias, nombre]);
+      }
+    }
+  };
+
   const formatEUR = (n, fractionDigits = 0) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: fractionDigits }).format(n);
 
   const styles = `
@@ -119,11 +135,10 @@ export default function InteractiveAudit({ onComplete }) {
 
     @keyframes levitate {
       0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-10px); }
+      50% { transform: translateY(-12px); }
     }
-    .group:hover .logo-levitate {
-      animation: levitate 2s ease-in-out infinite;
-    }
+    .logo-levitate { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+    .group:hover .logo-levitate { animation: levitate 2.5s ease-in-out infinite; }
   `;
 
   return (
@@ -168,14 +183,12 @@ export default function InteractiveAudit({ onComplete }) {
           
           {step === 0 && (
             <motion.div key="step0" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -50 }} className="w-full text-center max-w-3xl my-auto py-10">
-              
               <TypewriterLogo />
-
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight mb-6 leading-[1.1] text-zinc-100">
                 El fin del caos en tu almacén.<br className="hidden md:block"/> Y deja de regalar tu trabajo.
               </h1>
               <p className="text-base md:text-lg text-zinc-400 font-medium mb-12 max-w-2xl mx-auto leading-relaxed">
-                Localiza cualquier paquete en menos de 5 segundos, elimina los dolores de cabeza de organización y descubre tu fuga de capital real para exigir a las agencias la tarifa que mereces.
+                Localiza cualquier paquete en menos de 5 segundos, elimina los dolores de organización y descubre tu fuga de capital real para exigir la tarifa que mereces.
               </p>
               
               <button onClick={() => setStep(1)} className="relative inline-flex h-14 w-full md:w-auto items-center justify-center overflow-hidden rounded-xl p-[1.5px] focus:outline-none transition-transform active:scale-95 group">
@@ -190,42 +203,57 @@ export default function InteractiveAudit({ onComplete }) {
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} className="w-full flex flex-col items-center h-full max-h-[80vh] py-6">
               <div className="text-center mb-12 shrink-0">
-                <h2 className="text-3xl md:text-4xl font-black tracking-tight text-zinc-100">Proveedor Principal</h2>
-                <p className="text-zinc-500 mt-2 font-mono text-[10px] uppercase tracking-widest">Selecciona tu agencia de mayor rotación.</p>
+                <h2 className="text-3xl md:text-4xl font-black tracking-tight text-zinc-100">Agencias Principales</h2>
+                <p className="text-zinc-500 mt-2 font-mono text-[10px] uppercase tracking-widest">Selecciona de 1 a 3 agencias con más volumen.</p>
               </div>
-              <div className="w-full max-w-4xl mx-auto flex-1 overflow-y-auto hide-scrollbar pb-6 px-2 pt-4">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-8 md:gap-10">
-                  {AGENCIAS.map(ag => (
-                    <button 
-                      key={ag.id} 
-                      onClick={() => { setAgencia(ag.nombre); setStep(2); }}
-                      className="group flex flex-col items-center justify-center transition-all outline-none cursor-pointer"
-                    >
-                      <div className="w-16 h-16 md:w-20 md:h-20 flex items-center justify-center mb-4 relative">
-                        <div className="absolute inset-0 bg-brand-500/0 group-hover:bg-brand-500/10 blur-2xl rounded-full transition-all duration-500" />
-                        
-                        <div className="w-full h-full relative z-10 logo-levitate opacity-40 grayscale group-hover:opacity-100 group-hover:grayscale-0 transition-all duration-500">
-                          {ag.domain ? (
-                            <img 
-                              src={`https://logo.uplead.com/${ag.domain}`} 
-                              alt={ag.nombre} 
-                              className="w-full h-full object-contain drop-shadow-sm group-hover:drop-shadow-xl"
-                              onError={(e) => {
-                                if (e.target.src.includes('uplead')) { e.target.src = `https://www.google.com/s2/favicons?domain=${ag.domain}&sz=128`; } 
-                                else { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(ag.nombre)}&background=18181b&color=a1a1aa&bold=true`; }
-                              }}
-                            />
-                          ) : (
-                            <div className="text-zinc-600 group-hover:text-white transition-colors w-full h-full flex items-center justify-center"><CustomIconChart /></div>
-                          )}
+              <div className="w-full max-w-4xl mx-auto flex-1 overflow-y-auto hide-scrollbar pb-10 px-4 pt-16">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-16 md:gap-y-20">
+                  {AGENCIAS.map(ag => {
+                    const isSelected = agencias.includes(ag.nombre);
+                    const isDisabled = !isSelected && agencias.length >= 3;
+                    
+                    return (
+                      <button 
+                        key={ag.id} 
+                        onClick={() => toggleAgencia(ag.nombre)}
+                        disabled={isDisabled}
+                        className={`group flex flex-col items-center justify-center transition-all outline-none cursor-pointer relative ${isDisabled ? 'opacity-30 cursor-not-allowed' : ''}`}
+                      >
+                        <div className="w-16 h-16 md:w-20 md:h-20 flex items-center justify-center mb-4 relative">
+                          <div className={`absolute inset-0 blur-2xl rounded-full transition-all duration-500 ${isSelected ? 'bg-brand-500/30 scale-150' : 'bg-transparent group-hover:bg-brand-500/10'}`} />
+                          
+                          <div className={`w-full h-full relative z-10 logo-levitate transition-all duration-500 ${isSelected ? 'opacity-100 saturate-100 drop-shadow-[0_0_15px_rgba(20,184,166,0.6)]' : 'opacity-50 saturate-[0.2] group-hover:opacity-100 group-hover:saturate-100'}`}>
+                            {ag.domain ? (
+                              <img 
+                                src={`https://logo.uplead.com/${ag.domain}`} 
+                                alt={ag.nombre} 
+                                className="w-full h-full object-contain drop-shadow-sm group-hover:drop-shadow-xl"
+                                onError={(e) => {
+                                  if (e.target.src.includes('uplead')) { e.target.src = `https://www.google.com/s2/favicons?domain=${ag.domain}&sz=128`; } 
+                                  else { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(ag.nombre)}&background=18181b&color=a1a1aa&bold=true`; }
+                                }}
+                              />
+                            ) : (
+                              <div className="text-zinc-600 group-hover:text-white transition-colors w-full h-full flex items-center justify-center"><CustomIconChart /></div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <span className="text-[11px] md:text-xs font-bold text-zinc-600 group-hover:text-zinc-200 transition-colors text-center w-full truncate font-mono uppercase tracking-widest">
-                        {ag.nombre}
-                      </span>
-                    </button>
-                  ))}
+                        <span className={`text-[11px] md:text-xs font-bold text-center w-full truncate font-mono uppercase tracking-widest transition-colors ${isSelected ? 'text-brand-400' : 'text-zinc-600 group-hover:text-zinc-300'}`}>
+                          {ag.nombre}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
+              </div>
+              <div className="shrink-0 mt-6 pt-6 border-t border-zinc-800/80 w-full max-w-sm flex justify-center">
+                <button 
+                  onClick={() => setStep(2)}
+                  disabled={agencias.length === 0}
+                  className="px-10 py-4 bg-zinc-100 text-zinc-950 disabled:bg-zinc-800 disabled:text-zinc-500 hover:bg-white text-sm font-black rounded-xl transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] disabled:shadow-none active:scale-95 flex items-center justify-center gap-3 w-full"
+                >
+                  Confirmar Selección <CustomIconArrow />
+                </button>
               </div>
             </motion.div>
           )}
@@ -233,13 +261,13 @@ export default function InteractiveAudit({ onComplete }) {
           {step === 2 && (
             <motion.div key="step2" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} className="w-full text-center max-w-xl mx-auto flex flex-col items-center my-auto py-10">
               <div className="mb-8">
-                <h2 className="text-3xl font-black tracking-tight text-zinc-100">Volumen Operativo</h2>
-                <p className="text-zinc-500 mt-1 font-mono text-[10px] uppercase tracking-widest">Indica la entrada diaria de {agencia}.</p>
+                <h2 className="text-3xl font-black tracking-tight text-zinc-100">Volumen Operativo Total</h2>
+                <p className="text-zinc-500 mt-1 font-mono text-[10px] uppercase tracking-widest">Suma la entrada diaria de {agencias.join(', ')}.</p>
               </div>
               
               <div className="w-full mb-8 bg-zinc-950 border border-zinc-800/80 rounded-2xl p-8 relative overflow-hidden shadow-2xl">
                 <div className="text-7xl font-black text-white mb-1 font-mono tracking-tighter tabular-nums drop-shadow-md">{volumen}</div>
-                <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-8">Paquetes / Día</div>
+                <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-8">Paquetes combinados al día</div>
                 <input 
                   type="range" min="10" max="500" step="1" value={volumen} 
                   onChange={(e) => setVolumen(parseInt(e.target.value))}
@@ -261,7 +289,7 @@ export default function InteractiveAudit({ onComplete }) {
             <motion.div key="step3" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="w-full text-center max-w-xl mx-auto flex flex-col items-center my-auto py-10">
               <div className="mb-8">
                 <h2 className="text-3xl font-black tracking-tight text-zinc-100">Tu Realidad Actual</h2>
-                <p className="text-zinc-500 mt-1 font-mono text-[10px] uppercase tracking-widest">¿Cuánto te paga {agencia} por paquete?</p>
+                <p className="text-zinc-500 mt-1 font-mono text-[10px] uppercase tracking-widest">¿Cuál es tu TICKET MEDIO por paquete?</p>
               </div>
               
               <div className="w-full mb-8 bg-zinc-950 border border-zinc-800/80 rounded-2xl p-8 relative overflow-hidden shadow-2xl">
@@ -270,7 +298,7 @@ export default function InteractiveAudit({ onComplete }) {
                 <div className="text-7xl font-black text-white mb-1 font-mono tracking-tighter tabular-nums drop-shadow-md">
                   {formatEUR(tarifaActual, 2)}
                 </div>
-                <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-8">Comisión por envío</div>
+                <div className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-8">Ingreso medio por envío</div>
                 
                 <input 
                   type="range" min="0.10" max="0.80" step="0.01" value={tarifaActual} 
@@ -306,94 +334,120 @@ export default function InteractiveAudit({ onComplete }) {
                 >
                   <span className="h-6 flex items-center justify-center">Analizando margen actual de {formatEUR(tarifaActual, 2)}...</span>
                   <span className="h-6 flex items-center justify-center">Cruzando volumen ({volumen}/día) con red EasyTrack...</span>
-                  <span className="h-6 flex items-center justify-center">Calculando tarifa objetivo y fuga de capital...</span>
+                  <span className="h-6 flex items-center justify-center">Calculando ticket objetivo y fuga de capital...</span>
                 </motion.div>
               </div>
             </motion.div>
           )}
 
           {step === 5 && (
-            <motion.div key="step5" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-4xl mx-auto my-auto py-6">
+            <motion.div key="step5" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-5xl mx-auto my-auto py-6">
               
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 border-b border-zinc-800/80 pb-4">
                 <div>
-                  <h2 className="text-2xl font-black text-white tracking-tight">Impacto Financiero.</h2>
-                  <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-widest mt-1">Auditoría de tarifa base vs optimizada</p>
+                  <h2 className="text-3xl font-black text-white tracking-tight">Impacto Financiero.</h2>
+                  <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-widest mt-1">Comparativa de Ticket Medio Actual vs Optimizado</p>
                 </div>
-                <div className="md:text-right flex items-center md:block gap-2">
-                  <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Agencia Analizada</div>
-                  <div className="text-brand-400 font-black text-lg leading-none">{agencia}</div>
+                <div className="md:text-right flex flex-col items-start md:items-end gap-1">
+                  <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Agencias Analizadas</div>
+                  <div className="text-brand-400 font-black text-sm">{agencias.join(' • ')}</div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Columna Izquierda */}
-                <div className="bg-[#09090b] border border-zinc-800 rounded-xl p-6 flex flex-col overflow-hidden">
-                  
-                  <div className="space-y-3 mb-6 flex-1">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-zinc-400 font-medium">Volumen Anual</span>
-                      <span className="text-zinc-100 font-mono font-bold">{(volumen * 30 * 12).toLocaleString()} paq.</span>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <div className="lg:col-span-7 flex flex-col gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    
+                    <div className="bg-[#09090b] border border-zinc-800 rounded-2xl p-6 relative flex flex-col justify-between shadow-sm">
+                      <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-6 font-mono">Escenario Actual</h3>
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center border-b border-zinc-800/60 pb-3">
+                          <span className="text-zinc-400 text-xs font-bold">Ticket Medio</span>
+                          <span className="text-zinc-300 font-mono font-black">{formatEUR(tarifaActual, 2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-zinc-800/60 pb-3">
+                          <span className="text-zinc-400 text-xs font-bold">Ingreso Mensual</span>
+                          <span className="text-zinc-300 font-mono font-black">{formatEUR(ingresoMensualActual)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-zinc-400 text-xs font-bold">Proyección Anual</span>
+                          <span className="text-white font-mono font-black">{formatEUR(ingresoAnualActual)}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-zinc-400 font-medium">Tu Tarifa Actual</span>
-                      <span className="text-zinc-500 font-mono font-bold">{formatEUR(tarifaActual, 2)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-zinc-400 font-medium">Tarifa Objetivo (Media)</span>
-                      <span className="text-brand-400 font-mono font-bold">{formatEUR(tarifaObjetivo, 2)}</span>
+
+                    <div className="bg-[#09090b] border border-brand-500/40 rounded-2xl p-6 relative flex flex-col justify-between shadow-[0_0_20px_rgba(20,184,166,0.05)]">
+                      <div className="flex justify-between items-start mb-6">
+                        <h3 className="text-[10px] font-black text-brand-400 uppercase tracking-widest font-mono">Escenario Optimizado</h3>
+                        {pctIncremento > 0 && (
+                          <span className="bg-brand-500/10 text-brand-400 border border-brand-500/20 text-[10px] font-black px-2 py-1 rounded-md tracking-wider">
+                            +{pctIncremento.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center border-b border-brand-500/20 pb-3">
+                          <span className="text-zinc-300 text-xs font-bold">Nuevo Ticket Base</span>
+                          <span className="text-brand-400 font-mono font-black">{formatEUR(tarifaObjetivo, 2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-brand-500/20 pb-3">
+                          <span className="text-zinc-300 text-xs font-bold">Ingreso Mensual</span>
+                          <span className="text-brand-400 font-mono font-black">{formatEUR(ingresoMensualOpt)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-zinc-300 text-xs font-bold">Proyección Anual</span>
+                          <span className="text-brand-400 font-mono font-black text-lg">{formatEUR(ingresoAnualOpt)}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  
-                  <div className="pt-5 border-t border-zinc-800 border-dashed">
-                    <div className="flex items-center gap-2 mb-1 text-red-500">
+
+                  <div className="bg-[#09090b] border border-red-900/50 rounded-2xl p-6 relative">
+                    <div className="flex items-center gap-2 mb-3 text-red-500">
                       <CustomIconLeak />
-                      <span className="text-[10px] font-black font-mono uppercase tracking-widest">Fuga de Capital Anual</span>
+                      <span className="text-[10px] font-black font-mono uppercase tracking-widest">Fuga de Capital Anual por falta de negociación</span>
                     </div>
-                    <div className="text-5xl font-black text-red-500 font-mono tracking-tighter tabular-nums drop-shadow-[0_0_15px_rgba(239,68,68,0.15)] leading-none mb-3">
+                    <div className="text-5xl md:text-7xl font-black text-red-500 font-mono tracking-tighter tabular-nums drop-shadow-[0_0_15px_rgba(239,68,68,0.15)] leading-none mb-1">
                       {formatEUR(dineroPerdido)}
                     </div>
-                    <p className="text-[10px] text-zinc-500 font-medium leading-snug">
-                      <strong className="text-zinc-300">Nota:</strong> Cifra calculada solo para {agencia}. El impacto real en tu negocio es mayor al sumar el resto de operativas.
-                    </p>
                   </div>
                 </div>
 
-                {/* Columna Derecha */}
-                <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-6 flex flex-col justify-between relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-500/50 to-transparent" />
+                <div className="lg:col-span-5 bg-zinc-900/30 border border-zinc-800/80 rounded-2xl p-6 md:p-8 flex flex-col justify-between relative overflow-hidden">
                   
                   <div>
-                    <h3 className="text-lg font-black text-white mb-2 tracking-tight">Detén el caos y la pérdida hoy.</h3>
-                    <p className="text-zinc-400 text-xs leading-relaxed mb-5">
-                      EasyTrack es el software operativo diseñado para darte el control. Regístrate gratis y obtén:
+                    <h3 className="text-xl font-black text-white mb-3 tracking-tight">Recupera lo que es tuyo.</h3>
+                    <p className="text-zinc-400 text-xs leading-relaxed mb-6">
+                      El volumen que mueves justifica de sobra un aumento a {formatEUR(tarifaObjetivo, 2)}. EasyTrack te da el sistema para demostrarlo irrefutablemente y negociar al alza.
                     </p>
-                    <ul className="space-y-4 mb-6">
+                    <ul className="space-y-5 mb-8">
                       <li className="flex items-start gap-3">
                         <div className="text-zinc-500 mt-0.5"><CustomIconChart /></div>
                         <div>
-                          <h4 className="text-zinc-200 font-bold text-xs">Auditoría Irrefutable</h4>
-                          <p className="text-[10px] text-zinc-500 mt-0.5">Informes de rendimiento reales para sentarte a negociar el {formatEUR(tarifaObjetivo, 2)}.</p>
+                          <h4 className="text-zinc-200 font-bold text-xs">Auditoría Real</h4>
+                          <p className="text-[10px] text-zinc-500 mt-1 leading-snug">Genera informes de rendimiento blindados para sentarte a negociar el ticket medio con agencias.</p>
                         </div>
                       </li>
                       <li className="flex items-start gap-3">
                         <div className="text-zinc-500 mt-0.5"><CustomIconAI /></div>
                         <div>
-                          <h4 className="text-zinc-200 font-bold text-xs">Escáner IA y Búsqueda en 5s</h4>
-                          <p className="text-[10px] text-zinc-500 mt-0.5">La cámara lee la etiqueta y ubica el paquete. Encuentra todo en 5 segundos sin estrés.</p>
+                          <h4 className="text-zinc-200 font-bold text-xs">Ahorro Masivo de Tiempo</h4>
+                          <p className="text-[10px] text-zinc-500 mt-1 leading-snug">Automatiza el escaneo y los avisos de recogida. Libera tiempo para enfocarte en tu negocio principal.</p>
                         </div>
                       </li>
                     </ul>
                   </div>
                   
                   <div>
-                    <button onClick={handleFinish} className="relative inline-flex h-12 w-full items-center justify-center overflow-hidden rounded-lg p-[1.5px] focus:outline-none transition-transform active:scale-95 group">
+                    <button onClick={handleFinish} className="relative inline-flex h-14 w-full items-center justify-center overflow-hidden rounded-xl p-[1.5px] focus:outline-none transition-transform active:scale-95 group">
                       <span className="absolute inset-[-1000%] animate-border-spin bg-[conic-gradient(from_90deg_at_50%_50%,#18181b_0%,#14b8a6_50%,#18181b_100%)] opacity-70 group-hover:opacity-100 transition-opacity" />
-                      <span className="inline-flex h-full w-full items-center justify-center rounded-lg bg-zinc-950 px-6 py-1 text-xs font-black text-white backdrop-blur-3xl gap-2 uppercase tracking-widest group-hover:bg-zinc-900 transition-colors">
+                      <span className="inline-flex h-full w-full items-center justify-center rounded-xl bg-zinc-950 px-6 py-1 text-xs font-black text-white backdrop-blur-3xl gap-2 uppercase tracking-widest group-hover:bg-zinc-900 transition-colors">
                         CREAR CUENTA GRATIS <CustomIconArrow />
                       </span>
                     </button>
-                    <p className="text-center text-[9px] font-bold text-zinc-600 uppercase tracking-widest font-mono mt-3">
+                    <p className="text-center text-[9px] font-bold text-zinc-600 uppercase tracking-widest font-mono mt-4">
                       Setup en 1 min • Sin Tarjeta
                     </p>
                   </div>
@@ -405,7 +459,6 @@ export default function InteractiveAudit({ onComplete }) {
         </AnimatePresence>
       </div>
 
-      {/* Progress Bar Fina */}
       <div className="h-1 w-full bg-zinc-900 shrink-0">
         <div className="h-full bg-brand-500 transition-all duration-700 ease-out shadow-[0_0_10px_rgba(20,184,166,0.8)]" style={{ width: `${((step + 1) / 6) * 100}%` }} />
       </div>
