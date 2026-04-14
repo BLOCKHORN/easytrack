@@ -36,6 +36,7 @@ const TypewriterNavLogo = () => {
 
 export default function Navbar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { openLogin } = useModal();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -45,6 +46,7 @@ export default function Navbar() {
   const { checking, isLoggedIn, userEmail, avatarUrl, isAdmin, handleLogout } = useNavbarAuth(navigate);
   const { tenant, loading: tenantLoading } = useTenant();
   const slug = tenant?.slug;
+  const [isAuditComplete, setIsAuditComplete] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -62,6 +64,11 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const hasSeenAudit = localStorage.getItem('et_audit_complete');
+    setIsAuditComplete(!!hasSeenAudit);
+  }, [location]);
+
   const navLinks = [
     { name: 'Características', path: '/#features' },
     { name: 'Precios', path: '/#pricing' },
@@ -70,11 +77,13 @@ export default function Navbar() {
 
   const goDashboard = () => {
     setAccountOpen(false);
+    setMobileOpen(false);
     navigate(slug ? `/${slug}/dashboard` : '/dashboard');
   };
 
   const goConfig = () => {
     setAccountOpen(false);
+    setMobileOpen(false);
     navigate(slug ? `/${slug}/dashboard/configuracion` : '/dashboard/configuracion');
   };
 
@@ -173,6 +182,7 @@ export default function Navbar() {
               )}
           </div>
 
+          {/* Menú de Hamburguesa para Móvil */}
           <div className="md:hidden flex items-center">
             <button onClick={() => setMobileOpen(!mobileOpen)} className="p-2 text-white">
               {mobileOpen ? <IconClose /> : <IconMenu />}
@@ -180,6 +190,77 @@ export default function Navbar() {
           </div>
         </div>
       </div>
+
+      {/* DESPLEGABLE MÓVIL */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }} 
+            animate={{ opacity: 1, height: 'auto' }} 
+            exit={{ opacity: 0, height: 0 }} 
+            className="md:hidden bg-zinc-950 border-b border-zinc-800 overflow-hidden"
+          >
+            <div className="px-4 pt-2 pb-6 space-y-2">
+              {navLinks.map((link) => (
+                <a key={link.name} href={link.path} onClick={() => setMobileOpen(false)} className="block px-4 py-3 text-base font-bold text-zinc-300 hover:text-white hover:bg-zinc-800/50 rounded-xl transition-colors">
+                  {link.name}
+                </a>
+              ))}
+              
+              <div className="pt-4 mt-2 border-t border-zinc-800">
+                {checking ? (
+                  <div className="w-full h-12 bg-zinc-800/50 animate-pulse rounded-xl"></div>
+                ) : isLoggedIn ? (
+                    tenantLoading ? (
+                      <div className="w-full h-12 bg-zinc-800/50 animate-pulse rounded-xl"></div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 px-4 py-3 mb-4 bg-zinc-900 rounded-xl border border-zinc-800">
+                          <Avatar email={userEmail} url={avatarUrl} />
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest leading-none mb-1">User_Session</span>
+                            <span className="text-sm font-bold text-white truncate">{userEmail}</span>
+                          </div>
+                        </div>
+                        
+                        {isAdmin && (
+                          <button onClick={() => { setMobileOpen(false); navigate('/admin/dashboard'); }} className="w-full py-4 text-brand-400 font-bold bg-brand-500/10 hover:bg-brand-500/20 rounded-xl flex justify-center items-center gap-2 transition-colors mb-2">
+                            <IconAdminRoot /> Administración
+                          </button>
+                        )}
+
+                        <button onClick={goDashboard} className="w-full py-4 bg-brand-500 hover:bg-brand-400 text-white font-black rounded-xl shadow-md flex justify-center items-center gap-2 transition-colors active:scale-95">
+                          <IconDashboard /> Ir al Panel
+                        </button>
+                        <button onClick={goConfig} className="w-full py-4 text-zinc-300 font-bold bg-zinc-800 hover:bg-zinc-700 rounded-xl flex justify-center items-center gap-2 transition-colors mt-2">
+                          <IconSettings /> Configuración
+                        </button>
+                        <button onClick={() => { setMobileOpen(false); handleLogout(); }} className="w-full py-4 text-red-500 font-bold bg-red-500/10 hover:bg-red-500/20 rounded-xl flex justify-center items-center gap-2 transition-colors mt-4">
+                          <IconLogout /> Cerrar sesión
+                        </button>
+                      </div>
+                    )
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <button onClick={() => { setMobileOpen(false); openLogin(); }} className="w-full py-4 text-white font-bold bg-zinc-800 hover:bg-zinc-700 rounded-xl flex justify-center items-center transition-colors">
+                      Iniciar Sesión
+                    </button>
+                    {!isAuditComplete && (
+                      <button onClick={() => { setMobileOpen(false); navigate('/?audit=true'); }} className="w-full py-4 text-brand-400 font-bold bg-zinc-900 border border-zinc-700 rounded-xl flex justify-center items-center gap-2 transition-colors">
+                        <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-pulse"></span>
+                        Auditar Beneficios
+                      </button>
+                    )}
+                    <button onClick={() => { setMobileOpen(false); navigate('/registro'); }} className="w-full py-4 bg-brand-500 text-white font-black rounded-xl shadow-xl flex justify-center items-center transition-colors active:scale-95">
+                      Empezar gratis
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </nav>
   );
 }
