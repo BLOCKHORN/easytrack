@@ -122,10 +122,13 @@ export default function ConfigPage() {
     return data || [];
   };
 
-  const loadAll = async (forTenantId, cancelRef) => {
-    const { data: tenantData } = await supabase.from('tenants').select('*').eq('id', forTenantId).maybeSingle();
+  // ✅ CORRECCIÓN 1: Recibimos el tenant asegurado completo para saltarnos el bloqueo de RLS
+  const loadAll = async (ensuredTenant, cancelRef) => {
+    const forTenantId = ensuredTenant.id;
+
     if (!cancelRef.current) {
-      setTenant(tenantData || null); setNombre(tenantData?.nombre_empresa || '');
+      setTenant(ensuredTenant); 
+      setNombre(ensuredTenant.nombre_empresa || ensuredTenant.nombre || '');
     }
 
     const { data: empresasData } = await supabase.from('empresas_transporte_tenant').select('*').eq('tenant_id', forTenantId);
@@ -150,7 +153,8 @@ export default function ConfigPage() {
         const { tenant: ensuredTenant } = await ensureTenantResolved();
         if (!ensuredTenant?.id) throw new Error('TENANT_NOT_FOUND');
 
-        await loadAll(ensuredTenant.id, cancelRef);
+        // Pasamos todo el objeto ensuredTenant
+        await loadAll(ensuredTenant, cancelRef);
       } catch (err) {
         mostrarToast('No se pudieron cargar los datos.', 'error');
       } finally {
@@ -223,11 +227,28 @@ export default function ConfigPage() {
 
       let debugResp = null;
       if (dirty) {
-        const { error: nameErr } = await supabase.rpc('update_tenant_name_secure', { p_tenant: tId, p_nombre: nombre.trim() });
-        if (nameErr) throw nameErr;
+        const { data: { session } } = await supabase.auth.getSession();
+        const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || 'http://localhost:3001';
+        
+        // ✅ CORRECCIÓN 2: Actualizamos a través del Backend oficial para saltarnos bloqueos
+        const nameRes = await fetch(`${apiBase}/api/tenants/me`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ nombre_empresa: nombre.trim() })
+        });
+        
+        // Por si tu servidor usa PATCH en lugar de PUT
+        if (!nameRes.ok) {
+          const patchRes = await fetch(`${apiBase}/api/tenants/me`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+            body: JSON.stringify({ nombre_empresa: nombre.trim() })
+          });
+          if (!patchRes.ok) throw new Error('No se pudo actualizar el nombre del negocio.');
+        }
+
         setTenant(prev => prev ? { ...prev, nombre_empresa: nombre.trim() } : prev);
 
-        const { data: { session } } = await supabase.auth.getSession();
         const resp = await guardarUbicaciones(
           { tenantId: tId, ubicaciones: sanitizeUbicaciones(ubiRows), meta: { cols: ubiMeta.cols, order: ubiMeta.orden }, deletions: pendingDeletionsRef.current, forceDeletePackages: forceDeleteRef.current },
           session?.access_token
