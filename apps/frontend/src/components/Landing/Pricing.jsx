@@ -34,15 +34,15 @@ export default function Pricing() {
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="bg-white p-8 md:p-10 rounded-[2rem] border border-zinc-200 flex flex-col justify-between hover:border-zinc-300 transition-colors shadow-sm">
             <div>
               <h3 className="text-xl font-black text-zinc-900 mb-2 tracking-tight">Freemium</h3>
-              <p className="text-zinc-500 font-medium mb-8 text-sm">Prueba el sistema en tu local sin riesgo.</p>
+              <p className="text-zinc-500 font-medium mb-8 text-sm">Integra la herramienta en tu operativa diaria sin riesgo.</p>
               <div className="mb-10 h-16 flex items-end gap-1"><span className="text-5xl font-black text-zinc-950 tracking-tighter">0€</span></div>
               <div className="space-y-4">
-                <div className="flex items-start gap-3"><div className="mt-1 shrink-0"><IconCheck /></div><p className="font-bold text-zinc-700 text-sm">Hasta 250 paquetes / mes</p></div>
+                <div className="flex items-start gap-3"><div className="mt-1 shrink-0"><IconCheck /></div><p className="font-bold text-zinc-700 text-sm">14 días de paquetes ILIMITADOS</p></div>
+                <div className="flex items-start gap-3"><div className="mt-1 shrink-0"><IconCheck /></div><p className="font-bold text-zinc-700 text-sm">Después, 250 paquetes / mes</p></div>
                 <div className="flex items-start gap-3"><div className="mt-1 shrink-0"><IconCheck /></div><p className="font-bold text-zinc-700 text-sm">Registro manual de entradas</p></div>
                 <div className="flex items-start gap-3"><div className="mt-1 shrink-0"><IconCheck /></div><p className="font-bold text-zinc-700 text-sm">Mapeo visual de estanterías</p></div>
                 
                 <div className="pt-4 mt-4 border-t border-zinc-100 space-y-4">
-                  <div className="flex items-start gap-3"><div className="mt-1 shrink-0 text-zinc-300"><IconLock /></div><p className="font-bold text-zinc-400 text-sm line-through">Paquetes ilimitados</p></div>
                   <div className="flex items-start gap-3"><div className="mt-1 shrink-0 text-zinc-300"><IconLock /></div><p className="font-bold text-zinc-400 text-sm line-through">Escáner de etiquetas por IA</p></div>
                   <div className="flex items-start gap-3"><div className="mt-1 shrink-0 text-zinc-300"><IconLock /></div><p className="font-bold text-zinc-400 text-sm line-through">Avisos automáticos a clientes</p></div>
                   <div className="flex items-start gap-3"><div className="mt-1 shrink-0 text-zinc-300"><IconLock /></div><p className="font-bold text-zinc-400 text-sm line-through">Analítica y Auditoría de personal</p></div>
@@ -51,10 +51,18 @@ export default function Pricing() {
             </div>
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="bg-zinc-950 p-8 md:p-10 rounded-[2rem] border border-zinc-800 flex flex-col justify-between relative shadow-2xl">
-            <div className="absolute -top-4 right-8 bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">7 Días Gratis</div>
-            <div className="relative z-10">
-              <h3 className="text-xl font-black text-white mb-2 tracking-tight">PRO</h3>
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="bg-zinc-950 p-8 md:p-10 rounded-[2rem] border border-zinc-800 flex flex-col justify-between shadow-2xl">
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-xl font-black text-white tracking-tight">PRO</h3>
+                <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-emerald-400">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  7 días gratis
+                </div>
+              </div>
               <p className="text-zinc-400 font-medium mb-8 text-sm">Automatización total. Cero cuellos de botella.</p>
               <div className="mb-8 h-16 flex items-end gap-1">
                 <span className="text-5xl font-black text-white tracking-tighter leading-none">{isAnnual ? '299€' : '29,90€'}</span>
@@ -98,8 +106,8 @@ export default function Pricing() {
         </div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="max-w-3xl mx-auto text-center bg-zinc-50 border border-zinc-200 rounded-[2rem] p-10 md:p-12 shadow-sm">
-          <h3 className="text-2xl md:text-3xl font-black text-zinc-950 tracking-tight mb-4">Inicia hoy. Escala cuando estés listo.</h3>
-          <p className="text-zinc-500 font-medium mb-8 text-lg leading-relaxed">Comienza en el plan Freemium probando el sistema sin compromiso. Podrás activar tu prueba gratuita de 7 días del plan PRO desde tu panel de control en cualquier momento.</p>
+          <h3 className="text-2xl md:text-3xl font-black text-zinc-950 tracking-tight mb-4">Empieza con 14 días sin límites.</h3>
+          <p className="text-zinc-500 font-medium mb-8 text-lg leading-relaxed">Crea tu cuenta gratis y prueba la herramienta a máximo rendimiento durante dos semanas. Pasado ese tiempo, decides si mantienes el volumen con Pro o te quedas en el plan Freemium con 250 paquetes mensuales.</p>
           <button onClick={() => navigate('/registro')} className="w-full md:w-auto px-10 py-4 bg-zinc-950 text-white font-black rounded-xl hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-950/20 active:scale-95 text-lg">
             Crear cuenta gratis
           </button>
