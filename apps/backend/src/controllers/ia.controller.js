@@ -1,15 +1,17 @@
 'use strict';
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const supa = require('../utils/supabaseClient');
+const supabase = supa.supabase || supa.default || supa;
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Función auxiliar para pausar la ejecución (reintentos)
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 exports.escanearEtiqueta = async (req, res) => {
   try {
-    const { imageBase64 } = req.body;
+    const { imageBase64, tenant_id } = req.body;
+    
     if (!imageBase64) return res.status(400).json({ error: 'Falta la imagen.' });
 
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
@@ -32,14 +34,12 @@ exports.escanearEtiqueta = async (req, res) => {
       }
     `;
 
-    // Strings oficiales exactos basados en tu panel de Google AI Studio
     const models = ["gemini-2.5-flash", "gemini-2-flash"];
     let result;
     let lastError;
 
-    // Bucle de modelos
     for (const modelName of models) {
-      let retries = 2; // Le damos 2 oportunidades a cada modelo si el servidor de Google está saturado
+      let retries = 2; 
       
       while (retries > 0) {
         try {
@@ -49,29 +49,23 @@ exports.escanearEtiqueta = async (req, res) => {
           });
           
           result = await model.generateContent([promptText, imagePart]);
-          break; // Éxito: rompemos el bucle 'while'
+          break; 
           
         } catch (error) {
           lastError = error;
           
           if (error.status === 503) {
-            // Si es un 503 (Saturación), restamos un intento, esperamos 1.5s y volvemos a lanzar
-            console.warn(`[IA Scanner] ${modelName} saturado (503). Reintentando...`);
             retries--;
             if (retries > 0) await sleep(1500);
           } else {
-            // Si es un 404 u otro error grave, rompemos el bucle 'while' para pasar al SIGUIENTE modelo del array
-            console.warn(`[IA Scanner] El modelo ${modelName} falló con error ${error.status}. Probando alternativa...`);
             break;
           }
         }
       }
       
-      // Si ya obtuvimos resultado, rompemos el bucle de modelos (no necesitamos probar el fallback)
       if (result) break;
     }
 
-    // Si después de probar todos los modelos y reintentos seguimos sin resultado, lanzamos el error
     if (!result) {
       throw lastError;
     }
@@ -79,6 +73,20 @@ exports.escanearEtiqueta = async (req, res) => {
     const response = await result.response;
     const textOutput = response.text();
     
+    if (tenant_id) {
+      const usage = response.usageMetadata;
+      const pTokens = usage?.promptTokenCount || 0;
+      const cTokens = usage?.candidatesTokenCount || 0;
+
+      supabase.rpc('increment_ai_usage', {
+        p_tenant_id: tenant_id,
+        p_prompt_tokens: pTokens,
+        p_completion_tokens: cTokens
+      }).then(({error}) => {
+        if (error) console.error("[IA Log] Error actualizando tokens:", error);
+      });
+    }
+
     const cleanedText = textOutput.replace(/```json\s*|```/g, '').trim();
     const parsedJson = JSON.parse(cleanedText);
     

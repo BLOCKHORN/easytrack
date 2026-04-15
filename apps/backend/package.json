@@ -26,6 +26,7 @@
     "node-cron": "^3.0.3",
     "node-fetch": "^2.7.0",
     "nodemailer": "^7.0.6",
+    "puppeteer": "^24.40.0",
     "sharp": "^0.34.3",
     "stripe": "^18.4.0",
     "zod": "^4.0.17"

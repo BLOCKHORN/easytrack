@@ -27,6 +27,7 @@ const activationRoutes = require('./routes/auth.activation.routes');
 const supportRoutes = require('./routes/support.routes');
 const ticketsRoutes = require('./routes/tickets.routes');
 const iaRoutes = require('./routes/ia.routes');
+const radarRoutes = require('./routes/radar.routes');
 
 const envOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
   .split(',').map(s => s.trim()).filter(Boolean);
@@ -115,6 +116,8 @@ authOnly('/:tenantSlug/api/ubicaciones', ubicacionesRoutes);
 
 authOnly('/api/ia', iaRoutes);
 authOnly('/:tenantSlug/api/ia', iaRoutes);
+
+authOnly('/api/admin/radar', radarRoutes);
 
 app.use('/api/tenants', requireAuth, subscriptionFirewall(), tenantsRoutes);
 

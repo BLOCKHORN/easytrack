@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from '../../utils/supabaseClient';
 import Hero from './Hero';
 import Benefits from './Benefits';
 import HowItWorks from './HowItWorks';
@@ -14,24 +15,50 @@ export default function LandingPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [showAudit, setShowAudit] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const forceAudit = params.get('audit') === 'true';
-    const hasSeenAudit = localStorage.getItem('et_audit_complete');
+    const checkAuditStatus = async () => {
+      const params = new URLSearchParams(location.search);
+      const forceAudit = params.get('audit') === 'true';
+      const hasSeenAudit = localStorage.getItem('et_audit_complete');
 
-    if (forceAudit) {
-      setShowAudit(true);
-      navigate('/', { replace: true }); 
-    } else if (!hasSeenAudit) {
-      setShowAudit(true);
-    }
+      if (forceAudit) {
+        setShowAudit(true);
+        setIsChecking(false);
+        navigate('/', { replace: true });
+        return;
+      }
+
+      if (hasSeenAudit) {
+        setShowAudit(false);
+        setIsChecking(false);
+        return;
+      }
+
+      const { data } = await supabase.auth.getSession();
+      
+      if (data?.session) {
+        localStorage.setItem('et_audit_complete', 'true');
+        setShowAudit(false);
+      } else {
+        setShowAudit(true);
+      }
+      
+      setIsChecking(false);
+    };
+
+    checkAuditStatus();
   }, [location.search, navigate]);
 
   const handleAuditComplete = () => {
     localStorage.setItem('et_audit_complete', 'true');
     setShowAudit(false);
   };
+
+  if (isChecking) {
+    return null; 
+  }
 
   if (showAudit) {
     return <InteractiveAudit onComplete={handleAuditComplete} />;

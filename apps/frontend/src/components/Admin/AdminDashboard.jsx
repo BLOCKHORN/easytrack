@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../../utils/supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// --- ICONOS TÉCNICOS ---
 const IconSearch = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const IconTerminal = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>;
 const IconBoxIn = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/><path d="M12 8v4"/><path d="M8 4l8 4"/></svg>;
@@ -15,25 +14,24 @@ const IconBuilding = () => <svg width="16" height="16" viewBox="0 0 24 24" fill=
 const IconAlert = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
 const IconWhatsapp = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.487-1.761-1.66-2.059-.173-.297-.018-.458.13-.606.134-.133-.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>;
 
-// --- FORMATEADORES ---
 const formatEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(n || 0);
+const formatMicroEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 4, maximumFractionDigits: 6 }).format(n || 0);
+
 const timeAgo = (dateString) => {
-  if (!dateString) return 'OFFLINE';
+  if (!dateString) return 'NO DATA';
   const seconds = Math.floor((new Date() - new Date(dateString)) / 1000);
-  let interval = seconds / 86400; if (interval > 1) return Math.floor(interval) + 'd';
-  interval = seconds / 3600; if (interval > 1) return Math.floor(interval) + 'h';
-  interval = seconds / 60; if (interval > 1) return Math.floor(interval) + 'm';
-  return 'LIVE';
+  let interval = seconds / 86400; if (interval > 1) return Math.floor(interval) + 'D';
+  interval = seconds / 3600; if (interval > 1) return Math.floor(interval) + 'H';
+  interval = seconds / 60; if (interval > 1) return Math.floor(interval) + 'M';
+  return 'NOW';
 };
 
-// --- LÓGICA DE NEGOCIACIÓN AI ---
 const analyzeNegotiationOpportunities = (statsArray) => {
   return statsArray.map(c => {
     const vol = Number(c.volumen) || 0;
     const currentTicket = Number(c.ticket_medio) || 0;
     let targetTicket = 0;
     
-    // Baremos actualizados del mercado real
     if (vol >= 2500) targetTicket = 0.60;
     else if (vol >= 1000) targetTicket = 0.50;
     else if (vol >= 500) targetTicket = 0.45;
@@ -53,24 +51,19 @@ const analyzeNegotiationOpportunities = (statsArray) => {
   }).filter(Boolean);
 };
 
-// --- COMPONENTE DE INSPECCIÓN (DETALLE DEL TENANT) ---
 const TenantInspector = ({ tenant, onBack, onUpdate }) => {
   const [statsData, setStatsData] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Controles de Limites
-  const [quotaInput, setQuotaInput] = useState(tenant.trial_quota);
+  const [quotaInput, setQuotaInput] = useState(tenant.trial_quota !== null ? tenant.trial_quota : -1);
   const [aiActive, setAiActive] = useState(tenant.is_ai_active);
   const [saving, setSaving] = useState(false);
-
-  // Filtros de tiempo calibrados al servidor ('today', 'week', 'month', 'all')
   const [timeRange, setTimeRange] = useState('all'); 
 
   useEffect(() => {
     const fetchDetails = async () => {
       setLoading(true);
       try {
-        // Llamada RPC de alto rendimiento
         const { data, error } = await supabase.rpc('admin_get_tenant_stats', { 
           p_tenant_id: tenant.id, 
           p_time_range: timeRange 
@@ -78,7 +71,7 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
         if (error) throw error;
         setStatsData(data || []);
       } catch (err) {
-        console.error("Error cargando inspector:", err);
+        console.error(err);
       } finally {
         setLoading(false);
       }
@@ -90,16 +83,17 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
     setSaving(true);
     try {
       const parsedQuota = parseInt(quotaInput, 10);
+      const finalQuota = isNaN(parsedQuota) || parsedQuota < 0 ? null : parsedQuota;
+      
       const { error } = await supabase.from('tenants').update({
-        trial_quota: isNaN(parsedQuota) ? -1 : parsedQuota,
+        trial_quota: finalQuota,
         is_ai_active: aiActive
       }).eq('id', tenant.id);
       
       if (error) throw error;
-      alert('Límites actualizados correctamente.');
       onUpdate(); 
     } catch (err) {
-      alert('Error guardando límites: ' + err.message);
+      alert(err.message);
     } finally {
       setSaving(false);
     }
@@ -113,11 +107,18 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
     }, { revenue: 0, volume: 0 });
   }, [statsData]);
 
-  // Procesar oportunidades con el radar solo si hay datos representativos (Mes o Total)
   const opportunities = useMemo(() => {
     if (timeRange === 'today' || timeRange === 'week') return [];
     return analyzeNegotiationOpportunities(statsData);
   }, [statsData, timeRange]);
+
+  const quotaPercentage = tenant.trial_quota > 0 ? Math.min((tenant.trial_used / tenant.trial_quota) * 100, 100) : 0;
+  const isQuotaExhausted = tenant.trial_quota > 0 && tenant.trial_used >= tenant.trial_quota;
+
+  const promptCost = (tenant.ai_prompt_tokens || 0) / 1000000 * 0.075;
+  const compCost = (tenant.ai_completion_tokens || 0) / 1000000 * 0.30;
+  const totalCost = promptCost + compCost;
+  const costPerScan = tenant.ai_scans_count > 0 ? (totalCost / tenant.ai_scans_count) : 0;
 
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
@@ -130,12 +131,11 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
           onClick={() => window.open(`/${tenant.slug}/dashboard`, '_blank')}
           className="flex items-center gap-2 text-[10px] font-black text-brand-500 hover:text-brand-300 uppercase tracking-[0.2em] bg-brand-500/10 px-3 py-1.5 rounded-lg border border-brand-500/20 transition-all"
         >
-          <IconTerminal /> INJECT ROOT (Entrar al Panel)
+          <IconTerminal /> INJECT ROOT
         </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* COLUMNA IZQUIERDA: Info y Controles */}
         <div className="space-y-6">
           <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-xl">
             <div className="flex items-center gap-3 mb-1">
@@ -166,16 +166,30 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
               <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400">Control de Límites</h3>
             </div>
             
-            <div className="space-y-5">
+            <div className="space-y-6">
               <div>
-                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-2">Cuota de Paquetes (-1 = Infinito)</label>
+                <div className="flex justify-between items-end mb-2">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block">Consumo de Paquetes</label>
+                  <span className="text-xs font-mono font-bold text-white">
+                    {tenant.trial_used} / {tenant.trial_quota || '∞'}
+                  </span>
+                </div>
+                {tenant.trial_quota > 0 && (
+                  <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-4 border border-zinc-800">
+                    <div 
+                      className={`h-full transition-all duration-500 ${isQuotaExhausted ? 'bg-red-500' : 'bg-brand-500'}`} 
+                      style={{ width: `${quotaPercentage}%` }} 
+                    />
+                  </div>
+                )}
+                
                 <input 
                   type="number" 
                   value={quotaInput} 
                   onChange={e => setQuotaInput(e.target.value)} 
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 text-white font-mono text-sm focus:border-brand-500 outline-none transition-colors"
+                  placeholder="-1 para infinito"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-white font-mono text-sm focus:border-brand-500 outline-none transition-colors"
                 />
-                <p className="text-[10px] text-zinc-600 mt-1 font-mono">Consumo actual: {tenant.trial_used}</p>
               </div>
 
               <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 p-3 rounded-lg">
@@ -184,6 +198,16 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
                   <input type="checkbox" checked={aiActive} onChange={e => setAiActive(e.target.checked)} className="sr-only peer" />
                   <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
                 </label>
+              </div>
+
+              <div className="flex justify-between items-center text-sm border-t border-zinc-900 pt-4 mt-2">
+                <span className="font-bold text-brand-500">Uso Scanner IA</span>
+                <div className="text-right">
+                  <p className="font-mono font-black text-white">{tenant.ai_scans_count || 0} usos</p>
+                  <p className="text-[10px] font-mono text-zinc-500">
+                     Coste: {formatMicroEUR(totalCost)} ({formatMicroEUR(costPerScan)}/uso)
+                  </p>
+                </div>
               </div>
 
               <button 
@@ -196,10 +220,7 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
           </div>
         </div>
 
-        {/* COLUMNA DERECHA: Analíticas Financieras Server-Side */}
         <div className="lg:col-span-2 space-y-6">
-          
-          {/* RADAR DE NEGOCIACIÓN AI */}
           {opportunities.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-[#09090b] border border-red-900/50 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
               <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/10 blur-[80px] rounded-full pointer-events-none" />
@@ -314,7 +335,6 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Ordenación Global
   const [sortKey, setSortKey] = useState('total_paquetes');
   const [sortDir, setSortDir] = useState('desc');
 
@@ -335,7 +355,7 @@ export default function AdminDashboard() {
       setTenants(resT.data || []);
       setLeaderboard(resL.data || []);
     } catch (err) {
-      console.error("Error fetching admin data:", err);
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -369,7 +389,6 @@ export default function AdminDashboard() {
     });
   }, [tenants, searchTerm, sortKey, sortDir]);
 
-  // Cálculos globales rápidos
   const globalMetrics = useMemo(() => {
     return {
       total: tenants.length,
@@ -380,13 +399,10 @@ export default function AdminDashboard() {
     };
   }, [tenants]);
 
-  // Total de ingresos generado a los locales
   const networkRevenue = useMemo(() => leaderboard.reduce((acc, c) => acc + (Number(c.ingreso_total) || 0), 0), [leaderboard]);
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8 pb-20 font-sans">
-      
-      {/* HEADER & GLOBAL KPIs */}
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 border-b border-zinc-800/80 pb-6">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-[0.2em] mb-4">
@@ -430,8 +446,6 @@ export default function AdminDashboard() {
           />
         ) : (
           <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
-            
-            {/* LEADERBOARD DE COMPAÑÍAS GLOBALES */}
             <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-xl">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
@@ -482,7 +496,6 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* TOOLBAR TENANTS */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="relative w-full sm:max-w-md">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-zinc-500">
@@ -501,14 +514,13 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* DENSE DATA TABLE (TENANTS) */}
             <div className="bg-[#09090b] border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl relative">
               <div className="overflow-x-auto">
                 <table className="w-full text-left whitespace-nowrap">
                   <thead>
                     <tr className="bg-zinc-900 border-b border-zinc-800 text-[9px] uppercase tracking-[0.2em] font-black text-zinc-500 select-none">
                       <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('nombre_empresa')}>Target Identity {sortKey==='nombre_empresa' && (sortDir==='asc'?'↑':'↓')}</th>
-                      <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('total_paquetes')}>Volumen All Time {sortKey==='total_paquetes' && (sortDir==='asc'?'↑':'↓')}</th>
+                      <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('total_paquetes')}>Quota / Volume {sortKey==='total_paquetes' && (sortDir==='asc'?'↑':'↓')}</th>
                       <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('ingresos_mes')}>€ App (Mes) {sortKey==='ingresos_mes' && (sortDir==='asc'?'↑':'↓')}</th>
                       <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('top_ticket_medio')}>Top Carrier Local {sortKey==='top_ticket_medio' && (sortDir==='asc'?'↑':'↓')}</th>
                       <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('ultima_actividad')}>System Ping {sortKey==='ultima_actividad' && (sortDir==='asc'?'↑':'↓')}</th>
@@ -549,22 +561,28 @@ export default function AdminDashboard() {
                                 <div className="flex items-center gap-2 mb-1">
                                   <span className="font-black text-white text-base">{t.nombre_empresa || 'Desconocido'}</span>
                                   {isPro && <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[8px] px-1.5 py-0.5 rounded uppercase tracking-widest font-black">PRO</span>}
+                                  {isBlocked && <span className="bg-red-500/10 text-red-500 border border-red-500/20 text-[8px] px-1.5 py-0.5 rounded uppercase tracking-widest font-black">LOCKED</span>}
                                 </div>
                                 <span className="text-[10px] font-mono text-zinc-500">{t.email}</span>
                               </div>
                             </td>
 
                             <td className="px-6 py-4">
-                              <div className="flex items-center gap-4">
-                                <div className="flex flex-col">
-                                  <span className="font-mono font-bold text-zinc-300 text-sm">{(t.total_paquetes || 0).toLocaleString()}</span>
-                                  <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600 mt-0.5">Total Historico</span>
+                              <div className="flex flex-col w-full max-w-[140px]">
+                                <div className="flex justify-between items-center mb-1">
+                                  <span className="font-mono font-bold text-zinc-300 text-sm">
+                                    {t.trial_used} <span className="text-zinc-500 text-xs">/ {t.trial_quota || '∞'}</span>
+                                  </span>
+                                  <span className="font-mono font-bold text-brand-400 text-xs">+{t.paquetes_hoy || 0}</span>
                                 </div>
-                                <div className="w-px h-6 bg-zinc-800" />
-                                <div className="flex flex-col">
-                                  <span className="font-mono font-black text-brand-400 text-sm">+{t.paquetes_hoy || 0}</span>
-                                  <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600 mt-0.5">In Hoy</span>
-                                </div>
+                                {t.trial_quota > 0 && (
+                                  <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
+                                    <div 
+                                      className={`h-full ${t.trial_used >= t.trial_quota ? 'bg-red-500' : 'bg-brand-500'}`} 
+                                      style={{ width: `${Math.min((t.trial_used / t.trial_quota) * 100, 100)}%` }} 
+                                    />
+                                  </div>
+                                )}
                               </div>
                             </td>
 
@@ -587,19 +605,11 @@ export default function AdminDashboard() {
                             </td>
 
                             <td className="px-6 py-4">
-                              <div className="flex flex-col gap-1.5">
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-2 h-2 rounded-full ${pingColor} ${hoursSinceActive < 1 ? 'animate-pulse' : ''}`} />
-                                  <span className="text-[10px] font-mono font-bold text-zinc-300 uppercase tracking-widest">
-                                    {timeAgo(t.ultima_actividad)}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-2 h-2 rounded-full ${isBlocked ? 'bg-red-500' : 'bg-emerald-500'}`} />
-                                  <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest">
-                                    {isBlocked ? 'LOCKED' : 'ACTIVE'}
-                                  </span>
-                                </div>
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${pingColor} ${hoursSinceActive < 1 ? 'animate-pulse' : ''}`} />
+                                <span className="text-xs font-mono font-bold text-zinc-300">
+                                  {timeAgo(t.ultima_actividad)}
+                                </span>
                               </div>
                             </td>
                           </motion.tr>

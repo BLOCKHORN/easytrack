@@ -15,12 +15,8 @@ import ImportWizard from './ImportWizard';
 import { guardarCarriers } from '../../services/configuracionService';
 import { cargarUbicaciones, guardarUbicaciones } from '../../services/ubicacionesService';
 
-// ==========================================
-// ICONOS CUSTOM
-// ==========================================
 const IconSettings = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 
-/* ===== Helpers ===== */
 const sameJSON = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const rowsFromCount = (n) => Array.from({ length: clamp(parseInt(n || 0, 10) || 0, 0, 5000) }, (_, i) => ({ label: `B${i + 1}`, codigo: `B${i + 1}`, orden: i }));
@@ -43,27 +39,21 @@ export default function ConfigPage() {
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
 
-  // Ubicaciones
   const [ubiRows, setUbiRows] = useState([]);
   const [ubiMeta, setUbiMeta] = useState({ cols: 5, orden: 'horizontal' });
   const [ubiLoading, setUbiLoading] = useState(false);
   const [usageByCodigo, setUsageByCodigo] = useState({});
 
-  // Carriers
   const [empresas, setEmpresas] = useState([]);
   const [empresasDisponibles, setEmpresasDisponibles] = useState([]);
   const carriersRef = useRef(null);
 
-  // Borradores de Cuenta
   const [accountDraft, setAccountDraft] = useState(null);
-
-  // Paquetes totales
   const [packagesCount, setPackagesCount] = useState(0);
 
   const [toast, setToast] = useState(null);
   const mostrarToast = (mensaje, tipo = 'success') => setToast({ mensaje, tipo });
 
-  // Snapshot + dirty
   const [snapshot, setSnapshot] = useState(null);
   const [dirty, setDirty] = useState(false);
 
@@ -81,7 +71,6 @@ export default function ConfigPage() {
     mostrarToast('Cambios revertidos.', 'success');
   };
 
-  /* ---------- Estabilidad de scroll ---------- */
   useEffect(() => {
     const prev = window.history.scrollRestoration;
     try { window.history.scrollRestoration = 'manual'; } catch {}
@@ -150,7 +139,6 @@ export default function ConfigPage() {
     await Promise.all([loadUbicacionesForTenant(forTenantId), loadPackagesCount(forTenantId), loadUsageByCodigo(forTenantId)]);
   };
 
-  // Carga inicial
   useEffect(() => {
     const cancelRef = { current: false };
     (async () => {
@@ -174,13 +162,11 @@ export default function ConfigPage() {
     return () => { cancelRef.current = true; };
   }, []);
 
-  // Dirty tracking
   useEffect(() => {
     if (!snapshot) return;
     setDirty(!sameJSON(deepPack(), snapshot));
   }, [nombre, ubiRows, ubiMeta, empresas, snapshot]);
 
-  // Atajos guardar/revertir
   useEffect(() => {
     const onKey = (e) => {
       const key = e.key?.toLowerCase();
@@ -191,7 +177,6 @@ export default function ConfigPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [dirty, snapshot]);
 
-  /* ---------- Carriers helpers ---------- */
   const sanitizeCarriersLocal = () => {
     const trimmed = empresas.map(e => ({ ...e, nombre: (e.nombre || '').trim(), ingreso_por_entrega: e.ingreso_por_entrega === '' ? '' : ('' + e.ingreso_por_entrega).trim() }));
     const names = trimmed.map(e => e.nombre).filter(Boolean);
@@ -225,7 +210,6 @@ export default function ConfigPage() {
     return !!(emailPending || passPending);
   }, [accountDraft, usuario]);
 
-  /* ---------- Guardar global ---------- */
   const handleGuardar = async () => {
     const carriersPayload = buildCarriersPayload();
     if (carriersPayload === null) return;
@@ -290,68 +274,81 @@ export default function ConfigPage() {
   if (cargando) return <Skeleton />;
 
   return (
-    <main className="max-w-5xl mx-auto space-y-10 pb-28 pt-8 px-4 sm:px-6 lg:px-8">
+    <main className="max-w-4xl mx-auto pb-28 pt-8 px-4 sm:px-6 lg:px-8">
       {toast && <Toast message={toast.mensaje} type={toast.tipo} onClose={() => setToast(null)} />}
 
-      <header className="sticky top-0 z-50 bg-zinc-50/80 backdrop-blur-md flex flex-col md:flex-row md:items-center justify-between gap-6 py-6 border-b border-zinc-200/80 shadow-sm rounded-b-3xl -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-8">
+      <header className="sticky top-0 z-40 bg-[#fafafa]/90 backdrop-blur-md flex flex-col md:flex-row md:items-center justify-between gap-6 py-6 border-b border-zinc-200/80 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-10">
         <div>
           <h1 className="text-3xl font-black text-zinc-950 tracking-tight flex items-center gap-3">
             <IconSettings /> Ajustes del Sistema
           </h1>
-          <p className="text-zinc-500 font-medium mt-1">Configura la infraestructura, accesos e importaciones.</p>
+          <p className="text-zinc-500 font-medium text-sm mt-1">Configura la infraestructura, accesos y seguridad.</p>
         </div>
         <button 
           onClick={handleGuardar}
           disabled={guardando || (!dirty && !hasAccountPending)}
-          className="px-8 py-3 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-bold rounded-xl shadow-lg shadow-brand-500/20 transition-all active:scale-95"
+          className="px-6 py-3 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-black text-sm uppercase tracking-widest rounded-xl shadow-lg shadow-brand-500/20 transition-all active:scale-95"
         >
           {guardando ? 'Guardando...' : 'Guardar Cambios'}
         </button>
       </header>
 
-      <div className="grid grid-cols-1 gap-8">
-        <IdentityCard nombre={nombre} setNombre={setNombre} usuario={usuario} />
+      <div className="space-y-12">
         
-        {ubiLoading ? <Skeleton /> : (
-          <Ubicaciones
-            initial={ubiRows}
-            initialMeta={ubiMeta}
-            tenantId={tenant?.id}
-            lockedCount={packagesCount}
-            usageByCodigo={usageByCodigo}
-            fetchPackagesByLabels={fetchPackagesByLabels}
-            onChange={({ ubicaciones, meta, deletions, forceDeletePackages }) => {
-              const sanitized = sanitizeUbicaciones(ubicaciones || []);
-              setUbiRows(sanitized);
-              setUbiMeta({ cols: Math.max(1, Math.min(12, parseInt(meta?.cols ?? ubiMeta.cols, 10) || ubiMeta.cols)), orden: (meta?.order || meta?.orden) === 'vertical' ? 'vertical' : 'horizontal' });
-              pendingDeletionsRef.current = Array.isArray(deletions) ? deletions : [];
-              forceDeleteRef.current = !!forceDeletePackages;
-            }}
-          />
-        )}
+        <section className="space-y-4">
+          <h2 className="text-xs font-black text-zinc-400 uppercase tracking-widest pl-2">1. Identidad</h2>
+          <IdentityCard nombre={nombre} setNombre={setNombre} usuario={usuario} />
+        </section>
 
-        {/* CONTENEDOR IMPORT WIZARD */}
-        <div className="bg-white rounded-3xl border border-zinc-200 shadow-sm p-6 md:p-8">
-          <ImportWizard
-            onToast={(m,t) => setToast({ mensaje: m, tipo: t || 'success' })}
-            onDone={() => { if (tenant?.id) { Promise.all([loadPackagesCount(tenant.id), loadUsageByCodigo(tenant.id)]).catch(()=>{}); } }}
-          />
-        </div>
+        <section className="space-y-4">
+          <h2 className="text-xs font-black text-zinc-400 uppercase tracking-widest pl-2">2. Operativa Logística</h2>
+          <div ref={carriersRef}>
+            <CarriersCard
+              empresas={empresas}
+              empresasDisponibles={empresasDisponibles}
+              INGRESOS={INGRESOS}
+              añadirEmpresa={() => setEmpresas([...empresas, { nombre: '', ingreso_por_entrega: '' }])}
+              actualizarEmpresa={(i,c,v) => setEmpresas(empresas.map((e, idx) => idx===i ? { ...e, [c]: v } : e))}
+              eliminarEmpresa={(i) => { if (window.confirm('¿Eliminar esta empresa?')) setEmpresas(empresas.filter((_, idx) => idx !== i)); }}
+            />
+          </div>
+          {ubiLoading ? <Skeleton /> : (
+            <Ubicaciones
+              initial={ubiRows}
+              initialMeta={ubiMeta}
+              tenantId={tenant?.id}
+              lockedCount={packagesCount}
+              usageByCodigo={usageByCodigo}
+              fetchPackagesByLabels={fetchPackagesByLabels}
+              onChange={({ ubicaciones, meta, deletions, forceDeletePackages }) => {
+                const sanitized = sanitizeUbicaciones(ubicaciones || []);
+                setUbiRows(sanitized);
+                setUbiMeta({ cols: Math.max(1, Math.min(12, parseInt(meta?.cols ?? ubiMeta.cols, 10) || ubiMeta.cols)), orden: (meta?.order || meta?.orden) === 'vertical' ? 'vertical' : 'horizontal' });
+                pendingDeletionsRef.current = Array.isArray(deletions) ? deletions : [];
+                forceDeleteRef.current = !!forceDeletePackages;
+              }}
+            />
+          )}
+        </section>
 
-        <div ref={carriersRef}>
-          <CarriersCard
-            empresas={empresas}
-            empresasDisponibles={empresasDisponibles}
-            INGRESOS={INGRESOS}
-            añadirEmpresa={() => setEmpresas([...empresas, { nombre: '', ingreso_por_entrega: '' }])}
-            actualizarEmpresa={(i,c,v) => setEmpresas(empresas.map((e, idx) => idx===i ? { ...e, [c]: v } : e))}
-            eliminarEmpresa={(i) => { if (window.confirm('¿Eliminar esta empresa?')) setEmpresas(empresas.filter((_, idx) => idx !== i)); }}
-          />
-        </div>
+        <section className="space-y-4">
+          <h2 className="text-xs font-black text-zinc-400 uppercase tracking-widest pl-2">3. Seguridad y Accesos</h2>
+          <PinCard tenantId={tenant?.id} onToast={(m,t) => setToast({ mensaje: m, tipo: t || 'success' })} />
+          <AccountSettings usuario={usuario} onDraftChange={setAccountDraft} />
+        </section>
 
-        <PinCard tenantId={tenant?.id} onToast={(m,t) => setToast({ mensaje: m, tipo: t || 'success' })} />
+        <section className="space-y-4 pt-12">
+          <h2 className="text-xs font-black text-zinc-400 uppercase tracking-widest pl-2">4. Datos y Herramientas</h2>
+          <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+             <div className="p-6 md:p-8 bg-zinc-50/30">
+               <ImportWizard
+                 onToast={(m,t) => setToast({ mensaje: m, tipo: t || 'success' })}
+                 onDone={() => { if (tenant?.id) { Promise.all([loadPackagesCount(tenant.id), loadUsageByCodigo(tenant.id)]).catch(()=>{}); } }}
+               />
+             </div>
+          </div>
+        </section>
 
-        <AccountSettings usuario={usuario} onDraftChange={setAccountDraft} />
       </div>
     </main>
   );

@@ -5,7 +5,6 @@ import { hasNotice, subscribeNotice, setNotice, clearNotice } from '../../utils/
 import { listTickets } from '../../services/ticketsService';
 import { supabase } from '../../utils/supabaseClient';
 
-// --- LOGO TYPEWRITER UNIFICADO ---
 const TypewriterLogo = ({ size = "text-2xl", cursorHeight = "h-6" }) => {
   const text = "easytrack";
   return (
@@ -33,6 +32,7 @@ const IconLogout = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="n
 const IconCreditCard = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>;
 const IconMenu = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
 const IconX = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const IconScan = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.5-1.5"/></svg>;
 
 export default function DashboardLayout() {
   const location = useLocation();
@@ -89,7 +89,7 @@ export default function DashboardLayout() {
   ];
 
   const mobileNavLeft = [
-    { label: 'Inicio', path: '.', icon: <IconChart />, end: true },
+    { label: 'Manual', path: 'anadir', icon: <IconPlus /> },
     { label: 'Buscar', path: 'buscar', icon: <IconSearch /> }
   ];
 
@@ -115,7 +115,6 @@ export default function DashboardLayout() {
       `}} />
 
       <aside className="hidden md:flex flex-col w-[260px] bg-zinc-950 border-r border-zinc-900 sticky top-0 h-screen overflow-y-auto">
-        {/* LOGO TYPEWRITER SIDEBAR */}
         <div className="p-8 cursor-pointer" onClick={() => navigate('.')}>
           <TypewriterLogo size="text-2xl" cursorHeight="h-6" />
         </div>
@@ -165,7 +164,6 @@ export default function DashboardLayout() {
         </div>
       </aside>
 
-      {/* HEADER MOBILE CON LOGO TYPEWRITER */}
       <header className="md:hidden sticky top-0 z-40 bg-zinc-950 flex items-center justify-between p-4 px-5 shadow-lg border-b border-zinc-800/50">
         <div className="cursor-pointer" onClick={() => navigate('.')}>
           <TypewriterLogo size="text-xl" cursorHeight="h-5" />
@@ -260,11 +258,12 @@ export default function DashboardLayout() {
 
           <div className="relative shrink-0 flex justify-center -mt-8">
             <NavLink 
-              to="anadir" 
+              to="anadir"
+              state={{ openScanner: true }}
               className={({ isActive }) => `relative flex flex-col items-center justify-center transition-transform active:scale-95 ${isActive ? '' : 'hover:-translate-y-1'}`}
             >
               <div className="w-[60px] h-[60px] bg-gradient-to-tr from-brand-500 to-brand-400 rounded-full flex items-center justify-center text-white pro-fab shadow-xl">
-                <IconPlus />
+                <IconScan />
               </div>
             </NavLink>
           </div>

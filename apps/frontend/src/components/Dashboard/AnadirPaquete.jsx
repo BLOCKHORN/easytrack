@@ -1,12 +1,11 @@
 import { useState, useEffect, useMemo, useCallback, useRef, startTransition } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '../../utils/supabaseClient';
 import { getTenantIdOrThrow } from '../../utils/tenant';
 import { crearPaqueteBackend, obtenerPaquetesBackend } from '../../services/paquetesService';
 import { cargarUbicaciones } from '../../services/ubicacionesService';
 
-// --- ICONOS (Se mantienen igual) ---
 const IconBox = () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
 const IconCheck = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>;
 const IconLayers = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
@@ -246,9 +245,9 @@ const CameraScanner = ({ onCapture, onClose }) => {
 
 export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaquetes, actualizarPaquetes }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { tenantSlug } = useParams();
 
-  // --- ESTADOS DE CARGA UNIFICADOS ---
   const [isInitializing, setIsInitializing] = useState(true);
   const [tenant, setTenant] = useState(null);
   const [aiStatus, setAiStatus] = useState('locked');
@@ -316,7 +315,6 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   .fly-parcel.animate { animation: flyCurve 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
   `;
 
-  // --- INICIALIZACIÓN OPTIMIZADA (SIN SALTOS) ---
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -326,7 +324,6 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         const token = session?.access_token;
         const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
 
-        // LANZAMOS TODO EN PARALELO PARA EVITAR LA CASCADA
         const [limitsRes, companiesRes, ubiData, pkgsData] = await Promise.all([
           fetch(`${API_URL}/api/limits/me`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({})),
           supabase.from('empresas_transporte_tenant').select('nombre').eq('tenant_id', tid).then(r => r.data || []),
@@ -336,7 +333,6 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
 
         if (cancel) return;
 
-        // --- ACTUALIZACIÓN DE ESTADOS EN UN SOLO BLOQUE ---
         const limitsData = limitsRes;
         setAiStatus(limitsData?.entitlements?.features?.aiStatus || 'locked');
         
@@ -367,10 +363,8 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
           setPaquetesLocales(Array.isArray(pkgsData) ? pkgsData : []);
         }
 
-        // LIBERAMOS LA UI SOLO CUANDO TODO ESTÁ CARGADO
         setIsInitializing(false);
 
-        // Autofocus después del renderizado completo
         setTimeout(() => inputClienteRef.current?.focus(), 50);
 
       } catch (e) {
@@ -379,6 +373,19 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
     })();
     return () => { cancel = true; };
   }, [propsPaquetes]);
+
+  useEffect(() => {
+    if (!isInitializing && location.state?.openScanner) {
+      window.history.replaceState({}, document.title);
+      if (['unlimited', 'trial_active'].includes(aiStatus)) {
+        setShowCamera(true);
+      } else if (aiStatus === 'trial_available') {
+        setShowTrialModal(true);
+      } else {
+        setShowUpgradePro(true);
+      }
+    }
+  }, [isInitializing, location.state, aiStatus]);
 
   const handleActivateTrial = async () => {
     if (activatingTrial) return;
@@ -494,7 +501,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   }, [activeTab]);
 
   useEffect(() => {
-    if (isInitializing) return; // Evitamos lógica innecesaria durante la carga inicial
+    if (isInitializing) return;
     
     const pendientes = paquetes.filter(p => !p.entregado);
     const sug = bestClientSuggestion(leadingName, pendientes);
@@ -556,7 +563,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       const res = await fetch(`${API_URL}/api/ia/scan-label`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ imageBase64: base64Image })
+        body: JSON.stringify({ imageBase64: base64Image, tenant_id: tenant.id })
       });
 
       if (!res.ok) {
@@ -802,7 +809,6 @@ const renderScannerButton = () => {
     }
   };
 
-  // --- RENDERING CONDICIONAL DE CARGA ---
   if (isInitializing) {
     return (
       <div className={`bg-white flex flex-col items-center justify-center ${modoRapido ? 'h-[400px]' : 'min-h-[60vh] rounded-[2rem] border border-zinc-200/80 mx-auto max-w-5xl'}`}>
@@ -1107,7 +1113,6 @@ const renderScannerButton = () => {
 <AnimatePresence>
   {showUpgradePro && (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      {/* Fondo con desenfoque técnico */}
       <motion.div 
         initial={{ opacity: 0 }} 
         animate={{ opacity: 1 }} 
@@ -1122,11 +1127,9 @@ const renderScannerButton = () => {
         exit={{ scale: 0.9, opacity: 0, y: 30 }} 
         className="relative bg-zinc-950 border border-zinc-800 rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 text-center overflow-hidden"
       >
-        {/* Efecto de luz ambiental en la esquina */}
         <div className="absolute top-0 right-0 w-40 h-40 bg-brand-500/10 blur-[80px] rounded-full pointer-events-none" />
         
         <div className="relative z-10">
-          {/* Icono más técnico */}
           <div className="w-20 h-20 bg-zinc-900 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-zinc-800 shadow-inner group">
             <div className="text-brand-400">
               <IconSparkles className="w-10 h-10" />
@@ -1134,12 +1137,12 @@ const renderScannerButton = () => {
           </div>
 
           <p className="text-[10px] font-black text-brand-500 uppercase tracking-[0.3em] mb-3">Feature_Locked</p>
-          <h3 className="text-3xl font-black text-white tracking-tighter mb-4">Pistoleo Inteligente</h3>
+          <h3 className="text-3xl font-black text-white tracking-tighter mb-4">Escaneo Inteligente</h3>
           
           <p className="text-zinc-400 font-medium mb-10 leading-relaxed text-sm">
             {aiStatus === 'trial_expired' 
               ? "Tu acceso de prueba ha caducado. Actualiza a una licencia PRO para restaurar el escáner de red neuronal y el autocompletado." 
-              : "Utiliza el motor de visión artificial para procesar etiquetas en milisegundos. Función reservada para funciones PRO."}
+              : "Utiliza el motor de visión artificial para procesar etiquetas en milisegundos. Función reservada para plan PRO."}
           </p>
 
           <div className="flex flex-col gap-3">
@@ -1159,7 +1162,6 @@ const renderScannerButton = () => {
           </div>
         </div>
         
-        {/* Decoración de código sutil en el fondo */}
         <div className="absolute bottom-4 left-0 right-0 opacity-[0.03] font-mono text-[8px] text-white pointer-events-none select-none">
           AI_ENGINE_V3 // NEURAL_LINK_STABLE // ROOT_ACCESS_REQUIRED
         </div>

@@ -53,7 +53,7 @@ function StepThreeIllustration() {
 export default function HowItWorks() {
   const steps = [
     { title: "Crea tu cuenta", desc: "Regístrate en minutos. Tu primer mes es gratuito para que valides el sistema sin riesgo.", render: <StepOneIllustration /> },
-    { title: "Mapea tu local", desc: "Define baldas y estantes una sola vez. EasyTrack crea un mapa visual idéntico a tu tienda.", render: <StepTwoIllustration /> },
+    { title: "Mapea tu local", desc: "Define tu ubicaciones una sola vez. EasyTrack crea un mapa visual idéntico a tu tienda.", render: <StepTwoIllustration /> },
     { title: "Escanea y guarda", desc: "El sistema asigna el hueco óptimo al instante. Solo sigue la indicación visual en pantalla.", render: <StepThreeIllustration /> }
   ];
 

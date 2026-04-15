@@ -40,6 +40,7 @@ import AdminRoute from './components/Routing/AdminRoute';
 // --- MODO ADMIN (DIOS) ---
 import AdminLayout from './components/Admin/AdminLayout';
 import AdminDashboard from './components/Admin/AdminDashboard';
+import AdminRadar from './components/Admin/AdminRadar';
 
 import { useModal } from './context/ModalContext';
 import { useTenant } from './context/TenantContext';
@@ -180,6 +181,7 @@ export default function App() {
           <Route element={<AdminLayout />}>
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="negocios" element={<AdminDashboard />} />
+            <Route path="radar" element={<AdminRadar />} />
           </Route>
         </Route>
 

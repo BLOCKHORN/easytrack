@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { supabase } from "../../utils/supabaseClient";
 
-// --- ICONO ---
 const CustomIconArrow = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 12H20M20 12L13 5M20 12L13 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M4 12H20M20 12L13 5M20 12L13 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.4" transform="translate(2, 0)"/></svg>;
 
 export default function Hero() {
   const navigate = useNavigate();
   const [metrics, setMetrics] = useState({ tenants: '13+', pkgs: '12k+' });
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     const fetchMetrics = async () => {
@@ -23,13 +24,19 @@ export default function Hero() {
         }
       } catch (e) {}
     };
+    
     fetchMetrics();
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (data?.session) {
+        setIsLoggedIn(true);
+      }
+    });
   }, []);
 
   return (
     <section className="relative pt-32 pb-40 md:pt-48 md:pb-48 bg-[#09090b] overflow-hidden">
       
-      {/* Fondo Industrial Oscuro */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-80" />
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[radial-gradient(ellipse_at_center,rgba(52,211,153,0.08)_0%,transparent_70%)] rounded-full" />
@@ -39,7 +46,6 @@ export default function Hero() {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center flex flex-col items-center">
           
-          {/* ETIQUETA PREMIUM (Sustituye a la antigua píldora) */}
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
             className="flex items-center justify-center gap-3 mb-10 will-change-transform"
@@ -85,12 +91,21 @@ export default function Hero() {
               </span>
             </button>
 
-            <button 
-              onClick={() => navigate("/registro")}
-              className="w-full sm:w-auto px-10 py-4 bg-brand-600 hover:bg-brand-500 text-white font-black rounded-xl transition-all text-sm uppercase tracking-widest flex items-center justify-center shadow-[0_0_20px_rgba(20,184,166,0.2)] active:scale-95"
-            >
-              Empezar gratis
-            </button>
+            {isLoggedIn ? (
+              <button 
+                onClick={() => navigate("/dashboard")}
+                className="w-full sm:w-auto px-10 py-4 bg-brand-600 hover:bg-brand-500 text-white font-black rounded-xl transition-all text-sm uppercase tracking-widest flex items-center justify-center shadow-[0_0_20px_rgba(20,184,166,0.2)] active:scale-95"
+              >
+                Ir a mi panel
+              </button>
+            ) : (
+              <button 
+                onClick={() => navigate("/registro")}
+                className="w-full sm:w-auto px-10 py-4 bg-brand-600 hover:bg-brand-500 text-white font-black rounded-xl transition-all text-sm uppercase tracking-widest flex items-center justify-center shadow-[0_0_20px_rgba(20,184,166,0.2)] active:scale-95"
+              >
+                Empezar gratis
+              </button>
+            )}
           </motion.div>
 
           <motion.div 
