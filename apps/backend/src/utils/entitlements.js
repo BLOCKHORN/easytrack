@@ -17,6 +17,11 @@ function computeEntitlements({ tenant = null, subscription = null } = {}) {
   const planId = tenant?.plan_id || 'free';
   const softBlocked = !!tenant?.soft_blocked;
   
+  // Cálculo de los 14 días (si no hay fecha_creacion, asume 0 para no regalar trials a cuentas legacy sin fecha)
+  const createdAt = tenant?.fecha_creacion ? new Date(tenant.fecha_creacion).getTime() : 0;
+  const daysSinceCreation = (Date.now() - createdAt) / 86400000;
+  const isFirst14Days = daysSinceCreation <= 14;
+  
   const VIP_TENANTS = ['463e2871-32de-4880-bddc-e1072acb7f59'];
   const isVip = VIP_TENANTS.includes(tenant?.id);
   
@@ -37,7 +42,7 @@ function computeEntitlements({ tenant = null, subscription = null } = {}) {
     canUseWhatsAppClient: subscriptionActive,
     aiStatus,
     supportType: subscriptionActive ? 'direct_whatsapp' : 'none',
-    unlimitedPackages: subscriptionActive
+    unlimitedPackages: subscriptionActive || isFirst14Days // <-- BARRA LIBRE ACTIVADA
   };
 
   const hasStripeInvolved = !!tenant?.stripe_customer_id || !!subscription?.provider_subscription_id;
@@ -64,7 +69,15 @@ function computeEntitlements({ tenant = null, subscription = null } = {}) {
     features,
     subscriptionActive,
     is_paid: subscriptionActive,
-    trial: { active: !subscriptionActive && !isVip, quota: trialQuota, used: trialUsed, remaining: Math.max(0, trialQuota - trialUsed), quota_ok: quotaOk },
+    trial: { 
+      active: !subscriptionActive && !isVip, 
+      is_unlimited_phase: isFirst14Days, // Mandamos estado al front
+      days_remaining: isFirst14Days ? Math.max(0, 14 - Math.floor(daysSinceCreation)) : 0, // Días exactos
+      quota: trialQuota, 
+      used: trialUsed, 
+      remaining: Math.max(0, trialQuota - trialUsed), 
+      quota_ok: quotaOk 
+    },
     soft_blocked: softBlocked,
     reason: softBlocked ? 'blocked' : (!(features.unlimitedPackages || quotaOk) ? 'quota_exceeded' : null),
     plan: planInfo

@@ -18,6 +18,7 @@ const IconAlert = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="no
 const IconPhone = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
 const IconCalendar = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
 const IconGrid = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>;
+const IconRocket = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>;
 
 const formatEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(n || 0);
 
@@ -61,7 +62,6 @@ export default function Dashboard(props) {
   const paquetes = contextData.paquetes || props.paquetes || [];
   const actualizarPaquetes = contextData.actualizarPaquetes || props.actualizarPaquetes;
 
-  // FIX: Creamos un "hash" simple de los paquetes para estabilizar la dependencia del useEffect
   const paquetesHash = useMemo(() => {
     return paquetes.map(p => `${p.id}-${p.entregado}`).join('|');
   }, [paquetes]);
@@ -141,7 +141,6 @@ export default function Dashboard(props) {
     return () => { cancel = true; };
   }, [apiBase, apiRoot]);
 
-  // Actualización de Métricas usando el HASH estabilizado
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -166,7 +165,7 @@ export default function Dashboard(props) {
       } catch {} 
     })();
     return () => { cancel = true; };
-  }, [apiBase, paquetesHash]); // <-- FIX CRÍTICO: Usamos el Hash
+  }, [apiBase, paquetesHash]);
 
   const listaHuerfanos = useMemo(() => {
     return resumen.huerfanosMaestros
@@ -215,22 +214,40 @@ export default function Dashboard(props) {
         </button>
       </div>
 
+      {/* LÓGICA DE PLG: Banner Ilimitado vs Barra Progreso */}
       {entitlements?.plan_id === 'free' && entitlements?.trial && (
-        <div className="bg-zinc-950 text-zinc-300 px-5 py-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs font-mono shadow-md border border-zinc-800">
-          <div className="flex items-center gap-4 w-full sm:w-1/2">
-            <span className="text-brand-400 font-black uppercase tracking-widest shrink-0">Free Tier</span>
-            <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
-              <div 
-                className={`h-full rounded-full transition-all ${entitlements.trial.remaining < 20 ? 'bg-red-500' : 'bg-brand-500'}`} 
-                style={{ width: `${Math.min(100, (entitlements.trial.used / entitlements.trial.quota) * 100)}%` }} 
-              />
+        entitlements.trial.is_unlimited_phase ? (
+          <div className="bg-gradient-to-r from-brand-600 to-brand-500 text-white px-5 py-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs shadow-[0_8px_30px_rgb(20,184,166,0.2)] border border-brand-400">
+            <div className="flex items-center gap-4 w-full sm:w-auto">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0">
+                <IconRocket />
+              </div>
+              <div>
+                <strong className="block text-sm font-black uppercase tracking-widest mb-0.5 text-white">Paquetes Ilimitados</strong>
+                <span className="font-medium text-brand-50">Disfruta sin restricciones en tus primeros 14 días. (Te quedan {entitlements.trial.days_remaining} días).</span>
+              </div>
             </div>
-            <span className="shrink-0"><strong>{entitlements.trial.used}</strong> / {entitlements.trial.quota}</span>
+            <button onClick={() => go('/dashboard/facturacion')} className="bg-white text-brand-600 hover:bg-zinc-50 px-5 py-2.5 rounded-xl font-black uppercase tracking-widest transition-colors shrink-0 shadow-sm">
+              Ver planes premium
+            </button>
           </div>
-          <button onClick={() => go('/dashboard/facturacion')} className="text-brand-400 hover:text-white font-black uppercase tracking-widest transition-colors shrink-0">
-            Desbloquear sin límites
-          </button>
-        </div>
+        ) : (
+          <div className="bg-zinc-950 text-zinc-300 px-5 py-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs font-mono shadow-md border border-zinc-800">
+            <div className="flex items-center gap-4 w-full sm:w-1/2">
+              <span className="text-brand-400 font-black uppercase tracking-widest shrink-0">Free Tier</span>
+              <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all ${entitlements.trial.remaining < 20 ? 'bg-red-500' : 'bg-brand-500'}`} 
+                  style={{ width: `${Math.min(100, (entitlements.trial.used / entitlements.trial.quota) * 100)}%` }} 
+                />
+              </div>
+              <span className="shrink-0"><strong>{entitlements.trial.used}</strong> / {entitlements.trial.quota}</span>
+            </div>
+            <button onClick={() => go('/dashboard/facturacion')} className="text-brand-400 hover:text-white font-black uppercase tracking-widest transition-colors shrink-0">
+              Desbloquear sin límites
+            </button>
+          </div>
+        )
       )}
 
       {configPendiente && (
@@ -311,7 +328,6 @@ export default function Dashboard(props) {
                   allowDecimals={false}
                 />
                 <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#e4e4e7', strokeWidth: 2, strokeDasharray: '5 5' }} />
-                {/* FIX CRÍTICO: isAnimationActive={false} para evitar el parpadeo infinito por re-renders de React */}
                 <Line isAnimationActive={false} name="Entradas" type="monotone" dataKey="in" stroke="#14b8a6" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
                 <Line isAnimationActive={false} name="Salidas" type="monotone" dataKey="out" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
               </LineChart>

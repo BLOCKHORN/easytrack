@@ -32,10 +32,10 @@ router.get('/me', requireAuth, async (req, res) => {
 
     if (!tenantId) return res.status(404).json({ ok: false, error: 'TENANT_NOT_FOUND' });
 
-    // ✅ CORRECCIÓN AQUÍ: Eliminamos trial_active y añadimos los campos del nuevo modelo
+    // ✅ CORRECCIÓN AQUÍ: Añadimos fecha_creacion para alimentar el cerebro central
     const { data: tenant, error: tErr } = await supabaseAdmin
       .from('tenants')
-      .select('id, slug, nombre_empresa, trial_quota, trial_used, soft_blocked, plan_id, requested_plan, is_ai_active, ai_trial_ends_at, ai_trial_used')
+      .select('id, slug, nombre_empresa, trial_quota, trial_used, soft_blocked, plan_id, requested_plan, is_ai_active, ai_trial_ends_at, ai_trial_used, fecha_creacion')
       .eq('id', tenantId)
       .maybeSingle();
       
@@ -53,8 +53,8 @@ router.get('/me', requireAuth, async (req, res) => {
         id: tenant.id,
         slug: tenant.slug,
         nombre_empresa: tenant.nombre_empresa,
-        plan_id: tenant.plan_id,             // Lo mandamos al front
-        is_ai_active: tenant.is_ai_active    // Lo mandamos al front
+        plan_id: tenant.plan_id,
+        is_ai_active: tenant.is_ai_active
       },
       limits: {
         trial_quota: entitlements.trial.quota,
@@ -68,7 +68,7 @@ router.get('/me', requireAuth, async (req, res) => {
         cancel_at_period_end: !!sub?.cancel_at_period_end,
         period_end: sub?.current_period_end || null,
       },
-      entitlements, // El frontend usará esto
+      entitlements, // El frontend usará esto para saber si oculta la barra limitadora y pinta el banner
     });
   } catch (e) {
     console.error('[limits/me] error', e);

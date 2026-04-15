@@ -9,7 +9,7 @@ const { computeEntitlements } = require('../utils/entitlements');
 async function getTenantById(id) {
   const { data, error } = await supabaseAdmin
     .from('tenants')
-    .select('id, slug, nombre_empresa, email, trial_active, trial_quota, trial_used, soft_blocked')
+    .select('id, slug, nombre_empresa, email, trial_active, trial_quota, trial_used, soft_blocked, fecha_creacion')
     .eq('id', id)
     .maybeSingle();
   if (error) throw error;
@@ -27,7 +27,7 @@ module.exports = function requireActiveSubscription() {
 
       const [tenant, sub] = await Promise.all([
         getTenantById(tenantId),
-        fetchSubscriptionForTenant(tenantId)     // ver #2 más abajo
+        fetchSubscriptionForTenant(tenantId)
       ]);
 
       const ent = computeEntitlements({ tenant, subscription: sub });
