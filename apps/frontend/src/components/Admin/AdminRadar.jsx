@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../utils/supabaseClient';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 const IconTerminal = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>;
 const IconBuilding = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/></svg>;
@@ -10,7 +10,7 @@ export default function AdminRadar() {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markersGroup = useRef(null);
-  
+
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(false);
   const [leafletReady, setLeafletReady] = useState(false);
@@ -61,13 +61,13 @@ export default function AdminRadar() {
 
   const scanArea = async () => {
     if (!mapInstance.current || loading) return;
-    
+
     setLoading(true);
     setStatusMsg("CAPTURANDO COORDENADAS...");
-    
+
     try {
       const center = mapInstance.current.getCenter();
-      
+
       const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${center.lat}&lon=${center.lng}&format=json`);
       const geoData = await geoRes.json();
       const cp = geoData.address?.postcode;
@@ -79,10 +79,10 @@ export default function AdminRadar() {
 
       const { data: { session } } = await supabase.auth.getSession();
       const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
-      
+
       const res = await fetch(`${API_URL}/api/admin/radar/scan`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`
         },
@@ -91,14 +91,14 @@ export default function AdminRadar() {
 
       const data = await res.json();
       const newLeads = data.leads || [];
-      
+
       setLeads(newLeads);
       setStatusMsg(`${newLeads.length} TIENDAS SEUR`);
 
       if (markersGroup.current) {
         markersGroup.current.clearLayers();
         const L = window.L;
-        
+
         newLeads.forEach(lead => {
           const icon = L.divIcon({
             className: 'bg-transparent',
@@ -121,43 +121,43 @@ export default function AdminRadar() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-8rem)]">
-      
-      <div className="flex-1 rounded-[2rem] overflow-hidden border border-zinc-800 relative bg-zinc-900 shadow-2xl">
+    <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 h-full min-h-[calc(100vh-6rem)] lg:min-h-0 lg:h-[calc(100vh-8rem)]">
+
+      <div className="flex-none h-[50vh] lg:h-auto lg:flex-1 rounded-[2rem] overflow-hidden border border-zinc-800 relative bg-zinc-900 shadow-2xl">
         <style dangerouslySetInnerHTML={{ __html: `
           .leaflet-container { background: #09090b !important; }
           .leaflet-tile { filter: grayscale(1) invert(1) opacity(0.2) !important; }
           .leaflet-popup-content-wrapper { border-radius: 12px !important; background: #fff !important; }
         `}} />
 
-        <div className="absolute top-6 left-6 z-[999] flex flex-col gap-3">
-          <button 
-            onClick={scanArea} 
+        <div className="absolute top-4 left-4 lg:top-6 lg:left-6 z-[999] flex flex-col gap-2 lg:gap-3 max-w-[calc(100%-2rem)]">
+          <button
+            onClick={scanArea}
             disabled={loading || !leafletReady}
-            className="group flex items-center gap-3 px-6 py-4 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-800 text-zinc-950 font-black uppercase tracking-[0.2em] text-[11px] rounded-2xl transition-all shadow-2xl active:scale-95"
+            className="group flex items-center justify-center lg:justify-start gap-3 px-4 lg:px-6 py-3 lg:py-4 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-800 text-zinc-950 font-black uppercase tracking-[0.2em] text-[10px] lg:text-[11px] rounded-2xl transition-all shadow-2xl active:scale-95"
           >
             {loading ? <div className="w-4 h-4 border-2 border-zinc-950/30 border-t-zinc-950 rounded-full animate-spin" /> : <IconTarget />}
             {loading ? 'CALIBRANDO...' : 'EJECUTAR ESCÁNER'}
           </button>
-          
-          <div className="bg-zinc-950/90 backdrop-blur-xl border border-white/5 px-4 py-3 rounded-2xl flex items-center gap-3 shadow-2xl">
-             <div className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-ping" />
-             <span className="text-[10px] font-mono font-black text-brand-400 uppercase tracking-widest">{statusMsg}</span>
+
+          <div className="bg-zinc-950/90 backdrop-blur-xl border border-white/5 px-3 lg:px-4 py-2 lg:py-3 rounded-2xl flex items-center gap-3 shadow-2xl overflow-hidden">
+             <div className="w-1.5 h-1.5 rounded-full bg-brand-500 flex-shrink-0 animate-ping" />
+             <span className="text-[9px] lg:text-[10px] font-mono font-black text-brand-400 uppercase tracking-widest truncate">{statusMsg}</span>
           </div>
         </div>
 
         <div ref={mapRef} className="w-full h-full z-10" />
       </div>
 
-      <div className="w-full lg:w-80 bg-zinc-950 border border-zinc-800 rounded-[2rem] flex flex-col shadow-xl overflow-hidden">
-        <div className="p-6 border-b border-zinc-800 bg-zinc-900/20">
+      <div className="w-full lg:w-80 flex-1 lg:flex-none bg-zinc-950 border border-zinc-800 rounded-[2rem] flex flex-col shadow-xl overflow-hidden min-h-[300px]">
+        <div className="p-4 lg:p-6 border-b border-zinc-800 bg-zinc-900/20">
           <div className="flex items-center gap-3 mb-1">
             <div className="text-brand-500"><IconTerminal /></div>
             <h2 className="text-sm font-black text-white uppercase tracking-widest">Base de Datos</h2>
           </div>
           <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Prospectos en tiempo real</p>
         </div>
-        
+
         <div className="flex-1 overflow-auto p-4 space-y-3 custom-scrollbar">
           {leads.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center opacity-20">
@@ -166,9 +166,9 @@ export default function AdminRadar() {
             </div>
           ) : (
             leads.map(lead => (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                key={lead.id} 
+                key={lead.id}
                 className="bg-zinc-900/40 border border-zinc-800 p-4 rounded-2xl hover:border-brand-500/30 transition-all group"
               >
                 <h4 className="font-black text-white text-[11px] truncate mb-1 uppercase">{lead.name}</h4>
