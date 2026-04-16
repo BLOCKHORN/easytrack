@@ -64,7 +64,9 @@ async function bootstrap(req, res) {
         trial_used: 0,
         is_ai_active: false,
         ai_trial_used: false,
-        ai_trial_ends_at: null
+        ai_trial_ends_at: null,
+        goal_annual_eur: 5000,  
+        currency: 'EUR'
       }])
       .select()
       .single();
@@ -72,7 +74,6 @@ async function bootstrap(req, res) {
     if (tErr) throw tErr;
 
     await supabase.from('memberships').insert([{ tenant_id: tenant.id, user_id: userId, role: 'owner' }]);
-    await supabase.from('area_personal_settings').upsert([{ tenant_id: tenant.id, goal_annual_eur: 5000, currency: 'EUR' }]);
     
     return res.json({ ok: true, tenant, status: 'created' });
   } catch (e) {

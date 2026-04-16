@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, useNavigate, useParams, useLocation, Outlet } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
+import AnalyticsTracker from './components/Routing/AnalyticsTracker'; // <-- IMPORTACIÓN NUEVA
+
 import LandingPage from './components/Landing/LandingPage';
 import DashboardLayout from './components/Dashboard/DashboardLayout';
 import Dashboard from './components/Dashboard/Dashboard';
@@ -158,6 +160,7 @@ export default function App() {
 
   return (
     <Router>
+      <AnalyticsTracker /> {/* <-- INYECTADO AQUÍ */}
       <ScrollWithHash />
       <Routes>
         {/* PUBLIC ROUTES */}

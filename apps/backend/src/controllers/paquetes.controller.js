@@ -1,7 +1,6 @@
 'use strict';
 
-const supa = require('../utils/supabaseClient');
-const supabase = supa.supabase || supa.default || supa;
+const { supabase } = require('../utils/supabaseClient');
 const { computeEntitlements } = require('../utils/entitlements');
 const { fetchSubscriptionForTenant } = require('../utils/subscription');
 
@@ -20,37 +19,31 @@ async function resolveTenantId(req) {
   try {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) return null;
-    const userId = data.user.id;
-    const { data: map } = await supabase.from('memberships').select('tenant_id').eq('user_id', userId).limit(1);
-    return map && map[0]?.tenant_id ? String(map[0].tenant_id) : null;
+    const { data: map } = await supabase.from('memberships').select('tenant_id').eq('user_id', data.user.id).limit(1);
+    return map?.[0]?.tenant_id ? String(map[0].tenant_id) : null;
   } catch {
     return null;
   }
 }
 
 async function getEmpresaId(tenantId, nombre) {
-  const { data, error } = await supabase.from('empresas_transporte_tenant').select('id').eq('tenant_id', tenantId).eq('nombre', nombre).maybeSingle();
-  if (error) throw error;
+  const { data } = await supabase.from('empresas_transporte_tenant').select('id').eq('tenant_id', tenantId).eq('nombre', nombre).maybeSingle();
   return data?.id || null;
 }
 
 async function getTarifaPorEmpresaId(empresaId) {
   if (!empresaId) return 0;
-  const { data, error } = await supabase.from('empresas_transporte_tenant').select('ingreso_por_entrega').eq('id', empresaId).maybeSingle();
-  if (error) throw error;
+  const { data } = await supabase.from('empresas_transporte_tenant').select('ingreso_por_entrega').eq('id', empresaId).maybeSingle();
   return Number(data?.ingreso_por_entrega || 0);
 }
 
 async function resolveUbiIdByLabel(tenantId, label) {
-  const lbl = up(label);
-  const { data, error } = await supabase.from('ubicaciones').select('id').eq('tenant_id', tenantId).eq('label', lbl).maybeSingle();
-  if (error) throw error;
+  const { data } = await supabase.from('ubicaciones').select('id').eq('tenant_id', tenantId).eq('label', up(label)).maybeSingle();
   return data?.id || null;
 }
 
 async function ensureUbiBelongsToTenant(tenantId, ubiId) {
-  const { data, error } = await supabase.from('ubicaciones').select('id').eq('tenant_id', tenantId).eq('id', ubiId).maybeSingle();
-  if (error) throw error;
+  const { data } = await supabase.from('ubicaciones').select('id').eq('tenant_id', tenantId).eq('id', ubiId).maybeSingle();
   return !!data?.id;
 }
 
@@ -69,17 +62,16 @@ function applyCommonFilters(qb, { estado, compania, ubicacion, search }) {
   return qb;
 }
 
-async function listarPaquetes(req, res) {
+exports.listarPaquetes = async (req, res) => {
   try {
     const tenantId = await resolveTenantId(req);
     if (!tenantId) return res.json({ paquetes: [] });
     
     const { limit, offset, all, estado, compania, ubicacion, search, order = 'fecha_llegada', dir = 'desc' } = req.query || {};
-    const filters = { estado, compania, ubicacion, search };
     const cols = `id, tenant_id, nombre_cliente, empresa_transporte, empresa_id, fecha_llegada, entregado, fecha_entregado, ingreso_generado, ubicacion_id, ubicacion_label, telefono`;
     
     let qb = supabase.from('packages').select(cols).eq('tenant_id', tenantId);
-    qb = applyCommonFilters(qb, filters);
+    qb = applyCommonFilters(qb, { estado, compania, ubicacion, search });
     qb = qb.order(order, { ascending: String(dir).toLowerCase() === 'asc' });
 
     if (String(all) === '1') {
@@ -97,15 +89,14 @@ async function listarPaquetes(req, res) {
   } catch (err) {
     return res.status(500).json({ error: 'Error al listar paquetes' });
   }
-}
+};
 
-async function contarPaquetes(req, res) {
+exports.contarPaquetes = async (req, res) => {
   try {
     const tenantId = await resolveTenantId(req);
     if (!tenantId) return res.json({ total: 0, entregados: 0, pendientes: 0 });
     
     const { estado, compania, ubicacion, search } = req.query || {};
-    
     const { data, error } = await supabase.rpc('contar_kpis_paquetes', {
       p_tenant_id: tenantId,
       p_estado: estado || null,
@@ -115,14 +106,13 @@ async function contarPaquetes(req, res) {
     });
 
     if (error) throw error;
-
     return res.json(data);
   } catch (err) {
     return res.status(500).json({ error: 'Error al contar paquetes' });
   }
-}
+};
 
-async function crearPaquete(req, res) {
+exports.crearPaquete = async (req, res) => {
   try {
     const { tenant_id, nombre_cliente, empresa_transporte, ubicacion_id, ubicacion_label, balda_id, compartimento, telefono } = req.body || {};
     const tenantId = tenant_id || (await resolveTenantId(req));
@@ -135,35 +125,33 @@ async function crearPaquete(req, res) {
     const entitlements = computeEntitlements({ tenant: tenantData, subscription });
 
     if (!entitlements.canCreatePackage) {
-      return res.status(403).json({ ok: false, error: 'LIMIT_EXCEEDED', message: 'Límite de paquetes alcanzado para tu plan.', entitlements });
+      return res.status(403).json({ ok: false, error: 'LIMIT_EXCEEDED', message: 'Límite de paquetes alcanzado.', entitlements });
     }
 
     if (!empresa_transporte) return res.status(400).json({ error: 'Falta empresa_transporte' });
+    
     const empresaId = await getEmpresaId(tenantId, empresa_transporte);
-    if (!empresaId) return res.status(400).json({ error: 'Empresa no encontrada para este local.' });
+    if (!empresaId) return res.status(400).json({ error: 'Empresa no encontrada en la configuración del local.' });
 
     let finalUbiId = ubicacion_id || balda_id || null;
     let finalUbiLabel = ubicacion_label || compartimento || null;
 
     if (finalUbiId) {
-      const ok = await ensureUbiBelongsToTenant(tenantId, finalUbiId);
-      if (!ok) return res.status(400).json({ error: 'La ubicación no pertenece a este local.' });
-    }
-    if (finalUbiLabel) {
+      if (!(await ensureUbiBelongsToTenant(tenantId, finalUbiId))) return res.status(400).json({ error: 'Ubicación ajena al local.' });
+    } else if (finalUbiLabel) {
       finalUbiLabel = up(finalUbiLabel);
-      if (!finalUbiId) {
-        finalUbiId = await resolveUbiIdByLabel(tenantId, finalUbiLabel);
-        if (!finalUbiId) return res.status(400).json({ error: `No existe la ubicación ${finalUbiLabel}` });
-      }
+      finalUbiId = await resolveUbiIdByLabel(tenantId, finalUbiLabel);
+      if (!finalUbiId) return res.status(400).json({ error: `No existe la ubicación ${finalUbiLabel}` });
+    } else {
+      return res.status(400).json({ error: 'Ubicación no especificada.' });
     }
-    if (!finalUbiId) return res.status(400).json({ error: 'Ubicación no especificada.' });
 
     if (!finalUbiLabel) {
       const { data: u } = await supabase.from('ubicaciones').select('label').eq('id', finalUbiId).maybeSingle();
       finalUbiLabel = up(u?.label || '');
     }
 
-    const payloadDB = {
+    const { data, error } = await supabase.from('packages').insert({
       tenant_id: tenantId, 
       empresa_id: empresaId, 
       nombre_cliente: up(nombre_cliente),
@@ -172,11 +160,9 @@ async function crearPaquete(req, res) {
       ubicacion_label: finalUbiLabel, 
       entregado: false,
       telefono: telefono ? String(telefono).trim() : null
-    };
+    }).select().single();
 
-    const { data, error } = await supabase.from('packages').insert(payloadDB).select().single();
-
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) throw error;
 
     if (!entitlements.features.unlimitedPackages) {
       await supabase.from('tenants').update({ trial_used: (tenantData.trial_used || 0) + 1 }).eq('id', tenantId);
@@ -184,34 +170,39 @@ async function crearPaquete(req, res) {
 
     return res.json({ paquete: data });
   } catch (err) {
-    return res.status(500).json({ error: 'Error al crear paquete' });
+    return res.status(500).json({ error: 'Error interno al crear paquete' });
   }
-}
+};
 
-async function entregarPaquete(req, res) {
+exports.entregarPaquete = async (req, res) => {
   try {
     const id = req.params.id;
     const tenantId = await resolveTenantId(req);
     if (!id || !tenantId) return res.status(400).json({ error: 'Faltan parámetros' });
+
     const { data: pkg, error: e1 } = await supabase.from('packages').select('*').eq('id', id).eq('tenant_id', tenantId).maybeSingle();
     if (e1 || !pkg) return res.status(404).json({ error: 'Paquete no encontrado' });
+
     let ingreso = Number(pkg.ingreso_generado || 0);
     if (ingreso <= 0) ingreso = await getTarifaPorEmpresaId(pkg.empresa_id);
+
     const { data, error: e2 } = await supabase.from('packages').update({
       entregado: true, ingreso_generado: ingreso, fecha_entregado: new Date().toISOString()
     }).eq('id', id).select().single();
-    if (e2) return res.status(500).json({ error: e2.message });
+
+    if (e2) throw e2;
     return res.json({ paquete: data });
   } catch (err) {
     return res.status(500).json({ error: 'Error al entregar paquete' });
   }
-}
+};
 
-async function editarPaquete(req, res) {
+exports.editarPaquete = async (req, res) => {
   try {
     const id = req.params.id || req.body?.id;
     const tenantId = await resolveTenantId(req);
     if (!id || !tenantId) return res.status(400).json({ error: 'Faltan parámetros' });
+
     const patch = {};
     if (req.body.nombre_cliente != null) patch.nombre_cliente = up(req.body.nombre_cliente);
     if (req.body.empresa_transporte != null) patch.empresa_transporte = req.body.empresa_transporte;
@@ -219,36 +210,36 @@ async function editarPaquete(req, res) {
     
     let nUbiId = req.body.ubicacion_id;
     let nUbiLabel = req.body.ubicacion_label;
+
     if (nUbiId) {
-      const ok = await ensureUbiBelongsToTenant(tenantId, nUbiId);
-      if (!ok) return res.status(400).json({ error: 'Ubicación inválida' });
-    }
-    if (nUbiLabel) {
+      if (!(await ensureUbiBelongsToTenant(tenantId, nUbiId))) return res.status(400).json({ error: 'Ubicación inválida' });
+    } else if (nUbiLabel) {
       nUbiLabel = up(nUbiLabel);
-      if (!nUbiId) nUbiId = await resolveUbiIdByLabel(tenantId, nUbiLabel);
+      nUbiId = await resolveUbiIdByLabel(tenantId, nUbiLabel);
     }
+
     if (nUbiId) {
       patch.ubicacion_id = nUbiId;
       patch.ubicacion_label = nUbiLabel || null;
     }
+
     const { data, error } = await supabase.from('packages').update(patch).eq('id', id).eq('tenant_id', tenantId).select().single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) throw error;
     return res.json({ paquete: data });
   } catch (err) {
     return res.status(500).json({ error: 'Error al editar paquete' });
   }
-}
+};
 
-async function eliminarPaquete(req, res) {
+exports.eliminarPaquete = async (req, res) => {
   try {
     const id = req.params.id;
     const tenantId = await resolveTenantId(req);
     const { data, error } = await supabase.from('packages').delete().eq('id', id).eq('tenant_id', tenantId).select('id').single();
+    
     if (error || !data) return res.status(404).json({ error: 'No encontrado' });
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ error: 'Error al eliminar paquete' });
   }
-}
-
-module.exports = { listarPaquetes, contarPaquetes, crearPaquete, entregarPaquete, editarPaquete, eliminarPaquete };
+};

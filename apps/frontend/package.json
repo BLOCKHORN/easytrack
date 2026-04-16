@@ -13,32 +13,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@doncicuto/es-municipalities": "^1.0.0",
-    "@doncicuto/es-provinces": "^1.0.1",
-    "@radix-ui/react-select": "^2.2.5",
     "@supabase/supabase-js": "^2.52.1",
-    "@zxing/browser": "^0.1.5",
-    "@zxing/library": "^0.21.3",
-    "axios": "^1.11.0",
-    "country-state-city": "^3.2.1",
     "framer-motion": "^12.38.0",
-    "i18n-iso-countries": "^7.14.0",
-    "iso-3166-2": "^1.0.0",
-    "konva": "^9.3.22",
-    "leaflet": "^1.9.4",
     "lucide-react": "^0.536.0",
-    "nanoid": "^5.1.5",
     "react": "^19.1.0",
-    "react-datepicker": "^8.4.0",
     "react-dom": "^19.1.0",
     "react-icons": "^5.5.0",
-    "react-konva": "^19.0.7",
-    "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.7.1",
-    "react-toastify": "^11.0.5",
-    "recharts": "^3.1.0",
-    "spain-cities": "^1.0.6",
-    "tesseract.js": "^6.0.1"
+    "recharts": "^3.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",

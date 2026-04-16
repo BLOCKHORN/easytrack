@@ -61,9 +61,7 @@ async function ensureTenantForUser(user, hintedCompany) {
 async function resolveStripeCustomer(tenantId, tenantData, email) {
   let customerId = tenantData?.stripe_customer_id;
 
-  if (customerId === 'NULL' || customerId === 'null') {
-    customerId = null;
-  }
+  if (customerId === 'NULL' || customerId === 'null') customerId = null;
 
   if (customerId) {
     try {
@@ -126,60 +124,33 @@ exports.createCheckout = async (req, res) => {
     const planCode = String(req.body?.plan_code || '').trim();
     const priceId = PRICE_MAP[planCode];
 
-    if (!priceId) {
-      return res.status(400).json({ ok:false, error:'INVALID_PLAN' });
-    }
+    if (!priceId) return res.status(400).json({ ok:false, error:'INVALID_PLAN' });
 
     const { data: tenant } = await supabase.from('tenants').select('id, email, nombre_empresa, stripe_customer_id, slug').eq('id', tenantId).maybeSingle();
     const stripeCustomerId = await resolveStripeCustomer(tenantId, tenant, email);
 
     if (stripeCustomerId) {
-      const existingSubs = await stripe.subscriptions.list({
-        customer: stripeCustomerId,
-        status: 'active',
-        limit: 1
-      });
-
+      const existingSubs = await stripe.subscriptions.list({ customer: stripeCustomerId, status: 'active', limit: 1 });
       if (existingSubs.data.length > 0) {
-        return res.status(409).json({ 
-          ok: false, 
-          error: 'ACTIVE_SUBSCRIPTION_EXISTS',
-          redirect_to_portal: true
-        });
+        return res.status(409).json({ ok: false, error: 'ACTIVE_SUBSCRIPTION_EXISTS', redirect_to_portal: true });
       }
     }
 
-    // --- LÓGICA ANTI-ABUSOS DE TRIAL ---
-    // 1. Comprobamos si el tenant ya ha tenido una suscripción PRO antes (miramos la tabla subscriptions)
-    const { data: pastSubs } = await supabase
-      .from('subscriptions')
-      .select('id')
-      .eq('tenant_id', tenantId)
-      .limit(1);
-
+    const { data: pastSubs } = await supabase.from('subscriptions').select('id').eq('tenant_id', tenantId).limit(1);
     const hasHadProBefore = pastSubs && pastSubs.length > 0;
     
-    // 2. Decidimos si le damos Trial: Solo si es la primera vez Y (opcional) si es el plan mensual.
-    // Si quieres dar trial también en el anual, quita la condición `planCode === 'pro_monthly'`
     const shouldGiveTrial = !hasHadProBefore && planCode === 'pro_monthly';
-
     const metadata = { tenant_id: tenantId, signup_email: email, plan_code: planCode || '' };
 
-    // Construimos los datos de la suscripción dinámicamente
-    const subscriptionData = {
-      metadata
-    };
-
-    if (shouldGiveTrial) {
-      subscriptionData.trial_period_days = 7;
-    }
+    const subscriptionData = { metadata };
+    if (shouldGiveTrial) subscriptionData.trial_period_days = 7;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: stripeCustomerId,
       line_items: [{ price: priceId, quantity: 1 }],
       allow_promotion_codes: true,
-      subscription_data: subscriptionData, // <-- Inyectamos la configuración segura
+      subscription_data: subscriptionData,
       automatic_tax: { enabled: true },
       tax_id_collection: { enabled: true },
       billing_address_collection: 'auto',
@@ -193,7 +164,6 @@ exports.createCheckout = async (req, res) => {
 
     return res.json({ ok:true, url: session.url });
   } catch (e) {
-    console.error("Error en createCheckout:", e);
     return res.status(500).json({ ok:false, error: 'CHECKOUT_ERROR' });
   }
 };

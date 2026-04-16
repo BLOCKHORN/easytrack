@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+'use strict';
+
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../utils/supabaseClient';
-import { ensureTenantResolved } from '../../utils/tenant';
+// ✅ Cambiado ensureTenantResolved por getTenantData
+import { getTenantData } from '../../utils/tenant';
 import Toast from '../../components/UI/Toast';
 
 import IdentityCard from './IdentityCard';
@@ -15,67 +18,50 @@ import ImportWizard from './ImportWizard';
 import { guardarCarriers } from '../../services/configuracionService';
 import { cargarUbicaciones, guardarUbicaciones } from '../../services/ubicacionesService';
 
+const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
+
 const IconSettings = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 
 const sameJSON = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-const rowsFromCount = (n) => Array.from({ length: clamp(parseInt(n || 0, 10) || 0, 0, 5000) }, (_, i) => ({ label: `B${i + 1}`, codigo: `B${i + 1}`, orden: i }));
+const rowsFromCount = (n) => Array.from({ length: Math.min(parseInt(n || 0, 10) || 0, 5000) }, (_, i) => ({ label: `B${i + 1}`, codigo: `B${i + 1}`, orden: i }));
 
-const sanitizeUbicaciones = (rows = []) =>
-  rows.map((r, i) => ({
-    label: (r?.label || `B${i + 1}`).toUpperCase(),
-    codigo: (r?.codigo || r?.label || `B${i + 1}`).toUpperCase(),
-    orden: Number.isFinite(r?.orden) ? r.orden : i
-  }));
-
-const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
+const sanitizeUbicaciones = (rows = []) => rows.map((r, i) => ({
+  label: (r?.label || `B${i + 1}`).toUpperCase(),
+  codigo: (r?.codigo || r?.label || `B${i + 1}`).toUpperCase(),
+  orden: Number.isFinite(r?.orden) ? r.orden : i
+}));
 
 export default function ConfigPage() {
   const navigate = useNavigate();
-
   const [usuario, setUsuario] = useState(null);
   const [tenant, setTenant] = useState(null);
   const [nombre, setNombre] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
-
   const [ubiRows, setUbiRows] = useState([]);
   const [ubiMeta, setUbiMeta] = useState({ cols: 5, orden: 'horizontal' });
   const [ubiLoading, setUbiLoading] = useState(false);
   const [usageByCodigo, setUsageByCodigo] = useState({});
-
   const [empresas, setEmpresas] = useState([]);
   const [empresasDisponibles, setEmpresasDisponibles] = useState([]);
-  const carriersRef = useRef(null);
-
   const [accountDraft, setAccountDraft] = useState(null);
   const [packagesCount, setPackagesCount] = useState(0);
-
   const [toast, setToast] = useState(null);
-  const mostrarToast = (mensaje, tipo = 'success') => setToast({ mensaje, tipo });
-
   const [snapshot, setSnapshot] = useState(null);
   const [dirty, setDirty] = useState(false);
-
+  const carriersRef = useRef(null);
   const pendingDeletionsRef = useRef([]);
   const forceDeleteRef = useRef(false);
 
-  const INGRESOS = useMemo(() => Array.from({ length: 20 }, (_, i) => ((i + 1) * 0.05).toFixed(2)), []);
-
+  const mostrarToast = (mensaje, tipo = 'success') => setToast({ mensaje, tipo });
   const deepPack = () => ({ nombre, ubiRows, ubiMeta, empresas });
 
   const revertirCambios = () => {
     if (!snapshot) return;
     setNombre(snapshot.nombre); setUbiRows(snapshot.ubiRows); setUbiMeta(snapshot.ubiMeta); setEmpresas(snapshot.empresas);
     setDirty(false); setAccountDraft(null); pendingDeletionsRef.current = []; forceDeleteRef.current = false;
-    mostrarToast('Cambios revertidos.', 'success');
+    mostrarToast('Cambios revertidos.');
   };
-
-  useEffect(() => {
-    const prev = window.history.scrollRestoration;
-    try { window.history.scrollRestoration = 'manual'; } catch {}
-    return () => { try { window.history.scrollRestoration = prev || 'auto'; } catch {} };
-  }, []);
 
   const loadUbicacionesForTenant = async (tId) => {
     setUbiLoading(true);
@@ -84,86 +70,45 @@ export default function ConfigPage() {
       const resp = await cargarUbicaciones(session?.access_token, tId);
       const arr = Array.isArray(resp?.ubicaciones) ? resp.ubicaciones : [];
       setUbiRows(arr.length ? sanitizeUbicaciones(arr) : rowsFromCount(25));
-      const metaResp = resp?.meta || {};
-      setUbiMeta({ 
-        cols: Math.max(1, Math.min(12, parseInt(metaResp.cols ?? 5, 10) || 5)), 
-        orden: (metaResp.orden || metaResp.order) === 'vertical' ? 'vertical' : 'horizontal' 
-      });
+      setUbiMeta({ cols: parseInt(resp?.meta?.cols || 5, 10), orden: resp?.meta?.orden === 'vertical' ? 'vertical' : 'horizontal' });
     } catch {
-      setUbiRows(rowsFromCount(25)); setUbiMeta({ cols: 5, orden: 'horizontal' });
-    } finally {
-      setUbiLoading(false);
-    }
+      setUbiRows(rowsFromCount(25));
+    } finally { setUbiLoading(false); }
   };
 
-  const loadPackagesCount = async (forTenantId) => {
-    const { count: a } = await supabase.from('packages').select('id', { count: 'exact' }).eq('tenant_id', forTenantId).eq('entregado', false);
-    const { count: b } = await supabase.from('packages').select('id', { count: 'exact' }).eq('tenant_id', forTenantId).not('ubicacion_label', 'is', null);
-    const { count: ab } = await supabase.from('packages').select('id', { count: 'exact' }).eq('tenant_id', forTenantId).eq('entregado', false).not('ubicacion_label', 'is', null);
-    setPackagesCount((a || 0) + (b || 0) - (ab || 0));
-  };
-
-  const loadUsageByCodigo = async (forTenantId) => {
-    const { data, error } = await supabase.from('packages').select('ubicacion_label').eq('tenant_id', forTenantId).not('ubicacion_label', 'is', null);
-    if (error) return setUsageByCodigo({});
+  const loadUsageData = async (tId) => {
+    const { count: a } = await supabase.from('packages').select('id', { count: 'exact' }).eq('tenant_id', tId).eq('entregado', false);
+    setPackagesCount(a || 0);
+    const { data } = await supabase.from('packages').select('ubicacion_label').eq('tenant_id', tId).not('ubicacion_label', 'is', null);
     const map = {};
-    (data || []).forEach((row) => {
-      const code = String(row?.ubicacion_label || '').toUpperCase();
-      if (code) map[code] = (map[code] || 0) + 1;
-    });
+    (data || []).forEach(r => { const c = String(r.ubicacion_label).toUpperCase(); map[c] = (map[c] || 0) + 1; });
     setUsageByCodigo(map);
   };
 
-  const fetchPackagesByLabels = async (tenantIdArg, labels = []) => {
-    const tId = tenantIdArg || tenant?.id;
-    if (!tId || !labels.length) return [];
-    const { data, error } = await supabase.from('packages').select('id, nombre_cliente, ubicacion_label').eq('tenant_id', tId).not('ubicacion_label', 'is', null).in('ubicacion_label', labels.map(s => String(s).toUpperCase()));
-    if (error) return [];
-    return data || [];
-  };
-
-  // ✅ CORRECCIÓN 1: Recibimos el tenant asegurado completo para saltarnos el bloqueo de RLS
-  const loadAll = async (ensuredTenant, cancelRef) => {
-    const forTenantId = ensuredTenant.id;
-
-    if (!cancelRef.current) {
-      setTenant(ensuredTenant); 
-      setNombre(ensuredTenant.nombre_empresa || ensuredTenant.nombre || '');
-    }
-
-    const { data: empresasData } = await supabase.from('empresas_transporte_tenant').select('*').eq('tenant_id', forTenantId);
-    if (!cancelRef.current) {
-      setEmpresas((empresasData || []).map(e => ({ ...e, ingreso_por_entrega: e.ingreso_por_entrega != null ? e.ingreso_por_entrega.toFixed(2) : '' })));
-    }
-
-    const { data: listaEmpresas } = await supabase.from('empresas_transporte').select('*').order('nombre', { ascending: true });
-    if (!cancelRef.current) setEmpresasDisponibles(listaEmpresas || []);
-
-    await Promise.all([loadUbicacionesForTenant(forTenantId), loadPackagesCount(forTenantId), loadUsageByCodigo(forTenantId)]);
-  };
-
   useEffect(() => {
-    const cancelRef = { current: false };
     (async () => {
       try {
-        const { data: userResp } = await supabase.auth.getUser();
-        if (!userResp?.user) { if (!cancelRef.current) setCargando(false); return; }
-        if (!cancelRef.current) setUsuario(userResp.user);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return setCargando(false);
+        setUsuario(user);
 
-        const { tenant: ensuredTenant } = await ensureTenantResolved();
-        if (!ensuredTenant?.id) throw new Error('TENANT_NOT_FOUND');
+        // ✅ Usando la nueva función unificada
+        const { tenant: ensuredTenant } = await getTenantData();
+        setTenant(ensuredTenant);
+        setNombre(ensuredTenant.nombre_empresa || '');
 
-        // Pasamos todo el objeto ensuredTenant
-        await loadAll(ensuredTenant, cancelRef);
+        const { data: eData } = await supabase.from('empresas_transporte_tenant').select('*').eq('tenant_id', ensuredTenant.id);
+        setEmpresas((eData || []).map(e => ({ ...e, ingreso_por_entrega: e.ingreso_por_entrega?.toFixed(2) || '' })));
+
+        const { data: avail } = await supabase.from('empresas_transporte').select('*').order('nombre');
+        setEmpresasDisponibles(avail || []);
+
+        await Promise.all([loadUbicacionesForTenant(ensuredTenant.id), loadUsageData(ensuredTenant.id)]);
+        setSnapshot({ nombre: ensuredTenant.nombre_empresa || '', ubiRows: ubiRows, ubiMeta: ubiMeta, empresas: eData || [] });
       } catch (err) {
-        mostrarToast('No se pudieron cargar los datos.', 'error');
-      } finally {
-        if (!cancelRef.current) {
-          setSnapshot(deepPack()); setDirty(false); setCargando(false);
-        }
-      }
+        mostrarToast('Error cargando configuración.', 'error');
+      } finally { setCargando(false); }
     })();
-    return () => { cancelRef.current = true; };
   }, []);
 
   useEffect(() => {
@@ -171,205 +116,100 @@ export default function ConfigPage() {
     setDirty(!sameJSON(deepPack(), snapshot));
   }, [nombre, ubiRows, ubiMeta, empresas, snapshot]);
 
-  useEffect(() => {
-    const onKey = (e) => {
-      const key = e.key?.toLowerCase();
-      if ((e.ctrlKey || e.metaKey) && key === 's') { e.preventDefault(); handleGuardar(); }
-      if (key === 'escape' && (dirty || hasAccountPending) && snapshot) { e.preventDefault(); revertirCambios(); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [dirty, snapshot]);
-
-  const sanitizeCarriersLocal = () => {
-    const trimmed = empresas.map(e => ({ ...e, nombre: (e.nombre || '').trim(), ingreso_por_entrega: e.ingreso_por_entrega === '' ? '' : ('' + e.ingreso_por_entrega).trim() }));
-    const names = trimmed.map(e => e.nombre).filter(Boolean);
-    const dupNames = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))];
-    if (dupNames.length) {
-      mostrarToast(`Empresas duplicadas: ${dupNames.join(', ')}`, 'error');
-      carriersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return null;
-    }
-    const invalidNumber = trimmed.find(e => e.ingreso_por_entrega !== '' && isNaN(parseFloat(e.ingreso_por_entrega)));
-    if (invalidNumber) {
-      mostrarToast(`Ingreso por entrega inválido en "${invalidNumber.nombre || '—'}".`, 'error');
-      carriersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return null;
-    }
-    return trimmed;
-  };
-
-  const buildCarriersPayload = () => {
-    const sane = sanitizeCarriersLocal();
-    if (!sane) return null;
-    return sane.filter(e => e.nombre && e.ingreso_por_entrega !== '').map(e => ({
-      nombre: e.nombre, ingreso_por_entrega: parseFloat(e.ingreso_por_entrega) || 0, color: e.color ?? null, activo: typeof e.activo === 'boolean' ? e.activo : true, notas: e.notas ?? null
-    }));
-  };
-
-  const hasAccountPending = useMemo(() => {
-    if (!accountDraft || !usuario) return false;
-    const emailPending = accountDraft?.provider === 'email' && accountDraft?.emailDraft && accountDraft.emailDraft !== (usuario?.email || '') && isValidEmail(accountDraft.emailDraft);
-    const passPending = accountDraft?.provider === 'email' && accountDraft?.pwd1 && accountDraft?.pwd2 && accountDraft.pwd1.length >= 8 && accountDraft.pwd1 === accountDraft.pwd2;
-    return !!(emailPending || passPending);
-  }, [accountDraft, usuario]);
-
   const handleGuardar = async () => {
-    const carriersPayload = buildCarriersPayload();
-    if (carriersPayload === null) return;
-    if (!(dirty || hasAccountPending)) return navigate('/dashboard');
-    if (dirty && !nombre.trim()) return mostrarToast('El nombre no puede estar vacío.', 'error');
+    if (!dirty && !accountDraft) return navigate('/dashboard');
+    if (dirty && !nombre.trim()) return mostrarToast('Nombre obligatorio.', 'error');
 
     setGuardando(true);
     try {
-      const tId = tenant?.id;
-      if (!tId) throw new Error('Tenant no encontrado');
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-      let debugResp = null;
       if (dirty) {
-        const { data: { session } } = await supabase.auth.getSession();
-        const apiBase = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || 'http://localhost:3001';
-        
-        // ✅ CORRECCIÓN 2: Actualizamos a través del Backend oficial para saltarnos bloqueos
-        const nameRes = await fetch(`${apiBase}/api/tenants/me`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        // Actualizar Nombre vía Backend
+        await fetch(`${API_BASE}/api/tenants/me`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ nombre_empresa: nombre.trim() })
         });
-        
-        // Por si tu servidor usa PATCH en lugar de PUT
-        if (!nameRes.ok) {
-          const patchRes = await fetch(`${apiBase}/api/tenants/me`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-            body: JSON.stringify({ nombre_empresa: nombre.trim() })
-          });
-          if (!patchRes.ok) throw new Error('No se pudo actualizar el nombre del negocio.');
-        }
 
-        setTenant(prev => prev ? { ...prev, nombre_empresa: nombre.trim() } : prev);
+        // Ubicaciones
+        await guardarUbicaciones({
+          tenantId: tenant.id,
+          ubicaciones: sanitizeUbicaciones(ubiRows),
+          meta: { cols: ubiMeta.cols, order: ubiMeta.orden },
+          deletions: pendingDeletionsRef.current,
+          forceDeletePackages: forceDeleteRef.current
+        }, token);
 
-        const resp = await guardarUbicaciones(
-          { tenantId: tId, ubicaciones: sanitizeUbicaciones(ubiRows), meta: { cols: ubiMeta.cols, order: ubiMeta.orden }, deletions: pendingDeletionsRef.current, forceDeletePackages: forceDeleteRef.current },
-          session?.access_token
-        );
-        debugResp = resp?.debug || null;
-
-        if (session?.access_token) await guardarCarriers(carriersPayload, session.access_token, { sync: true });
-
-        pendingDeletionsRef.current = []; forceDeleteRef.current = false;
+        // Carriers
+        const carriers = empresas.filter(e => e.nombre).map(e => ({
+          nombre: e.nombre,
+          ingreso_por_entrega: parseFloat(e.ingreso_por_entrega) || 0,
+          color: e.color || null,
+          activo: e.activo ?? true
+        }));
+        await guardarCarriers(carriers, token, { sync: true });
       }
 
-      if (hasAccountPending && usuario) {
-        if (accountDraft?.provider === 'email' && accountDraft?.emailDraft && accountDraft.emailDraft !== (usuario?.email || '') && isValidEmail(accountDraft.emailDraft)) {
-          const r = await applyEmailDraft({ currentEmail: usuario?.email || '', nextEmail: accountDraft.emailDraft.trim() });
-          if (r?.error) throw r.error;
-          if (r?.notice) mostrarToast(r.notice, 'success');
-          const { data } = await supabase.auth.getUser();
-          setUsuario(data?.user || null);
-        }
-        if (accountDraft?.provider === 'email' && accountDraft?.pwd1 && accountDraft?.pwd2 && accountDraft.pwd1 === accountDraft.pwd2 && accountDraft.pwd1.length >= 8) {
-          const r = await applyPasswordDraft({ currentEmail: (usuario?.email || '').trim(), pwd1: accountDraft.pwd1, pwd2: accountDraft.pwd2 });
-          if (r?.error) throw r.error;
-          if (r?.notice) mostrarToast(r.notice, 'success');
-        }
-        setAccountDraft(null);
+      if (accountDraft) {
+        if (accountDraft.emailDraft) await applyEmailDraft({ currentEmail: usuario.email, nextEmail: accountDraft.emailDraft });
+        if (accountDraft.pwd1) await applyPasswordDraft({ currentEmail: usuario.email, pwd1: accountDraft.pwd1, pwd2: accountDraft.pwd2 });
       }
 
-      setSnapshot(deepPack()); setDirty(false);
-      
-      if (debugResp && (debugResp.packagesDeleted > 0 || debugResp.archived > 0)) {
-        const p = debugResp.packagesDeleted || 0; const u = debugResp.archived || 0;
-        mostrarToast(`Guardado: ${u} ubicación archivada y ${p} paquete eliminado.`, 'success');
-      } else {
-        mostrarToast('Configuración guardada correctamente.', 'success');
-      }
-
-      if (tenant?.id) await Promise.all([loadPackagesCount(tenant.id), loadUsageByCodigo(tenant.id), loadUbicacionesForTenant(tenant.id)]);
-      setTimeout(() => navigate('/dashboard'), 150);
+      mostrarToast('Cambios guardados.');
+      setTimeout(() => navigate('/dashboard'), 500);
     } catch (err) {
-      mostrarToast(err?.error?.message || err?.message || 'Error al guardar la configuración.', 'error');
+      mostrarToast(err.message || 'Error al guardar.', 'error');
     } finally { setGuardando(false); }
   };
 
   if (cargando) return <Skeleton />;
 
   return (
-    <main className="max-w-4xl mx-auto pb-28 pt-8 px-4 sm:px-6 lg:px-8">
+    <main className="max-w-4xl mx-auto pb-28 pt-8 px-4 font-sans">
       {toast && <Toast message={toast.mensaje} type={toast.tipo} onClose={() => setToast(null)} />}
 
-      <header className="sticky top-0 z-40 bg-[#fafafa]/90 backdrop-blur-md flex flex-col md:flex-row md:items-center justify-between gap-6 py-6 border-b border-zinc-200/80 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-10">
+      <header className="sticky top-0 z-40 bg-[#fafafa]/90 backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-6 py-6 border-b border-zinc-200 mb-10">
         <div>
-          <h1 className="text-3xl font-black text-zinc-950 tracking-tight flex items-center gap-3">
-            <IconSettings /> Ajustes del Sistema
-          </h1>
-          <p className="text-zinc-500 font-medium text-sm mt-1">Configura la infraestructura, accesos y seguridad.</p>
+          <h1 className="text-3xl font-black text-zinc-950 tracking-tight flex items-center gap-3"><IconSettings /> Ajustes</h1>
         </div>
         <button 
           onClick={handleGuardar}
-          disabled={guardando || (!dirty && !hasAccountPending)}
-          className="px-6 py-3 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-black text-sm uppercase tracking-widest rounded-xl shadow-lg shadow-brand-500/20 transition-all active:scale-95"
+          disabled={guardando || (!dirty && !accountDraft)}
+          className="px-8 py-3 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all"
         >
-          {guardando ? 'Guardando...' : 'Guardar Cambios'}
+          {guardando ? 'Guardando...' : 'Guardar'}
         </button>
       </header>
 
       <div className="space-y-12">
+        <IdentityCard nombre={nombre} setNombre={setNombre} usuario={usuario} />
         
-        <section className="space-y-4">
-          <h2 className="text-xs font-black text-zinc-400 uppercase tracking-widest pl-2">1. Identidad</h2>
-          <IdentityCard nombre={nombre} setNombre={setNombre} usuario={usuario} />
-        </section>
+        <CarriersCard 
+          empresas={empresas} 
+          empresasDisponibles={empresasDisponibles} 
+          añadirEmpresa={() => setEmpresas([...empresas, { nombre: '', ingreso_por_entrega: '' }])}
+          actualizarEmpresa={(i,k,v) => setEmpresas(empresas.map((e,idx) => idx===i ? {...e,[k]:v} : e))}
+          eliminarEmpresa={(i) => setEmpresas(empresas.filter((_,idx) => idx!==i))}
+        />
 
-        <section className="space-y-4">
-          <h2 className="text-xs font-black text-zinc-400 uppercase tracking-widest pl-2">2. Operativa Logística</h2>
-          <div ref={carriersRef}>
-            <CarriersCard
-              empresas={empresas}
-              empresasDisponibles={empresasDisponibles}
-              INGRESOS={INGRESOS}
-              añadirEmpresa={() => setEmpresas([...empresas, { nombre: '', ingreso_por_entrega: '' }])}
-              actualizarEmpresa={(i,c,v) => setEmpresas(empresas.map((e, idx) => idx===i ? { ...e, [c]: v } : e))}
-              eliminarEmpresa={(i) => { if (window.confirm('¿Eliminar esta empresa?')) setEmpresas(empresas.filter((_, idx) => idx !== i)); }}
-            />
-          </div>
-          {ubiLoading ? <Skeleton /> : (
-            <Ubicaciones
-              initial={ubiRows}
-              initialMeta={ubiMeta}
-              tenantId={tenant?.id}
-              lockedCount={packagesCount}
-              usageByCodigo={usageByCodigo}
-              fetchPackagesByLabels={fetchPackagesByLabels}
-              onChange={({ ubicaciones, meta, deletions, forceDeletePackages }) => {
-                const sanitized = sanitizeUbicaciones(ubicaciones || []);
-                setUbiRows(sanitized);
-                setUbiMeta({ cols: Math.max(1, Math.min(12, parseInt(meta?.cols ?? ubiMeta.cols, 10) || ubiMeta.cols)), orden: (meta?.order || meta?.orden) === 'vertical' ? 'vertical' : 'horizontal' });
-                pendingDeletionsRef.current = Array.isArray(deletions) ? deletions : [];
-                forceDeleteRef.current = !!forceDeletePackages;
-              }}
-            />
-          )}
-        </section>
+        <Ubicaciones 
+          initial={ubiRows} 
+          initialMeta={ubiMeta} 
+          tenantId={tenant?.id}
+          usageByCodigo={usageByCodigo}
+          onChange={({ ubicaciones, meta, deletions, forceDeletePackages }) => {
+            setUbiRows(ubicaciones);
+            setUbiMeta(meta);
+            pendingDeletionsRef.current = deletions;
+            forceDeleteRef.current = forceDeletePackages;
+          }}
+        />
 
-        <section className="space-y-4">
-          <h2 className="text-xs font-black text-zinc-400 uppercase tracking-widest pl-2">3. Seguridad y Accesos</h2>
-          <PinCard tenantId={tenant?.id} onToast={(m,t) => setToast({ mensaje: m, tipo: t || 'success' })} />
-          <AccountSettings usuario={usuario} onDraftChange={setAccountDraft} />
-        </section>
-
-        <section className="space-y-4 pt-12">
-          <h2 className="text-xs font-black text-zinc-400 uppercase tracking-widest pl-2">4. Datos y Herramientas</h2>
-          <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-             <div className="p-6 md:p-8 bg-zinc-50/30">
-               <ImportWizard
-                 onToast={(m,t) => setToast({ mensaje: m, tipo: t || 'success' })}
-                 onDone={() => { if (tenant?.id) { Promise.all([loadPackagesCount(tenant.id), loadUsageByCodigo(tenant.id)]).catch(()=>{}); } }}
-               />
-             </div>
-          </div>
-        </section>
-
+        <PinCard tenantId={tenant?.id} onToast={mostrarToast} />
+        <AccountSettings usuario={usuario} onDraftChange={setAccountDraft} />
+        <ImportWizard onToast={mostrarToast} onDone={() => loadUsageData(tenant.id)} />
       </div>
     </main>
   );

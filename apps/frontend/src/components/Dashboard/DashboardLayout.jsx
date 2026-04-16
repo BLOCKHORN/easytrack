@@ -1,8 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { hasNotice, subscribeNotice, setNotice, clearNotice } from '../../utils/supportNotice';
-import { listTickets } from '../../services/ticketsService';
 import { supabase } from '../../utils/supabaseClient';
 
 const TypewriterLogo = ({ size = "text-2xl", cursorHeight = "h-6" }) => {
@@ -25,7 +23,6 @@ const IconPlus = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="non
 const IconSearch = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
 const IconGrid = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>;
 const IconUser = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
-const IconSupport = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></svg>;
 const IconSettings = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 const IconGlobe = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>;
 const IconLogout = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
@@ -37,37 +34,10 @@ const IconScan = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="non
 export default function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [supportNotice, setSupportNotice] = useState(hasNotice());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const pollingRef = useRef(null);
-
-  useEffect(() => {
-    const unsub = subscribeNotice(setSupportNotice);
-    return unsub;
-  }, []);
-
-  useEffect(() => {
-    const inSupport = location.pathname.includes('/dashboard/soporte');
-    if (inSupport && supportNotice) clearNotice();
-  }, [location.pathname, supportNotice]);
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    let unmounted = false;
-    async function checkSupportNotice() {
-      try {
-        const r = await listTickets({ page: 1, pageSize: 1, estado: 'esperando_cliente' });
-        const total = Number(r?.total ?? 0);
-        if (!location.pathname.includes('/dashboard/soporte') && !unmounted) setNotice(total > 0);
-        else if (!unmounted) clearNotice();
-      } catch {}
-    }
-    checkSupportNotice();
-    pollingRef.current = setInterval(checkSupportNotice, 15000);
-    return () => { unmounted = true; if (pollingRef.current) clearInterval(pollingRef.current); };
   }, [location.pathname]);
 
   const handleLogout = async () => {
@@ -140,14 +110,10 @@ export default function DashboardLayout() {
             <NavLink
               key={item.path}
               to={item.path}
-              onClick={() => item.isSupport && clearNotice()}
               className={({ isActive }) => `relative flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 ${isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}
             >
               {item.icon}
               {item.label}
-              {item.isSupport && supportNotice && (
-                <span className="absolute right-3 w-2.5 h-2.5 bg-red-500 rounded-full" />
-              )}
             </NavLink>
           ))}
         </nav>
@@ -173,9 +139,6 @@ export default function DashboardLayout() {
           className="relative w-10 h-10 flex items-center justify-center text-zinc-300 hover:text-white transition-colors"
         >
           {isMobileMenuOpen ? <IconX /> : <IconMenu />}
-          {!isMobileMenuOpen && supportNotice && (
-            <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 border-2 border-zinc-950 rounded-full" />
-          )}
         </button>
       </header>
 
@@ -194,17 +157,11 @@ export default function DashboardLayout() {
                 <NavLink
                   key={item.path}
                   to={item.path}
-                  onClick={() => {
-                    if (item.isSupport) clearNotice();
-                    setIsMobileMenuOpen(false);
-                  }}
+                  onClick={() => setIsMobileMenuOpen(false)}
                   className={({ isActive }) => `relative flex items-center gap-4 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all ${isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}
                 >
-                  <div className={item.isSupport && supportNotice ? "text-white" : ""}>{item.icon}</div>
-                  <span className={item.isSupport && supportNotice ? "text-white" : ""}>{item.label}</span>
-                  {item.isSupport && supportNotice && (
-                    <span className="ml-auto w-2.5 h-2.5 bg-red-500 rounded-full" />
-                  )}
+                  {item.icon}
+                  <span>{item.label}</span>
                 </NavLink>
               ))}
               

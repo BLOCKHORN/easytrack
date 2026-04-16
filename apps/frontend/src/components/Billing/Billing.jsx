@@ -1,7 +1,8 @@
+'use strict';
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../utils/supabaseClient';
-
-const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
+import { openBillingPortal, startCheckout } from '../../services/billingService';
 
 const IconCreditCard = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>;
 const IconCheck = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-400"><path d="M20 6 9 17l-5-5"/></svg>;
@@ -10,18 +11,13 @@ const IconSpinner = () => <svg className="animate-spin h-5 w-5 text-current" vie
 const IconArrowRight = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>;
 const IconLock = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
 
-async function authedFetch(path, opts = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
-  if (!token) throw new Error("No auth");
-  return fetch(`${API_BASE}${path}`, {
-    method: opts.method || "GET",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(opts.headers || {}) },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-}
+const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
 
-const fmtDate = (iso) => { if (!iso) return ""; const d = new Date(iso); return isNaN(+d) ? "" : d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" }); };
+const fmtDate = (iso) => { 
+  if (!iso) return ""; 
+  const d = new Date(iso); 
+  return isNaN(+d) ? "" : d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" }); 
+};
 
 export default function Billing() {
   const [limitsData, setLimitsData] = useState(null);
@@ -33,14 +29,15 @@ export default function Billing() {
   useEffect(() => {
     async function loadLimits() {
       try {
-        const r = await authedFetch("/api/limits/me");
-        if (!r.ok) throw new Error("ERROR_LIMITS");
+        const { data: { session } } = await supabase.auth.getSession();
+        const r = await fetch(`${API_BASE}/api/limits/me`, {
+          headers: { Authorization: `Bearer ${session?.access_token}` }
+        });
         const data = await r.json();
         setLimitsData(data);
         if (data?.entitlements?.plan?.cadence === 'annual') setPeriodSel('m12');
-        else setPeriodSel('m1');
       } catch (e) {
-        setErrorMsg(e.message);
+        setErrorMsg("No se pudieron cargar los límites de facturación.");
       } finally {
         setLoading(false);
       }
@@ -48,70 +45,47 @@ export default function Billing() {
     loadLimits();
   }, []);
 
-  const openPortal = async () => {
+  const handlePortal = async () => {
     try {
       setErrorMsg(""); 
       setActiveAction('portal');
-      const r = await authedFetch("/api/billing/portal", { method: "POST" });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || "PORTAL_ERROR");
-      if (data.url) return window.location.href = data.url;
-      throw new Error("PORTAL_ERROR");
+      const url = await openBillingPortal();
+      window.location.href = url;
     } catch (e) {
       setErrorMsg(e.message);
       setActiveAction(null);
     }
   };
 
-  const startPeriodCheckout = async (tierCode) => {
+  const handleUpgrade = async (tierCode) => {
     try {
       setErrorMsg(""); 
       setActiveAction(tierCode);
       const planCode = `${tierCode}_${periodSel === 'm12' ? 'annual' : 'monthly'}`;
-      
-      const r = await authedFetch("/api/billing/checkout", {
-        method: "POST",
-        body: { plan_code: planCode }
-      });
-      
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || "CHECKOUT_ERROR");
-      
-      if (data.url) window.location.href = data.url;
+      const url = await startCheckout(planCode);
+      window.location.href = url;
     } catch (e) {
       setErrorMsg(e.message);
       setActiveAction(null);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="max-w-6xl mx-auto p-6 lg:p-8 animate-pulse flex flex-col gap-8">
-        <div className="h-10 w-48 bg-zinc-200 rounded-lg"></div>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-5 h-64 bg-zinc-100 rounded-2xl"></div>
-          <div className="lg:col-span-7 h-96 bg-zinc-100 rounded-2xl"></div>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="p-8 animate-pulse bg-zinc-50 min-h-screen" />;
 
   const ent = limitsData?.entitlements;
   const isPaid = !!ent?.is_paid;
   const isVip = ent?.trial?.quota > 10000;
   const isManualOverride = ent?.plan?.status === 'manual'; 
-  
   const status = String(ent?.plan?.status || "").toLowerCase();
   const isPaymentIssue = ["past_due", "unpaid", "incomplete"].includes(status);
   const isScheduledCancel = !!ent?.plan?.cancel_at_period_end;
-
   const trialUsed = ent?.trial?.used || 0;
   const trialQuota = ent?.trial?.quota || 250;
   const trialPct = Math.min(100, Math.round((trialUsed / trialQuota) * 100)) || 0;
   const isQuotaExceeded = !ent?.trial?.quota_ok;
 
   return (
-    <main className="max-w-6xl mx-auto p-6 lg:p-8">
+    <main className="max-w-6xl mx-auto p-6 lg:p-8 font-sans">
       <div className="mb-8">
         <h1 className="text-3xl font-black text-zinc-950 tracking-tight">Facturación</h1>
         <p className="text-zinc-500 font-medium mt-1">Suscripción, límites de uso y método de pago.</p>
@@ -126,14 +100,14 @@ export default function Billing() {
       {isScheduledCancel && (
         <div className="mb-8 p-4 bg-amber-50 text-amber-800 font-bold rounded-xl border border-amber-200 flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-          Suscripción cancelada. Estará activa hasta el final del ciclo de facturación.
+          Suscripción cancelada. Estará activa hasta el final del ciclo actual.
         </div>
       )}
 
       {isPaymentIssue && (
         <div className="mb-8 p-4 bg-red-50 text-red-800 font-bold rounded-xl border border-red-200 flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          Problema de pago detectado. Por favor, actualiza tu tarjeta en el portal.
+          Problema de pago. Actualiza tu tarjeta en el portal.
         </div>
       )}
 
@@ -148,7 +122,7 @@ export default function Billing() {
                 <h2 className="text-sm font-bold text-zinc-500 uppercase tracking-widest">Plan Actual</h2>
                 <div className="flex items-center gap-3 mt-0.5">
                   <span className="text-xl font-black text-zinc-950 uppercase">{ent?.plan?.name || 'Freemium'}</span>
-                  <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-md border ${isPaid || isVip ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : isQuotaExceeded ? 'bg-red-50 text-red-700 border-red-200' : 'bg-zinc-100 text-zinc-600 border-zinc-200'}`}>
+                  <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-md border ${isPaid || isVip ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-zinc-100 text-zinc-600 border-zinc-200'}`}>
                     {isPaid || isVip ? 'ACTIVO' : isQuotaExceeded ? 'AL LÍMITE' : 'GRATUITO'}
                   </span>
                 </div>
@@ -158,20 +132,18 @@ export default function Billing() {
             {(isPaid || isVip) && !isManualOverride && (
               <div className="pt-6 border-t border-zinc-100 grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Ciclo de facturación</p>
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Ciclo</p>
                   <p className="text-sm font-bold text-zinc-900">{ent.plan.cadence === 'annual' ? 'Anual' : 'Mensual'}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Próxima renovación</p>
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Renovación</p>
                   <p className="text-sm font-bold text-zinc-900">{fmtDate(ent.plan.current_period_end)}</p>
                 </div>
               </div>
             )}
             
             {isManualOverride && (
-              <div className="pt-6 border-t border-zinc-100">
-                 <p className="text-sm font-bold text-emerald-700">Cuenta de administración con acceso vitalicio.</p>
-              </div>
+              <div className="pt-6 border-t border-zinc-100 text-sm font-bold text-emerald-700">Acceso vitalicio administrativo.</div>
             )}
           </div>
 
@@ -179,37 +151,26 @@ export default function Billing() {
             <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm">
               <h3 className="text-sm font-bold text-zinc-900 mb-4">Uso de este mes</h3>
               <div className="flex justify-between items-end mb-2">
-                <span className="text-xs font-bold text-zinc-500">Paquetes registrados</span>
+                <span className="text-xs font-bold text-zinc-500">Paquetes</span>
                 <span className="text-sm font-black text-zinc-950">{trialUsed} <span className="text-zinc-400 font-medium">/ {trialQuota}</span></span>
               </div>
               <div className="w-full bg-zinc-100 rounded-full h-2 overflow-hidden mb-6">
-                <div className={`h-full transition-all duration-500 ${trialPct >= 100 ? 'bg-red-500' : trialPct > 80 ? 'bg-amber-500' : 'bg-zinc-900'}`} style={{ width: `${trialPct}%` }} />
+                <div className={`h-full transition-all ${trialPct >= 100 ? 'bg-red-500' : 'bg-zinc-900'}`} style={{ width: `${trialPct}%` }} />
               </div>
-              
-              <div className="pt-6 border-t border-zinc-100">
-                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Limitaciones actuales</h4>
-                <ul className="space-y-3">
-                  <li className="flex items-center gap-3 text-sm text-zinc-500 font-medium">
-                    <IconLock /> Escáner IA desactivado
-                  </li>
-                  <li className="flex items-center gap-3 text-sm text-zinc-500 font-medium">
-                    <IconLock /> Avisos de WhatsApp manuales
-                  </li>
-                  <li className="flex items-center gap-3 text-sm text-zinc-500 font-medium">
-                    <IconLock /> Sin analítica financiera
-                  </li>
-                </ul>
-              </div>
+              <ul className="space-y-3 pt-6 border-t border-zinc-100">
+                <li className="flex items-center gap-3 text-sm text-zinc-500 font-medium"><IconLock /> Escáner IA desactivado</li>
+                <li className="flex items-center gap-3 text-sm text-zinc-500 font-medium"><IconLock /> WhatsApp manual</li>
+              </ul>
             </div>
           )}
 
           {(isPaid || isScheduledCancel || isPaymentIssue) && !isManualOverride && (
             <button 
-              onClick={openPortal} 
+              onClick={handlePortal} 
               disabled={!!activeAction} 
-              className="w-full py-4 bg-white border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 text-zinc-900 text-sm font-bold rounded-2xl transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-4 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-900 text-sm font-bold rounded-2xl transition-all flex items-center justify-center gap-2"
             >
-              {activeAction === 'portal' ? <IconSpinner /> : <>Gestionar suscripción y facturas <IconArrowRight /></>}
+              {activeAction === 'portal' ? <IconSpinner /> : <>Gestionar pagos <IconArrowRight /></>}
             </button>
           )}
         </div>
@@ -218,29 +179,17 @@ export default function Billing() {
           <div className="lg:col-span-7">
             <div className="bg-zinc-950 rounded-3xl p-8 sm:p-10 shadow-xl text-white relative overflow-hidden">
               <div className="absolute top-0 right-0 p-6">
-                <span className="bg-white/10 text-white text-xs font-black uppercase tracking-widest px-3 py-1.5 rounded-full border border-white/10 backdrop-blur-md">
-                  7 DÍAS GRATIS
-                </span>
+                <span className="bg-white/10 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-full border border-white/10 backdrop-blur-md">7 DÍAS GRATIS</span>
               </div>
 
               <div className="mb-8 pr-32">
-                <h3 className="text-2xl font-black tracking-tight mb-2">Plan PRO</h3>
-                <p className="text-zinc-400 text-sm font-medium">Automatización logística total para escalar tu negocio sin límites operativos.</p>
+                <h3 className="text-2xl font-black mb-2">Plan PRO</h3>
+                <p className="text-zinc-400 text-sm">Automatización logística total para tu negocio.</p>
               </div>
 
               <div className="flex items-center gap-2 bg-zinc-900/50 p-1 rounded-xl w-fit mb-8 border border-zinc-800">
-                <button 
-                  onClick={() => setPeriodSel('m1')} 
-                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${periodSel === 'm1' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
-                >
-                  Mensual
-                </button>
-                <button 
-                  onClick={() => setPeriodSel('m12')} 
-                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-2 ${periodSel === 'm12' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
-                >
-                  Anual <span className="text-emerald-400 text-[10px] uppercase tracking-wider">-16%</span>
-                </button>
+                <button onClick={() => setPeriodSel('m1')} className={`px-4 py-2 text-xs font-bold rounded-lg ${periodSel === 'm1' ? 'bg-zinc-800 text-white' : 'text-zinc-400'}`}>Mensual</button>
+                <button onClick={() => setPeriodSel('m12')} className={`px-4 py-2 text-xs font-bold rounded-lg ${periodSel === 'm12' ? 'bg-zinc-800 text-white' : 'text-zinc-400'}`}>Anual <span className="text-emerald-400 ml-1">-16%</span></button>
               </div>
 
               <div className="mb-8 flex items-end gap-1 border-b border-zinc-800 pb-8">
@@ -248,25 +197,21 @@ export default function Billing() {
                 <span className="text-zinc-500 font-bold mb-1">/{periodSel === 'm12' ? 'año' : 'mes'}</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 mb-10">
-                <div className="flex items-center gap-3"><IconSparkles /> <span className="text-sm font-bold text-zinc-200">Escáner IA Ilimitado</span></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
+                <div className="flex items-center gap-3"><IconSparkles /> <span className="text-sm font-bold text-zinc-200">IA Ilimitada</span></div>
                 <div className="flex items-center gap-3"><IconCheck /> <span className="text-sm font-bold text-zinc-200">Paquetes ilimitados</span></div>
-                <div className="flex items-center gap-3"><IconCheck /> <span className="text-sm font-bold text-zinc-200">Avisos de WhatsApp automáticos</span></div>
+                <div className="flex items-center gap-3"><IconCheck /> <span className="text-sm font-bold text-zinc-200">WhatsApp automático</span></div>
                 <div className="flex items-center gap-3"><IconCheck /> <span className="text-sm font-bold text-zinc-200">Analítica Financiera</span></div>
-                <div className="flex items-center gap-3"><IconCheck /> <span className="text-sm font-bold text-zinc-200">Soporte prioritario</span></div>
               </div>
 
               <button 
-                onClick={() => startPeriodCheckout('pro')} 
+                onClick={() => handleUpgrade('pro')} 
                 disabled={!!activeAction} 
-                className="w-full py-4 bg-white hover:bg-zinc-200 text-zinc-950 text-sm font-black rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 flex justify-center items-center gap-2"
+                className="w-full py-4 bg-white hover:bg-zinc-200 text-zinc-950 text-sm font-black rounded-xl transition-all active:scale-[0.98]"
               >
                 {activeAction === 'pro' ? <IconSpinner /> : 'Comenzar prueba gratuita'}
               </button>
-              
-              <p className="text-center text-xs text-zinc-500 font-medium mt-4">
-                Cancela sin compromiso antes de 7 días. No se aplicarán cargos.
-              </p>
+              <p className="text-center text-[10px] text-zinc-500 mt-4 uppercase tracking-widest font-bold">Sin cargos durante los primeros 7 días.</p>
             </div>
           </div>
         )}

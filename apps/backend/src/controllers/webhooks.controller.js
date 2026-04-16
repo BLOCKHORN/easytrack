@@ -1,17 +1,12 @@
 'use strict';
 
-const express = require('express');
-const Stripe  = require('stripe');
-// Usamos tu cliente estándar, que ya tiene poderes de administrador (Service Role)
+const Stripe = require('stripe');
 const { supabase } = require('../utils/supabaseClient');
 
-const router = express.Router();
-
-const STRIPE_KEY  = process.env.STRIPE_SECRET_KEY;
+const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
 const WEBHOOK_KEY = process.env.STRIPE_WEBHOOK_SECRET;
-const stripe      = STRIPE_KEY ? new Stripe(STRIPE_KEY, { apiVersion: '2024-06-20' }) : null;
+const stripe = STRIPE_KEY ? new Stripe(STRIPE_KEY, { apiVersion: '2024-06-20' }) : null;
 
-// Logger silencioso para no romper el flujo principal
 async function safeLogEvent(provider, evt) {
   try {
     await supabase.from('payment_events').insert([{
@@ -20,9 +15,7 @@ async function safeLogEvent(provider, evt) {
       payload: evt || {},
       event_id: evt?.id || null
     }]);
-  } catch (e) {
-    console.warn(`[Webhook] No se pudo loguear el evento ${evt?.id}`);
-  }
+  } catch (e) {}
 }
 
 async function findTenantByCustomer(customerId) {
@@ -60,16 +53,12 @@ async function resolvePlanIdFromPrice(priceId) {
 const mapStatus = (s) => (s || '').toLowerCase();
 const toISO = (sec) => (sec ? new Date(sec * 1000).toISOString() : null);
 
-/**
- * Lógica Core de Sincronización (Idempotente)
- */
 async function upsertSubscription(tenantId, stripeSub) {
   if (!tenantId || !stripeSub) return;
 
   const priceId = getFirstPriceId(stripeSub) || stripeSub?.plan?.id || null;
   const subStatus = mapStatus(stripeSub.status);
   
-  // Determinamos el tier según el estado de Stripe
   const isActive = ['active', 'trialing', 'past_due'].includes(subStatus);
   const planIdInternal = await resolvePlanIdFromPrice(priceId);
   const tenantPlanTier = isActive ? 'pro' : 'free';
@@ -88,7 +77,6 @@ async function upsertSubscription(tenantId, stripeSub) {
     updated_at: new Date().toISOString(),
   };
 
-  // 1. Guardado Idempotente de la Suscripción (Evita crashes de ON CONFLICT)
   const { data: existingSub } = await supabase
     .from('subscriptions')
     .select('id')
@@ -101,10 +89,8 @@ async function upsertSubscription(tenantId, stripeSub) {
     await supabase.from('subscriptions').insert([subData]);
   }
 
-  // 2. Actualización del Tenant
   const tenantUpdates = { plan_id: tenantPlanTier };
   
-  // Si entra en Trialing o Active, reseteamos el consumo para que el servicio no se bloquee
   if (isActive) {
     tenantUpdates.trial_used = 0;
   }
@@ -114,12 +100,7 @@ async function upsertSubscription(tenantId, stripeSub) {
     .update(tenantUpdates)
     .eq('id', tenantId);
     
-  if (tenantErr) {
-    console.error(`[Webhook] Error actualizando el tenant ${tenantId}:`, tenantErr);
-    throw tenantErr;
-  }
-  
-  console.log(`✅ [Webhook] Tenant ${tenantId} sincronizado. Plan: ${tenantPlanTier}, Estado: ${subStatus}`);
+  if (tenantErr) throw tenantErr;
 }
 
 async function handleEvent(evt) {
@@ -129,33 +110,26 @@ async function handleEvent(evt) {
     case 'checkout.session.completed': {
       const session = evt.data.object;
       const tenantId = session.metadata?.tenant_id || session.client_reference_id;
-
       if (!tenantId || !isId(session.subscription, 'sub')) return;
-
       const sub = await stripe.subscriptions.retrieve(session.subscription);
       await upsertSubscription(tenantId, sub);
       break;
     }
-
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
       const sub = evt.data.object;
       const tenantId = sub.metadata?.tenant_id || await findTenantByCustomer(sub.customer);
-
       if (tenantId) await upsertSubscription(tenantId, sub);
       break;
     }
-
     case 'customer.subscription.deleted': {
       const sub = evt.data.object;
       const tenantId = await findTenantByCustomer(sub.customer);
       if (tenantId) {
         await supabase.from('tenants').update({ plan_id: 'free' }).eq('id', tenantId);
-        console.log(`⚠️ [Webhook] Suscripción cancelada. Tenant ${tenantId} degradado a Free.`);
       }
       break;
     }
-
     case 'invoice.paid': {
       const inv = evt.data.object;
       if (!isId(inv.subscription, 'sub')) return;
@@ -167,14 +141,13 @@ async function handleEvent(evt) {
   }
 }
 
-async function stripeWebhook(req, res) {
+exports.stripeWebhook = async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
 
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, WEBHOOK_KEY);
   } catch (err) {
-    console.error("❌ [Webhook] Error de firma de Stripe:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -182,10 +155,6 @@ async function stripeWebhook(req, res) {
     await handleEvent(event);
     return res.json({ received: true });
   } catch (err) {
-    console.error("❌ [Webhook] Fallo crítico procesando el evento:", err);
-    // Devolvemos 200 a Stripe para que no reintente en bucle si es un error interno nuestro
     return res.status(200).send('Event received but processing failed internally');
   }
-}
-
-module.exports = { router, stripeWebhook };
+};

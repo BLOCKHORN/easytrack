@@ -7,7 +7,6 @@ const ctrl = require('../controllers/import.controller');
 
 const router = Router();
 
-// Todas protegidas por login (pero sin subscriptionFirewall, igual que /api/paquetes)
 router.use(requireAuth);
 
 router.post('/preview', ctrl.preview);

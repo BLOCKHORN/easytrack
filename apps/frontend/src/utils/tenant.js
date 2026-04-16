@@ -1,9 +1,9 @@
-// frontend/src/utils/tenant.js
+'use strict';
+
 import { supabase } from './supabaseClient';
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
-/** Devuelve el slug si la URL es /:tenantSlug/... */
 export function getTenantSlugFromPath() {
   try {
     const m = window.location.pathname.match(/^\/([^/]+)(?:\/|$)/);
@@ -13,14 +13,7 @@ export function getTenantSlugFromPath() {
   }
 }
 
-export function getTenantSlugOrThrow() {
-  const s = getTenantSlugFromPath();
-  if (!s) throw new Error('NO_SLUG_IN_PATH');
-  return s;
-}
-
-/** Versión estricta: lanza si no hay sesión o tenant. */
-export async function getTenantIdOrThrow() {
+export async function getTenantData() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('NO_SESSION');
 
@@ -33,41 +26,19 @@ export async function getTenantIdOrThrow() {
     e.code = 402;
     throw e;
   }
+
   if (!r.ok) {
     const txt = await r.text().catch(() => '');
     throw new Error(`TENANT_ME_FAILED ${r.status} ${txt}`);
   }
 
-  const { tenant } = await r.json();
+  const { tenant, entitlements } = await r.json();
   if (!tenant?.id) throw new Error('TENANT_NOT_FOUND');
+  
+  return { tenant, entitlements };
+}
+
+export async function getTenantIdOrThrow() {
+  const { tenant } = await getTenantData();
   return tenant.id;
-}
-
-/** Back-compat: misma API antigua; devuelve null si algo falla. */
-export async function getTenantId() {
-  try {
-    return await getTenantIdOrThrow();
-  } catch {
-    return null;
-  }
-}
-
-/** Obtenida de ensureTenant.js para consolidar en un solo archivo */
-export async function ensureTenantResolved() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('NO_SESSION');
-
-  const r = await fetch(`${API}/api/tenants/me`, {
-    headers: { Authorization: `Bearer ${session.access_token}` }
-  });
-  
-  if (!r.ok) {
-    const txt = await r.text().catch(()=>'');
-    throw new Error(`TENANT_ME_FAILED ${r.status} ${txt}`);
-  }
-  
-  const j = await r.json();
-  if (!j?.tenant?.id) throw new Error('TENANT_NOT_FOUND');
-  
-  return { tenant: j.tenant, entitlements: j.entitlements ?? null };
 }
