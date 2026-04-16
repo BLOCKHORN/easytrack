@@ -1,9 +1,21 @@
-# /public/robots.txt
 User-agent: *
 Allow: /
+
+# Bloquear rutas de autenticación y onboarding
+Disallow: /login
+Disallow: /registro
+Disallow: /crear-password
+Disallow: /auth/
+
+# Bloquear pasarelas de pago y Stripe
+Disallow: /upgrade/
+Disallow: /gate
+Disallow: /portal
+
+# Bloquear la aplicación interna y rutas dinámicas de tenants
 Disallow: /dashboard/
 Disallow: /admin/
-Disallow: /api/
-Disallow: /registro
+Disallow: /*/dashboard/
 
+# Ubicación del mapa del sitio
 Sitemap: https://easytrack.pro/sitemap.xml
