@@ -1,7 +1,12 @@
+'use strict';
+
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../utils/supabaseClient';
+
+// Importamos el nuevo sistema de reseñas
+import ReviewBanner from './ReviewBanner';
 
 const TypewriterLogo = ({ size = "text-2xl", cursorHeight = "h-6" }) => {
   const text = "easytrack";
@@ -192,6 +197,9 @@ export default function DashboardLayout() {
           transition={{ duration: 0.2 }}
           className="flex-1 p-5 md:p-8 max-w-[1440px] w-full mx-auto"
         >
+          {/* Banner de reseñas dinámico */}
+          <ReviewBanner />
+          
           <Outlet />
         </motion.div>
       </main>

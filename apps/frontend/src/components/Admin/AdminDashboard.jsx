@@ -1,3 +1,5 @@
+'use strict';
+
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../../utils/supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,33 +20,63 @@ const formatEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', cur
 const formatMicroEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 4, maximumFractionDigits: 6 }).format(n || 0);
 
 const timeAgo = (dateString) => {
-  if (!dateString) return 'NO DATA';
+  if (!dateString) return 'SIN DATOS';
   const seconds = Math.floor((new Date() - new Date(dateString)) / 1000);
-  let interval = seconds / 86400; if (interval > 1) return Math.floor(interval) + 'D';
-  interval = seconds / 3600; if (interval > 1) return Math.floor(interval) + 'H';
-  interval = seconds / 60; if (interval > 1) return Math.floor(interval) + 'M';
-  return 'NOW';
+  let interval = seconds / 86400; if (interval > 1) return Math.floor(interval) + 'd';
+  interval = seconds / 3600; if (interval > 1) return Math.floor(interval) + 'h';
+  interval = seconds / 60; if (interval > 1) return Math.floor(interval) + 'm';
+  return 'AHORA';
 };
 
-const analyzeNegotiationOpportunities = (statsArray) => {
+const getAiCost = (pTokens, cTokens) => {
+  const p = (Number(pTokens) || 0) / 1000000 * 0.075;
+  const c = (Number(cTokens) || 0) / 1000000 * 0.30;
+  return p + c;
+};
+
+const analyzeNegotiationOpportunities = (statsArray, timeRange, tenant) => {
+  if (timeRange === 'today' || timeRange === 'week') return [];
+
+  const creationDate = tenant?.fecha_creacion ? new Date(tenant.fecha_creacion) : new Date();
+  const daysActive = (new Date() - creationDate) / (1000 * 60 * 60 * 24);
+  const monthsActive = Math.max(1, daysActive / 30.44);
+
+  const TIERS = {
+    VOLUMEN: ['Amazon Logistics', 'InPost', 'Mondial Relay', 'Punto Pack', 'Celeritas', 'Packlink'],
+    PREMIUM: ['DHL', 'UPS', 'FedEx', 'TNT']
+  };
+
   return statsArray.map(c => {
     const vol = Number(c.volumen) || 0;
     const currentTicket = Number(c.ticket_medio) || 0;
+    const monthlyVol = timeRange === 'all' ? (vol / monthsActive) : vol;
+
     let targetTicket = 0;
-    
-    if (vol >= 2500) targetTicket = 0.60;
-    else if (vol >= 1000) targetTicket = 0.50;
-    else if (vol >= 500) targetTicket = 0.45;
+    const emp = c.empresa_transporte;
+
+    if (TIERS.VOLUMEN.includes(emp)) {
+      if (monthlyVol >= 1500) targetTicket = 0.35;
+      else if (monthlyVol >= 800) targetTicket = 0.25;
+    } else if (TIERS.PREMIUM.includes(emp)) {
+      if (monthlyVol >= 150) targetTicket = 0.60;
+      else if (monthlyVol >= 50) targetTicket = 0.50; 
+    } else {
+      if (monthlyVol >= 800) targetTicket = 0.60;
+      else if (monthlyVol >= 400) targetTicket = 0.50;
+      else if (monthlyVol >= 200) targetTicket = 0.40; 
+    }
     
     if (targetTicket > 0 && currentTicket < targetTicket) {
-      const lostRevenueMonthly = vol * (targetTicket - currentTicket);
+      const diff = targetTicket - currentTicket;
       return {
-        empresa: c.empresa_transporte,
-        volumen: vol,
+        empresa: emp,
+        volumenTotal: vol,
+        volumenMensual: Math.round(monthlyVol),
         ticketActual: currentTicket,
         ticketObjetivo: targetTicket,
-        fugaMensual: lostRevenueMonthly,
-        fugaAnual: lostRevenueMonthly * 12
+        fugaMensual: monthlyVol * diff,
+        fugaAnual: (monthlyVol * diff) * 12,
+        fugaHistorica: timeRange === 'all' ? (vol * diff) : null
       };
     }
     return null;
@@ -108,9 +140,8 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
   }, [statsData]);
 
   const opportunities = useMemo(() => {
-    if (timeRange === 'today' || timeRange === 'week') return [];
-    return analyzeNegotiationOpportunities(statsData);
-  }, [statsData, timeRange]);
+    return analyzeNegotiationOpportunities(statsData, timeRange, tenant);
+  }, [statsData, timeRange, tenant]);
 
   const quotaPercentage = tenant.trial_quota > 0 ? Math.min((tenant.trial_used / tenant.trial_quota) * 100, 100) : 0;
   const isQuotaExhausted = tenant.trial_quota > 0 && tenant.trial_used >= tenant.trial_quota;
@@ -122,7 +153,6 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
 
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-      
       <div className="flex justify-between items-center mb-4">
         <button onClick={onBack} className="flex items-center gap-2 text-xs font-black text-zinc-500 hover:text-white uppercase tracking-widest transition-colors">
           <IconBack /> Cerrar Inspección
@@ -232,17 +262,23 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
                 
                 <div className="space-y-4">
                   {opportunities.map((opp, idx) => {
-                    const mensajeWa = encodeURIComponent(`Hola, analizando tu negocio en EasyTrack hemos detectado que mueves ${opp.volumen} paquetes con ${opp.empresa}. Actualmente te pagan ${formatEUR(opp.ticketActual)}, pero con tu volumen puedes exigir ${formatEUR(opp.ticketObjetivo)} a tu gestor. Estás perdiendo ${formatEUR(opp.fugaAnual)} al año. ¡Usa tus informes de la App para reclamarlo!`);
+                    const mensajeWa = encodeURIComponent(`Hola, analizando tu negocio en EasyTrack hemos detectado que mueves una media de ${opp.volumenMensual} paquetes/mes con ${opp.empresa}. Actualmente te pagan ${formatEUR(opp.ticketActual)}, pero con tu volumen puedes exigir ${formatEUR(opp.ticketObjetivo)} a tu gestor. Estás perdiendo ${formatEUR(opp.fugaAnual)} al año. ¡Usa tus informes de la App para reclamarlo!`);
                     const tlf = tenant.phone ? tenant.phone.replace(/\D/g,'') : '';
 
                     return (
                       <div key={idx} className="bg-zinc-900/50 border border-red-900/30 rounded-xl p-4 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                         <div>
-                          <p className="text-white font-bold text-sm mb-1">{opp.empresa} <span className="text-zinc-500 font-mono">({opp.volumen} paq)</span></p>
+                          <p className="text-white font-bold text-sm mb-1">{opp.empresa} <span className="text-zinc-500 font-mono">({opp.volumenTotal} paq)</span></p>
                           <p className="text-xs text-zinc-400">
                             Ticket: <span className="text-red-400 font-mono">{formatEUR(opp.ticketActual)}</span> <span className="text-zinc-600">→</span> Target: <span className="text-emerald-400 font-mono">{formatEUR(opp.ticketObjetivo)}</span>
                           </p>
-                          <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mt-2">Fuga Anual: {formatEUR(opp.fugaAnual)}</p>
+                          <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mt-2">
+                            {opp.fugaHistorica !== null ? (
+                              <>Fuga Histórica: {formatEUR(opp.fugaHistorica)} <span className="text-zinc-600 mx-1">|</span> Proyección Anual: {formatEUR(opp.fugaAnual)}</>
+                            ) : (
+                              <>Pérdida Anual Proyectada: {formatEUR(opp.fugaAnual)}</>
+                            )}
+                          </p>
                         </div>
                         <a 
                           href={tlf ? `https://wa.me/34${tlf}?text=${mensajeWa}` : '#'} 
@@ -332,6 +368,7 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
 export default function AdminDashboard() {
   const [tenants, setTenants] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [pendingReviews, setPendingReviews] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -344,16 +381,24 @@ export default function AdminDashboard() {
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      const [resT, resL] = await Promise.all([
+      const [resT, resL, resR] = await Promise.all([
         supabase.rpc('admin_get_all_tenants'),
-        supabase.rpc('admin_get_global_carrier_stats', { p_time_range: globalTimeFilter })
+        supabase.rpc('admin_get_global_carrier_stats', { p_time_range: globalTimeFilter }),
+        supabase.from('reviews').select('id, rating, comentario, created_at, tenants(nombre_empresa)').eq('status', 'pending') 
       ]);
       
       if (resT.error) throw resT.error;
       if (resL.error) throw resL.error;
+      if (resR.error) throw resR.error;
 
-      setTenants(resT.data || []);
+      const tenantsWithCost = (resT.data || []).map(t => ({
+        ...t,
+        ai_cost: getAiCost(t.ai_prompt_tokens, t.ai_completion_tokens)
+      }));
+
+      setTenants(tenantsWithCost);
       setLeaderboard(resL.data || []);
+      setPendingReviews(resR.data || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -368,6 +413,16 @@ export default function AdminDashboard() {
     else { setSortKey(key); setSortDir('desc'); }
   };
 
+  const handleReviewAction = async (reviewId, newStatus) => {
+    try {
+      const { error } = await supabase.from('reviews').update({ status: newStatus }).eq('id', reviewId);
+      if (error) throw error;
+      setPendingReviews(prev => prev.filter(r => r.id !== reviewId));
+    } catch (error) {
+      alert("Error procesando reseña: " + error.message);
+    }
+  };
+
   const processedTenants = useMemo(() => {
     let filtered = tenants.filter(t => 
       t.nombre_empresa?.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -377,7 +432,7 @@ export default function AdminDashboard() {
 
     return filtered.sort((a, b) => {
       let valA = a[sortKey]; let valB = b[sortKey];
-      if (['total_paquetes', 'ingresos_mes', 'paquetes_hoy', 'top_ticket_medio'].includes(sortKey)) {
+      if (['total_paquetes', 'ingresos_mes', 'paquetes_hoy', 'top_ticket_medio', 'ai_cost'].includes(sortKey)) {
          valA = Number(valA) || 0; valB = Number(valB) || 0;
          return sortDir === 'asc' ? valA - valB : valB - valA;
       } else {
@@ -395,7 +450,8 @@ export default function AdminDashboard() {
       ingresosMesGlobal: tenants.reduce((acc, t) => acc + (Number(t.ingresos_mes) || 0), 0),
       inToday: tenants.reduce((acc, t) => acc + (Number(t.paquetes_hoy) || 0), 0),
       totalFlow: tenants.reduce((acc, t) => acc + (Number(t.total_paquetes) || 0), 0),
-      proCount: tenants.filter(t => t.plan_id === 'pro').length
+      proCount: tenants.filter(t => t.plan_id === 'pro').length,
+      totalAiCost: tenants.reduce((acc, t) => acc + t.ai_cost, 0)
     };
   }, [tenants]);
 
@@ -406,31 +462,35 @@ export default function AdminDashboard() {
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 border-b border-zinc-800/80 pb-6">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-[0.2em] mb-4">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Network Metrics
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Métricas Globales
           </div>
           <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight flex items-center gap-4">
-            Global Command Center
-            <button onClick={fetchAllData} className="text-zinc-500 hover:text-brand-400 transition-colors p-2 rounded-full hover:bg-zinc-900 active:scale-95" title="Refrescar Nodos">
+            Panel General
+            <button onClick={fetchAllData} className="text-zinc-500 hover:text-brand-400 transition-colors p-2 rounded-full hover:bg-zinc-900 active:scale-95" title="Actualizar datos">
                <IconRefresh />
             </button>
           </h1>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full xl:w-auto">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 w-full xl:w-auto">
           <div className="bg-brand-950/20 border border-brand-500/20 rounded-xl p-4 min-w-[130px] shadow-inner">
-            <p className="text-[10px] font-bold text-brand-500/70 uppercase tracking-widest mb-1">SaaS MRR (Est.)</p>
+            <p className="text-[10px] font-bold text-brand-500/70 uppercase tracking-widest mb-1">Ingresos SaaS (Mes)</p>
             <p className="text-2xl font-mono font-black text-brand-400">{formatEUR(globalMetrics.proCount * 29)}</p>
           </div>
           <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-xl p-4 min-w-[130px] shadow-inner">
-            <p className="text-[10px] font-bold text-emerald-500/70 uppercase tracking-widest mb-1">€ Generados (Red)</p>
+            <p className="text-[10px] font-bold text-emerald-500/70 uppercase tracking-widest mb-1">Total Generado</p>
             <p className="text-2xl font-mono font-black text-emerald-400">{formatEUR(networkRevenue)}</p>
           </div>
+          <div className="bg-red-950/20 border border-red-500/20 rounded-xl p-4 min-w-[130px] shadow-inner">
+            <p className="text-[10px] font-bold text-red-500/70 uppercase tracking-widest mb-1">Coste Escáner IA</p>
+            <p className="text-2xl font-mono font-black text-red-400">{formatMicroEUR(globalMetrics.totalAiCost)}</p>
+          </div>
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 min-w-[130px] shadow-inner">
-            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Volumen All-Time</p>
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Paquetes Totales</p>
             <p className="text-2xl font-mono font-black text-white">{globalMetrics.totalFlow.toLocaleString()}</p>
           </div>
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 min-w-[130px] shadow-inner">
-            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Locales Activos</p>
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Negocios Activos</p>
             <p className="text-2xl font-mono font-black text-white">{globalMetrics.total}</p>
           </div>
         </div>
@@ -446,19 +506,51 @@ export default function AdminDashboard() {
           />
         ) : (
           <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
+            
+            {/* INBOX DE RESEÑAS PENDIENTES */}
+            {pendingReviews.length > 0 && (
+              <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-2xl p-6 shadow-xl mb-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <IconSparkles className="text-indigo-400" />
+                  <h3 className="text-sm font-black text-indigo-400 uppercase tracking-widest">Feedback Pendiente ({pendingReviews.length})</h3>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {pendingReviews.map(rev => (
+                    <div key={rev.id} className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="font-bold text-white text-sm">{rev.tenants?.nombre_empresa}</span>
+                          <span className="text-amber-400 text-xs font-black tracking-widest">{rev.rating} / 5</span>
+                        </div>
+                        <p className="text-zinc-400 text-xs italic mb-4">"{rev.comentario}"</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleReviewAction(rev.id, 'approved')} className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest py-2 rounded-lg transition-colors">
+                          Aprobar
+                        </button>
+                        <button onClick={() => handleReviewAction(rev.id, 'rejected')} className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 text-[10px] font-black uppercase tracking-widest py-2 rounded-lg transition-colors">
+                          Descartar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-xl">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
-                  <IconBuilding /> Leaderboard: Agencias de la Red
+                  <IconBuilding /> Ranking de Agencias de Transporte
                 </h3>
                 <select 
                   value={globalTimeFilter} 
                   onChange={e => setGlobalTimeFilter(e.target.value)} 
                   className="bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-300 px-3 py-2 rounded-lg outline-none cursor-pointer focus:ring-1 focus:ring-brand-500"
                 >
-                  <option value="today">Generado Hoy</option>
-                  <option value="week">Generado Esta Semana</option>
-                  <option value="month">Generado Este Mes</option>
+                  <option value="today">Hoy</option>
+                  <option value="week">Esta Semana</option>
+                  <option value="month">Este Mes</option>
                   <option value="all">Histórico Completo</option>
                 </select>
               </div>
@@ -467,17 +559,17 @@ export default function AdminDashboard() {
                 <table className="w-full text-left whitespace-nowrap text-sm">
                   <thead>
                     <tr className="border-b border-zinc-800/80 text-[10px] uppercase tracking-widest font-black text-zinc-500">
-                      <th className="py-3 px-4">Agencia Top</th>
-                      <th className="py-3 px-4 text-right">Volumen Movido</th>
+                      <th className="py-3 px-4">Agencia</th>
+                      <th className="py-3 px-4 text-right">Paquetes</th>
                       <th className="py-3 px-4 text-right">Ticket Medio Global</th>
-                      <th className="py-3 px-4 text-right">€ Generados a los Locales</th>
+                      <th className="py-3 px-4 text-right">€ Generados a Locales</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/30 font-mono">
                     {loading ? (
-                      <tr><td colSpan="4" className="py-6 text-center text-zinc-600 text-xs">Calculando matrices de servidor...</td></tr>
+                      <tr><td colSpan="4" className="py-6 text-center text-zinc-600 text-xs">Calculando datos...</td></tr>
                     ) : leaderboard.length === 0 ? (
-                      <tr><td colSpan="4" className="py-6 text-center text-zinc-600 text-[10px] uppercase tracking-widest">Sin actividad global en este periodo</td></tr>
+                      <tr><td colSpan="4" className="py-6 text-center text-zinc-600 text-[10px] uppercase tracking-widest">No hay actividad en estas fechas.</td></tr>
                     ) : (
                       leaderboard.slice(0, 6).map((c, i) => (
                         <tr key={c.empresa_transporte} className="hover:bg-zinc-900/50 transition-colors">
@@ -503,14 +595,14 @@ export default function AdminDashboard() {
                 </div>
                 <input
                   type="text"
-                  placeholder="Buscar negocio por ID, Email o Nombre..."
+                  placeholder="Buscar negocio por nombre o email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-11 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-sm font-bold text-white placeholder-zinc-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all shadow-inner font-mono"
                 />
               </div>
               <div className="flex items-center gap-2 text-[10px] font-black tracking-widest uppercase text-zinc-500 bg-zinc-900 px-4 py-3 rounded-xl border border-zinc-800">
-                Data Nodes: {processedTenants.length}
+                Negocios encontrados: {processedTenants.length}
               </div>
             </div>
 
@@ -519,11 +611,11 @@ export default function AdminDashboard() {
                 <table className="w-full text-left whitespace-nowrap">
                   <thead>
                     <tr className="bg-zinc-900 border-b border-zinc-800 text-[9px] uppercase tracking-[0.2em] font-black text-zinc-500 select-none">
-                      <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('nombre_empresa')}>Target Identity {sortKey==='nombre_empresa' && (sortDir==='asc'?'↑':'↓')}</th>
-                      <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('total_paquetes')}>Quota / Volume {sortKey==='total_paquetes' && (sortDir==='asc'?'↑':'↓')}</th>
-                      <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('ingresos_mes')}>€ App (Mes) {sortKey==='ingresos_mes' && (sortDir==='asc'?'↑':'↓')}</th>
-                      <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('top_ticket_medio')}>Top Carrier Local {sortKey==='top_ticket_medio' && (sortDir==='asc'?'↑':'↓')}</th>
-                      <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('ultima_actividad')}>System Ping {sortKey==='ultima_actividad' && (sortDir==='asc'?'↑':'↓')}</th>
+                      <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('nombre_empresa')}>Negocio / Email {sortKey==='nombre_empresa' && (sortDir==='asc'?'↑':'↓')}</th>
+                      <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('total_paquetes')}>Consumo / Paquetes {sortKey==='total_paquetes' && (sortDir==='asc'?'↑':'↓')}</th>
+                      <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('ingresos_mes')}>Facturado (Mes) {sortKey==='ingresos_mes' && (sortDir==='asc'?'↑':'↓')}</th>
+                      <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('ai_cost')}>Coste IA {sortKey==='ai_cost' && (sortDir==='asc'?'↑':'↓')}</th>
+                      <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('ultima_actividad')}>Última Conexión {sortKey==='ultima_actividad' && (sortDir==='asc'?'↑':'↓')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/50 text-sm">
@@ -532,14 +624,14 @@ export default function AdminDashboard() {
                         <td colSpan="5" className="px-6 py-16 text-center">
                           <div className="flex flex-col items-center justify-center gap-3 text-zinc-500">
                             <div className="w-6 h-6 border-2 border-zinc-600 border-t-brand-500 rounded-full animate-spin" />
-                            <span className="font-bold text-[10px] uppercase tracking-[0.2em] font-mono">Fetching Nodes...</span>
+                            <span className="font-bold text-[10px] uppercase tracking-[0.2em] font-mono">Cargando negocios...</span>
                           </div>
                         </td>
                       </tr>
                     ) : processedTenants.length === 0 ? (
                       <tr>
                         <td colSpan="5" className="px-6 py-16 text-center text-zinc-500 font-bold text-[10px] uppercase tracking-[0.2em] font-mono">
-                          ERROR: 404_TARGET_NOT_FOUND
+                          No se han encontrado negocios.
                         </td>
                       </tr>
                     ) : (
@@ -561,7 +653,7 @@ export default function AdminDashboard() {
                                 <div className="flex items-center gap-2 mb-1">
                                   <span className="font-black text-white text-base">{t.nombre_empresa || 'Desconocido'}</span>
                                   {isPro && <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[8px] px-1.5 py-0.5 rounded uppercase tracking-widest font-black">PRO</span>}
-                                  {isBlocked && <span className="bg-red-500/10 text-red-500 border border-red-500/20 text-[8px] px-1.5 py-0.5 rounded uppercase tracking-widest font-black">LOCKED</span>}
+                                  {isBlocked && <span className="bg-red-500/10 text-red-500 border border-red-500/20 text-[8px] px-1.5 py-0.5 rounded uppercase tracking-widest font-black">BLOQUEADO</span>}
                                 </div>
                                 <span className="text-[10px] font-mono text-zinc-500">{t.email}</span>
                               </div>
@@ -594,14 +686,10 @@ export default function AdminDashboard() {
                             </td>
 
                             <td className="px-6 py-4">
-                              {t.top_empresa ? (
-                                <div className="flex flex-col">
-                                  <span className="text-xs font-black text-white">{t.top_empresa}</span>
-                                  <span className="text-[10px] font-mono font-bold text-amber-400 mt-0.5">
-                                    {formatEUR(t.top_ticket_medio)} <span className="text-zinc-500">AVG</span>
-                                  </span>
-                                </div>
-                              ) : <span className="text-[10px] font-mono text-zinc-600">NO DATA</span>}
+                              <div className="flex flex-col">
+                                <span className="font-mono font-black text-red-400 text-sm">{formatMicroEUR(t.ai_cost)}</span>
+                                <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600 mt-0.5">{t.ai_scans_count || 0} Escaneos</span>
+                              </div>
                             </td>
 
                             <td className="px-6 py-4">

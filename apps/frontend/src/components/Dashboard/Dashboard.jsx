@@ -9,6 +9,24 @@ import AnadirPaquete from "./AnadirPaquete";
 import { supabase } from "../../utils/supabaseClient";
 import PlanBadge from '../../components/Billing/PlanBadge';
 
+// --- SISTEMA DE CACHÉ EN MEMORIA (SWR) ---
+let __DASHBOARD_CACHE = {
+  loaded: false,
+  negocio: null,
+  entitlements: null,
+  slug: null,
+  configPendiente: false,
+  resumen: {
+    recibidosHoy: 0,
+    entregadosHoy: 0,
+    almacenActual: 0,
+    huecosOcupados: 0,
+    ocupacion: [],
+    huerfanosMaestros: [],
+    diario: []
+  }
+};
+
 const IconPlus = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
 const IconClose = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
 const IconBoxIn = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/><path d="M12 8v4"/><path d="M8 4l8 4"/></svg>;
@@ -78,23 +96,15 @@ export default function Dashboard(props) {
   const apiRoot = useMemo(() => (import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001"), []);
 
   const [mostrarModal, setMostrarModal] = useState(false);
-  const [negocio, setNegocio] = useState(null);
-  const [entitlements, setEntitlements] = useState(null);
-  const [slug, setSlug] = useState(null);
-  const [cargandoNegocio, setCargandoNegocio] = useState(true);
-  const [configPendiente, setConfigPendiente] = useState(false);
-
+  
+  // Usamos el caché para inicializar los estados de forma instantánea
+  const [negocio, setNegocio] = useState(__DASHBOARD_CACHE.negocio);
+  const [entitlements, setEntitlements] = useState(__DASHBOARD_CACHE.entitlements);
+  const [slug, setSlug] = useState(__DASHBOARD_CACHE.slug);
+  const [cargandoNegocio, setCargandoNegocio] = useState(!__DASHBOARD_CACHE.loaded);
+  const [configPendiente, setConfigPendiente] = useState(__DASHBOARD_CACHE.configPendiente);
   const [diasHuerfano, setDiasHuerfano] = useState(7);
-
-  const [resumen, setResumen] = useState({ 
-    recibidosHoy: 0, 
-    entregadosHoy: 0, 
-    almacenActual: 0,
-    huecosOcupados: 0,
-    ocupacion: [],
-    huerfanosMaestros: [],
-    diario: []
-  });
+  const [resumen, setResumen] = useState(__DASHBOARD_CACHE.resumen);
 
   const go = (path) => { 
     if (slug) navigate(`/${slug}${path.startsWith("/") ? path : `/${path}`}`); 
@@ -107,10 +117,11 @@ export default function Dashboard(props) {
     return () => { document.body.style.overflow = ""; };
   }, [mostrarModal]);
 
+  // Carga de negocio y configuración base (silenciosa si ya hay caché)
   useEffect(() => {
     let cancel = false;
     (async () => {
-      setCargandoNegocio(true);
+      if (!__DASHBOARD_CACHE.loaded) setCargandoNegocio(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("AUTH_REQUIRED");
@@ -119,28 +130,60 @@ export default function Dashboard(props) {
         const data = await res.json();
         if (cancel) return;
 
-        setNegocio(data?.negocio || data); 
-        setEntitlements(data?.entitlements || null);
-        setSlug(data?.negocio?.slug || data?.slug || null);
+        const newNegocio = data?.negocio || data;
+        const newEntitlements = data?.entitlements || null;
+        const newSlug = data?.negocio?.slug || data?.slug || null;
+
+        setNegocio(newNegocio);
+        setEntitlements(newEntitlements);
+        setSlug(newSlug);
+
+        // Actualizamos caché
+        __DASHBOARD_CACHE.negocio = newNegocio;
+        __DASHBOARD_CACHE.entitlements = newEntitlements;
+        __DASHBOARD_CACHE.slug = newSlug;
         
         const estLegacy = data?.negocio?.estructura_almacen || data?.estructura_almacen || data?.tipo_almacen;
-        if (estLegacy || data?.baldas_total > 0) { setConfigPendiente(false); return; }
+        let isConfigPending = false;
 
-        try {
-          const ures = await fetch(`${apiRoot}/api/ubicaciones?debug=1`, { headers: { Authorization: `Bearer ${session.access_token}` } });
-          const ujson = await ures.json().catch(() => ({}));
-          const ucount = Array.isArray(ujson?.ubicaciones) ? ujson.ubicaciones.length : (Array.isArray(ujson?.rows) ? ujson.rows.length : 0);
-          if (!cancel) {
-            if (ucount > 0) { setConfigPendiente(false); setNegocio(prev => ({ ...prev, estructura_almacen: 'ubicaciones' })); }
-            else setConfigPendiente(true);
+        if (estLegacy || data?.baldas_total > 0) { 
+          isConfigPending = false; 
+        } else {
+          try {
+            const ures = await fetch(`${apiRoot}/api/ubicaciones?debug=1`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+            const ujson = await ures.json().catch(() => ({}));
+            const ucount = Array.isArray(ujson?.ubicaciones) ? ujson.ubicaciones.length : (Array.isArray(ujson?.rows) ? ujson.rows.length : 0);
+            
+            if (ucount > 0) { 
+              isConfigPending = false; 
+              setNegocio(prev => {
+                const updated = { ...prev, estructura_almacen: 'ubicaciones' };
+                __DASHBOARD_CACHE.negocio = updated;
+                return updated;
+              }); 
+            } else {
+              isConfigPending = true;
+            }
+          } catch { 
+            isConfigPending = true; 
           }
-        } catch { if (!cancel) setConfigPendiente(true); }
-      } catch (e) { }
-      finally { if (!cancel) setCargandoNegocio(false); }
+        }
+
+        if (!cancel) {
+          setConfigPendiente(isConfigPending);
+          __DASHBOARD_CACHE.configPendiente = isConfigPending;
+          __DASHBOARD_CACHE.loaded = true;
+          setCargandoNegocio(false);
+        }
+
+      } catch (e) { 
+        if (!cancel) setCargandoNegocio(false); 
+      }
     })();
     return () => { cancel = true; };
   }, [apiBase, apiRoot]);
 
+  // Carga de Resumen y KPIs (silenciosa si ya hay caché)
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -151,7 +194,7 @@ export default function Dashboard(props) {
         if (res.ok) { 
           const d = await res.json(); 
           if (!cancel) {
-            setResumen({
+            const newResumen = {
               recibidosHoy: d.resumen?.hoy_recibidos ?? 0,
               entregadosHoy: d.resumen?.hoy_entregados ?? 0,
               almacenActual: d.resumen?.pendientes ?? 0,
@@ -159,7 +202,9 @@ export default function Dashboard(props) {
               ocupacion: d.ocupacion || [],
               huerfanosMaestros: d.huerfanos || [],
               diario: d.diario || []
-            });
+            };
+            setResumen(newResumen);
+            __DASHBOARD_CACHE.resumen = newResumen;
           }
         }
       } catch {} 
@@ -214,7 +259,6 @@ export default function Dashboard(props) {
         </button>
       </div>
 
-      {/* LÓGICA DE PLG: Banner Ilimitado vs Barra Progreso */}
       {entitlements?.plan_id === 'free' && entitlements?.trial && (
         entitlements.trial.is_unlimited_phase ? (
           <div className="bg-gradient-to-r from-brand-600 to-brand-500 text-white px-5 py-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs shadow-[0_8px_30px_rgb(20,184,166,0.2)] border border-brand-400">

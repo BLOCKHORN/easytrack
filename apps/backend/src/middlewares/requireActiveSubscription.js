@@ -1,11 +1,9 @@
-// middlewares/requireActiveSubscription.js
 'use strict';
 
 const { fetchSubscriptionForTenant, resolveTenantId } = require('../utils/subscription');
-const { supabaseAdmin } = require('../utils/supabaseAdmin');
+const { supabaseAdmin } = require('../utils/supabaseClient');
 const { computeEntitlements } = require('../utils/entitlements');
 
-// SERVICE ROLE para leer tenant sin RLS
 async function getTenantById(id) {
   const { data, error } = await supabaseAdmin
     .from('tenants')

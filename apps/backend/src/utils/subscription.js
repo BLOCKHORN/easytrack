@@ -1,6 +1,6 @@
 'use strict';
 
-const { supabaseAdmin } = require('./supabaseAdmin');
+const { supabaseAdmin } = require('./supabaseClient');
 const Stripe = require('stripe');
 
 const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || process.env.STRIPE_API_KEY || '';
@@ -34,10 +34,8 @@ async function fetchSubscriptionForTenant(tenantId) {
   if (!tenantId) return null;
   const fields = 'id, tenant_id, plan_id, provider, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at, provider_subscription_id, provider_customer_id';
   
-  // 1. Intentar vista (por compatibilidad)
   let { data } = await supabaseAdmin.from('v_current_subscription').select(fields).eq('tenant_id', tenantId).maybeSingle();
   
-  // 2. Fallback a tabla real (por si el plan_id es null y la vista lo oculta)
   if (!data) {
     const { data: raw } = await supabaseAdmin.from('subscriptions').select(fields).eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(1).maybeSingle();
     data = raw;

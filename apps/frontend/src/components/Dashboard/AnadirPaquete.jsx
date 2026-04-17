@@ -6,6 +6,16 @@ import { getTenantIdOrThrow } from '../../utils/tenant';
 import { crearPaqueteBackend, obtenerPaquetesBackend } from '../../services/paquetesService';
 import { cargarUbicaciones } from '../../services/ubicacionesService';
 
+let __PAGE_CACHE = {
+  loaded: false,
+  tenant: null,
+  aiStatus: 'locked',
+  companias: [],
+  rawUbicaciones: [],
+  metaUbi: { cols: 5, order: 'horizontal' },
+  paquetesPendientes: []
+};
+
 const IconBox = () => <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
 const IconCheck = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>;
 const IconLayers = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
@@ -248,12 +258,17 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const location = useLocation();
   const { tenantSlug } = useParams();
 
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [tenant, setTenant] = useState(null);
-  const [aiStatus, setAiStatus] = useState('locked');
+  const [isInitializing, setIsInitializing] = useState(!__PAGE_CACHE.loaded);
+  const [tenant, setTenant] = useState(__PAGE_CACHE.tenant);
+  const [aiStatus, setAiStatus] = useState(__PAGE_CACHE.aiStatus);
   
-  const [companias, setCompanias] = useState([]);
-  const [compania, setCompania]   = useState('');
+  const [companias, setCompanias] = useState(__PAGE_CACHE.companias);
+  const [compania, setCompania]   = useState(() => {
+    if (!__PAGE_CACHE.loaded) return '';
+    const last = localStorage.getItem('ap_last_company');
+    return (last && __PAGE_CACHE.companias.includes(last)) ? last : (__PAGE_CACHE.companias[0] || '');
+  });
+  
   const [cliente, setCliente]     = useState('');
   const [telefono, setTelefono]   = useState('');
   const [enviarWhatsapp, setEnviarWhatsapp] = useState(false);
@@ -262,15 +277,23 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const [multiCount, setMultiCount] = useState(5);
   const [multiNames, setMultiNames] = useState(() => Array.from({length:5}, ()=>''));
   const [batchSameCompany, setBatchSameCompany] = useState(true);
-  const [batchCompany, setBatchCompany] = useState('');
-  const [multiCompanies, setMultiCompanies] = useState(() => Array.from({length:5}, ()=>''));
+  const [batchCompany, setBatchCompany] = useState(() => {
+    if (!__PAGE_CACHE.loaded) return '';
+    const last = localStorage.getItem('ap_last_company');
+    return (last && __PAGE_CACHE.companias.includes(last)) ? last : (__PAGE_CACHE.companias[0] || '');
+  });
+  const [multiCompanies, setMultiCompanies] = useState(() => Array.from({length:5}, () => {
+    if (!__PAGE_CACHE.loaded) return '';
+    const last = localStorage.getItem('ap_last_company');
+    return (last && __PAGE_CACHE.companias.includes(last)) ? last : (__PAGE_CACHE.companias[0] || '');
+  }));
   const [multiSaving, setMultiSaving] = useState(false);
 
   const [sugCliente, setSugCliente] = useState(null); 
   const [matchInfo, setMatchInfo] = useState(null);  
 
-  const [rawUbicaciones, setRawUbicaciones] = useState([]);
-  const [metaUbi, setMetaUbi] = useState({ cols: 5, order: 'horizontal' });
+  const [rawUbicaciones, setRawUbicaciones] = useState(__PAGE_CACHE.rawUbicaciones);
+  const [metaUbi, setMetaUbi] = useState(__PAGE_CACHE.metaUbi);
   const [penalizedSlots, setPenalizedSlots] = useState({});
 
   const [limiteAlcanzado, setLimiteAlcanzado] = useState(false);
@@ -281,7 +304,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const [isScanning, setIsScanning] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
 
-  const [paquetesLocales, setPaquetesLocales] = useState([]);
+  const [paquetesLocales, setPaquetesLocales] = useState(__PAGE_CACHE.paquetesPendientes);
   const paquetes = propsPaquetes || paquetesLocales;
 
   const [slotSel, setSlotSel] = useState(null);
@@ -324,55 +347,66 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         const token = session?.access_token;
         const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
 
-        const [limitsRes, companiesRes, ubiData, pkgsData] = await Promise.all([
-          fetch(`${API_URL}/api/limits/me`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({})),
-          supabase.from('empresas_transporte_tenant').select('nombre').eq('tenant_id', tid).then(r => r.data || []),
-          cargarUbicaciones(token, tid).catch(() => ({})),
-          propsPaquetes ? Promise.resolve(null) : obtenerPaquetesBackend(token, { estado: 'pendiente', all: 1 }).catch(() => [])
-        ]);
-
-        if (cancel) return;
-
-        const limitsData = limitsRes;
-        setAiStatus(limitsData?.entitlements?.features?.aiStatus || 'locked');
-        
-        const nombreEmpresa = limitsData?.tenant?.nombre_empresa || '';
-        setTenant({ id: tid, nombre_empresa: nombreEmpresa });
-
         try {
           const storedPenalties = JSON.parse(localStorage.getItem(`ap_penalties_${tid}`)) || {};
           setPenalizedSlots(storedPenalties);
         } catch(e) {}
 
-        const listaCompanias = companiesRes.map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b));
-        setCompanias(listaCompanias);
-        
-        const lastCompany = localStorage.getItem('ap_last_company');
-        const defaultCompany = (lastCompany && listaCompanias.includes(lastCompany)) ? lastCompany : (listaCompanias[0] || '');
-        setCompania(defaultCompany);
-        setBatchCompany(defaultCompany);
-        setMultiCompanies(prev => prev.map(v => v || defaultCompany));
+        const [limitsRes, companiesRes, ubiData, pkgsData] = await Promise.all([
+          fetch(`${API_URL}/api/limits/me`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({})),
+          supabase.from('empresas_transporte_tenant').select('nombre').eq('tenant_id', tid).then(r => r.data || []),
+          cargarUbicaciones(token, tid).catch(() => ({})),
+          !propsPaquetes ? obtenerPaquetesBackend(token, { estado: 'pendiente', all: 1 }).catch(() => []) : Promise.resolve(null)
+        ]);
 
-        setRawUbicaciones(Array.isArray(ubiData?.ubicaciones) ? ubiData.ubicaciones : []);
-        setMetaUbi({ 
-          cols: ubiData?.meta?.cols ?? 5, 
-          order: ubiData?.meta?.order ?? ubiData?.meta?.orden ?? 'horizontal' 
-        });
+        if (cancel) return;
+
+        const limitsData = limitsRes;
+        const newAiStatus = limitsData?.entitlements?.features?.aiStatus || 'locked';
+        const nombreEmpresa = limitsData?.tenant?.nombre_empresa || '';
+        const newTenant = { id: tid, nombre_empresa: nombreEmpresa };
+        
+        const listaCompanias = companiesRes.map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+        const newRawUbis = Array.isArray(ubiData?.ubicaciones) ? ubiData.ubicaciones : [];
+        const newMeta = { cols: ubiData?.meta?.cols ?? 5, order: ubiData?.meta?.order ?? ubiData?.meta?.orden ?? 'horizontal' };
+
+        __PAGE_CACHE = {
+           loaded: true,
+           tenant: newTenant,
+           aiStatus: newAiStatus,
+           companias: listaCompanias,
+           rawUbicaciones: newRawUbis,
+           metaUbi: newMeta,
+           paquetesPendientes: pkgsData ? (Array.isArray(pkgsData) ? pkgsData : []) : __PAGE_CACHE.paquetesPendientes
+        };
+
+        setTenant(newTenant);
+        setAiStatus(newAiStatus);
+        setCompanias(listaCompanias);
+        setRawUbicaciones(newRawUbis);
+        setMetaUbi(newMeta);
 
         if (!propsPaquetes && pkgsData) {
           setPaquetesLocales(Array.isArray(pkgsData) ? pkgsData : []);
         }
 
-        setIsInitializing(false);
-
-        setTimeout(() => inputClienteRef.current?.focus(), 50);
+        if (isInitializing) {
+          const lastCompany = localStorage.getItem('ap_last_company');
+          const defaultCompany = (lastCompany && listaCompanias.includes(lastCompany)) ? lastCompany : (listaCompanias[0] || '');
+          setCompania(defaultCompany);
+          setBatchCompany(defaultCompany);
+          setMultiCompanies(prev => prev.map(() => defaultCompany));
+          
+          setIsInitializing(false);
+          setTimeout(() => inputClienteRef.current?.focus(), 50);
+        }
 
       } catch (e) {
         if (!cancel) setIsInitializing(false);
       }
     })();
     return () => { cancel = true; };
-  }, [propsPaquetes]);
+  }, [propsPaquetes, isInitializing]);
 
   useEffect(() => {
     if (!isInitializing && location.state?.openScanner) {
@@ -560,10 +594,17 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       const { data: { session } } = await supabase.auth.getSession();
       const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
       
+      const isMulti = activeTab === 'multi';
+      const companiaFija = (isMulti && batchSameCompany && batchCompany) ? batchCompany : null;
+
       const res = await fetch(`${API_URL}/api/ia/scan-label`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ imageBase64: base64Image, tenant_id: tenant.id })
+        body: JSON.stringify({ 
+          imageBase64: base64Image, 
+          tenant_id: tenant.id,
+          compania_fija: companiaFija
+        })
       });
 
       if (!res.ok) {
@@ -573,20 +614,50 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       
       const data = await res.json();
 
-      if (data.cliente) setLeadingName(data.cliente);
-      if (data.telefono) {
-        setTelefono(data.telefono);
-        setEnviarWhatsapp(false);
-      }
-      
-      if (data.compania) {
-        const aiComp = toUpperVis(data.compania);
-        const match = companias.find(c => {
-          const dbComp = toUpperVis(c);
-          return dbComp === aiComp || dbComp.includes(aiComp) || aiComp.includes(dbComp);
+      if (isMulti) {
+        setMultiNames(prev => {
+          const next = [...prev];
+          const emptyIdx = next.findIndex(n => !n.trim());
+          if (emptyIdx !== -1) {
+            next[emptyIdx] = toUpperVis(data.cliente || '');
+          }
+          return next;
         });
-        if (match) {
-          setCompania(match);
+        
+        if (!batchSameCompany && data.compania) {
+          const aiComp = toUpperVis(data.compania);
+          const match = companias.find(c => {
+            const dbComp = toUpperVis(c);
+            return dbComp === aiComp || dbComp.includes(aiComp) || aiComp.includes(dbComp);
+          });
+          
+          if (match) {
+            setMultiCompanies(prev => {
+              const next = [...prev];
+              const emptyIdx = multiNames.findIndex(n => !n.trim()); 
+              if (emptyIdx !== -1) {
+                next[emptyIdx] = match;
+              }
+              return next;
+            });
+          }
+        }
+      } else {
+        if (data.cliente) setLeadingName(data.cliente);
+        if (data.telefono) {
+          setTelefono(data.telefono);
+          setEnviarWhatsapp(false);
+        }
+        
+        if (!companiaFija && data.compania) {
+          const aiComp = toUpperVis(data.compania);
+          const match = companias.find(c => {
+            const dbComp = toUpperVis(c);
+            return dbComp === aiComp || dbComp.includes(aiComp) || aiComp.includes(dbComp);
+          });
+          if (match) {
+            setCompania(match);
+          }
         }
       }
       
@@ -673,16 +744,19 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       };
       
       const res = await crearPaqueteBackend(payload, token);
-      if (actualizarPaquetes) await actualizarPaquetes();
       
-      setPaquetesLocales(prev => [...prev, res?.paquete || {
+      const newPkg = res?.paquete || {
         id: Date.now(),
         nombre_cliente: upperCliente,
         empresa_transporte: compania,
         ubicacion_id: slotSel.id,
         ubicacion_label: slotSel.label,
         entregado: false
-      }]);
+      };
+      __PAGE_CACHE.paquetesPendientes = [...__PAGE_CACHE.paquetesPendientes, newPkg];
+      
+      if (actualizarPaquetes) await actualizarPaquetes();
+      setPaquetesLocales(prev => [...prev, newPkg]);
 
       if (activeTab === 'single' && enviarWhatsapp && telefono.trim()) {
         let cleaned = telefono.replace(/\D/g, '');
@@ -755,8 +829,9 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       }
 
       localStorage.setItem('ap_last_company', batchSameCompany ? batchCompany : compania);
-      if (actualizarPaquetes) await actualizarPaquetes();
       
+      __PAGE_CACHE.paquetesPendientes = [...__PAGE_CACHE.paquetesPendientes, ...nuevosPaquetes];
+      if (actualizarPaquetes) await actualizarPaquetes();
       setPaquetesLocales(prev => [...prev, ...nuevosPaquetes]);
       
       playChime(260);

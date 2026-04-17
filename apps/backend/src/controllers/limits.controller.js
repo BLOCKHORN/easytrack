@@ -1,6 +1,6 @@
 'use strict';
 
-const { supabaseAdmin } = require('../utils/supabaseAdmin');
+const { supabaseAdmin } = require('../utils/supabaseClient');
 const { resolveTenantId, fetchSubscriptionForTenant } = require('../utils/subscription');
 const { computeEntitlements } = require('../utils/entitlements');
 

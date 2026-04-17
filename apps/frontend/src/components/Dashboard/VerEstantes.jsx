@@ -5,6 +5,13 @@ import { getTenantIdOrThrow } from "../../utils/tenant";
 import { eliminarPaqueteBackend } from "../../services/paquetesService";
 import { cargarUbicaciones } from "../../services/ubicacionesService";
 
+// --- SISTEMA DE CACHÉ EN MEMORIA (SWR) ---
+let __SHELF_CACHE = {
+  loaded: false,
+  ubicaciones: [],
+  paquetes: []
+};
+
 // --- ICONOS ---
 const IconGrid = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>;
 const IconSearch = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>;
@@ -25,9 +32,9 @@ const getShelfStyle = (count) => {
 };
 
 export default function VerEstantes() {
-  const [loading, setLoading] = useState(true);
-  const [ubicaciones, setUbicaciones] = useState([]);
-  const [paquetes, setPaquetes] = useState([]);
+  const [loading, setLoading] = useState(!__SHELF_CACHE.loaded);
+  const [ubicaciones, setUbicaciones] = useState(__SHELF_CACHE.ubicaciones);
+  const [paquetes, setPaquetes] = useState(__SHELF_CACHE.paquetes);
 
   const [search, setSearch] = useState("");
   const [ocultarVacias, setOcultarVacias] = useState(false);
@@ -35,34 +42,60 @@ export default function VerEstantes() {
   const [expandedUbis, setExpandedUbis] = useState({});
   const [revealedPkgs, setRevealedPkgs] = useState({});
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    let cancel = false;
+    const loadData = async () => {
+      if (!__SHELF_CACHE.loaded) setLoading(true);
+      try {
+        const tId = await getTenantIdOrThrow();
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        // Ejecutamos ambas consultas en paralelo
+        const [ubiRes, pkgsRes] = await Promise.all([
+          cargarUbicaciones(session.access_token, tId),
+          supabase.from('packages').select('*').eq('tenant_id', tId).eq('entregado', false)
+        ]);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const tId = await getTenantIdOrThrow();
-      const { data: { session } } = await supabase.auth.getSession();
-      const ubiRes = await cargarUbicaciones(session.access_token, tId);
-      setUbicaciones(ubiRes.ubicaciones || []);
+        if (cancel) return;
 
-      // Descargamos todo el inventario vivo (bypass pagination)
-      const { data: pkgs, error } = await supabase
-        .from('packages')
-        .select('*')
-        .eq('tenant_id', tId)
-        .eq('entregado', false);
-      
-      if (!error && pkgs) setPaquetes(pkgs);
-    } catch (e) { console.error(e); } finally { setLoading(false); }
-  };
+        const newUbis = ubiRes.ubicaciones || [];
+        const newPkgs = (!pkgsRes.error && pkgsRes.data) ? pkgsRes.data : [];
+
+        // Actualizar caché global
+        __SHELF_CACHE = {
+          loaded: true,
+          ubicaciones: newUbis,
+          paquetes: newPkgs
+        };
+
+        // Actualizar estado local silenciosamente
+        setUbicaciones(newUbis);
+        setPaquetes(newPkgs);
+      } catch (e) { 
+        console.error(e); 
+      } finally { 
+        if (!cancel) setLoading(false); 
+      }
+    };
+
+    loadData();
+    return () => { cancel = true; };
+  }, []);
 
   const onDeletePkg = async (id) => {
     if (!window.confirm("¿Eliminar paquete?")) return;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       await eliminarPaqueteBackend(id, session.access_token);
-      setPaquetes(prev => prev.filter(p => p.id !== id));
-    } catch (e) { alert("Error"); }
+      
+      const updatedPkgs = paquetes.filter(p => p.id !== id);
+      setPaquetes(updatedPkgs);
+      
+      // Sincronizar también la caché para que no reaparezca si cambian de tab
+      __SHELF_CACHE.paquetes = updatedPkgs;
+    } catch (e) { 
+      alert("Error eliminando paquete"); 
+    }
   };
 
   const toggleExpand = (label) => setExpandedUbis(prev => ({ ...prev, [label]: !prev[label] }));

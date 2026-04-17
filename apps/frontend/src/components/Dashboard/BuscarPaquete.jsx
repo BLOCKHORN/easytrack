@@ -10,6 +10,16 @@ import { getTenantIdOrThrow } from "../../utils/tenant";
 
 const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
 
+// --- SISTEMA DE CACHÉ EN MEMORIA (SWR) ---
+let __SEARCH_CACHE = {
+  loaded: false,
+  kpiGlobal: { total: 0, entregados: 0, pendientes: 0 },
+  companias: [],
+  ubicaciones: [],
+  paquetes: [],
+  totalResultados: 0
+};
+
 const IconSearch = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>;
 const IconCheck = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>;
 const IconTrash = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>;
@@ -34,10 +44,8 @@ const formatearFechaLocal = (isoString) => {
   }).format(new Date(isoString)).replace(',', ' -');
 };
 
-// Resaltado dinámico para la búsqueda fuzzy. Resalta cada palabra de la búsqueda por separado.
 function highlightExact(text, query) {
   if (!query || !text) return text;
-  
   const words = query.trim().split(/\s+/).filter(w => w.length > 0);
   if (words.length === 0) return text;
 
@@ -67,17 +75,36 @@ export default function BuscarPaquete() {
 
   const retryQueue = useRef(new Set());
   const isSyncing = useRef(false);
+  const isFirstMount = useRef(true);
 
   const [tenantId, setTenantId] = useState(null);
-  const [paquetes, setPaquetes] = useState([]);
-  const [totalResultados, setTotalResultados] = useState(0);
-  const [kpiGlobal, setKpiGlobal] = useState({ total: 0, entregados: 0, pendientes: 0 });
+  
+  // Estados inicializados con la caché
+  const [paquetes, _setPaquetes] = useState(__SEARCH_CACHE.paquetes);
+  const [totalResultados, _setTotalResultados] = useState(__SEARCH_CACHE.totalResultados);
+  const [kpiGlobal, _setKpiGlobal] = useState(__SEARCH_CACHE.kpiGlobal);
+  const [companias, _setCompanias] = useState(__SEARCH_CACHE.companias);
+  const [ubicaciones, _setUbicaciones] = useState(__SEARCH_CACHE.ubicaciones);
 
-  const [companias, setCompanias] = useState([]);
-  const [ubicaciones, setUbicaciones] = useState([]); 
+  // Funciones wrapper para mantener la caché sincronizada
+  const setPaquetes = (updater) => {
+    _setPaquetes(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; __SEARCH_CACHE.paquetes = next; return next; });
+  };
+  const setTotalResultados = (updater) => {
+    _setTotalResultados(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; __SEARCH_CACHE.totalResultados = next; return next; });
+  };
+  const setKpiGlobal = (updater) => {
+    _setKpiGlobal(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; __SEARCH_CACHE.kpiGlobal = next; return next; });
+  };
+  const setCompanias = (updater) => {
+    _setCompanias(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; __SEARCH_CACHE.companias = next; return next; });
+  };
+  const setUbicaciones = (updater) => {
+    _setUbicaciones(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; __SEARCH_CACHE.ubicaciones = next; return next; });
+  };
 
   const [paginaActual, setPaginaActual] = useState(1);
-  const [cargando, setCargando] = useState(false);
+  const [cargando, setCargando] = useState(!__SEARCH_CACHE.loaded);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [paqueteEditando, setPaqueteEditando] = useState(null);
   const [loadingEdit, setLoadingEdit] = useState(false);
@@ -156,13 +183,14 @@ export default function BuscarPaquete() {
   };
 
   const fetchPage = async () => {
-    setCargando(true);
+    const isBackgroundSync = isFirstMount.current && __SEARCH_CACHE.loaded;
+    if (!isBackgroundSync) setCargando(true);
+    
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       const headers = { Authorization: `Bearer ${token}` };
 
-      // Magia negra del fuzzy search: transformamos los espacios en comodines (%)
       const searchFuzzy = busqueda.trim().replace(/\s+/g, '%');
 
       const params = new URLSearchParams({
@@ -197,6 +225,7 @@ export default function BuscarPaquete() {
 
         setPaquetes(list);
         setTotalResultados(dataCount.total || 0);
+        __SEARCH_CACHE.loaded = true;
       }
     } catch(e) {
     } finally {
@@ -239,6 +268,7 @@ export default function BuscarPaquete() {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
       fetchPage();
+      isFirstMount.current = false; 
     }, 300);
     return () => clearTimeout(searchDebounceRef.current);
   }, [paginaActual, busqueda, estadoFiltro, companiaFiltro, ubicacionFiltro]);

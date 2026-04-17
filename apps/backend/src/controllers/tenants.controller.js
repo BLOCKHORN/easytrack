@@ -1,17 +1,9 @@
 'use strict';
 
-const { supabase } = require('../utils/supabaseClient');
+const { supabaseAdmin } = require('../utils/supabaseClient');
 const { computeEntitlements } = require('../utils/entitlements');
 const { fetchSubscriptionForTenant } = require('../utils/subscription');
 const { slugifyBase, uniqueSlug } = require('../utils/slug');
-
-let supabaseAdmin;
-try {
-  ({ supabaseAdmin } = require('../utils/supabaseAdmin'));
-} catch {
-  supabaseAdmin = supabase;
-}
-const dbAdmin = supabaseAdmin || supabase;
 
 const TENANT_FIELDS = 'id, slug, nombre_empresa, email, trial_quota, trial_used, soft_blocked, plan_id, requested_plan, is_ai_active, ai_trial_ends_at, ai_trial_used, fecha_creacion';
 
@@ -19,7 +11,7 @@ async function ensureTenantByEmail(email) {
   const em = String(email || '').toLowerCase().trim();
   if (!em) return null;
 
-  const { data: exist } = await dbAdmin
+  const { data: exist } = await supabaseAdmin
     .from('tenants')
     .select(`${TENANT_FIELDS}, updated_at`)
     .ilike('email', em)
@@ -29,16 +21,16 @@ async function ensureTenantByEmail(email) {
   if (exist) return exist;
 
   const base = slugifyBase(em.split('@')[0]);
-  const slug = await uniqueSlug(dbAdmin, base);
+  const slug = await uniqueSlug(supabaseAdmin, base);
 
-  const { data, error } = await dbAdmin
+  const { data, error } = await supabaseAdmin
     .from('tenants')
     .insert([{ email: em, nombre_empresa: base, slug, plan_id: 'free' }])
     .select(TENANT_FIELDS)
     .single();
 
   if (error) {
-    const { data: again } = await dbAdmin
+    const { data: again } = await supabaseAdmin
       .from('tenants')
       .select(TENANT_FIELDS)
       .ilike('email', em)
@@ -53,7 +45,7 @@ async function resolveTenantId(req) {
   if (direct) return direct;
   const email = String(req.user?.email || '').toLowerCase().trim();
   if (!email) return null;
-  const { data, error } = await dbAdmin.from('tenants').select('id').ilike('email', email).maybeSingle();
+  const { data, error } = await supabaseAdmin.from('tenants').select('id').ilike('email', email).maybeSingle();
   if (error) throw error;
   return data?.id || null;
 }
@@ -63,7 +55,7 @@ exports.obtenerTenantMe = async (req, res) => {
     const slugQ = req.query?.slug || null;
 
     if (req.tenant?.id) {
-      const { data: t, error: terr } = await dbAdmin
+      const { data: t, error: terr } = await supabaseAdmin
         .from('tenants')
         .select(TENANT_FIELDS)
         .eq('id', req.tenant.id)
@@ -80,7 +72,7 @@ exports.obtenerTenantMe = async (req, res) => {
     if (!email) return res.status(401).json({ ok: false, error: 'UNAUTHENTICATED' });
 
     if (slugQ) {
-      const { data: t, error } = await dbAdmin
+      const { data: t, error } = await supabaseAdmin
         .from('tenants')
         .select(TENANT_FIELDS)
         .eq('slug', slugQ)
@@ -110,7 +102,7 @@ exports.actualizarTenantMe = async (req, res) => {
     if (!tenantId) return res.status(403).json({ ok: false, error: 'Tenant no resuelto' });
     const nombre = String(req.body?.nombre_empresa || '').trim();
     if (!nombre) return res.status(400).json({ ok: false, error: 'Nombre vacío' });
-    const { data, error } = await dbAdmin.from('tenants').update({ nombre_empresa: nombre }).eq('id', tenantId).select('id, slug, nombre_empresa, email').maybeSingle();
+    const { data, error } = await supabaseAdmin.from('tenants').update({ nombre_empresa: nombre }).eq('id', tenantId).select('id, slug, nombre_empresa, email').maybeSingle();
     if (error) throw error;
     return res.json({ ok: true, tenant: data });
   } catch (e) {
@@ -123,7 +115,7 @@ exports.activarPruebaIA = async (req, res) => {
     const tenantId = await resolveTenantId(req);
     if (!tenantId) return res.status(403).json({ ok: false, error: 'Tenant no resuelto' });
     
-    const { data: t, error: tErr } = await dbAdmin.from('tenants').select('ai_trial_used, plan_id').eq('id', tenantId).single();
+    const { data: t, error: tErr } = await supabaseAdmin.from('tenants').select('ai_trial_used, plan_id').eq('id', tenantId).single();
     if (tErr || !t) return res.status(404).json({ ok: false, error: 'Tenant no encontrado' });
     if (t.plan_id !== 'plus') return res.status(400).json({ ok: false, error: 'Solo el plan Plus tiene acceso a esta prueba.' });
     if (t.ai_trial_used) return res.status(400).json({ ok: false, error: 'TRIAL_ALREADY_USED' });
@@ -131,7 +123,7 @@ exports.activarPruebaIA = async (req, res) => {
     const endsAt = new Date();
     endsAt.setDate(endsAt.getDate() + 7);
     
-    const { data, error } = await dbAdmin.from('tenants').update({ 
+    const { data, error } = await supabaseAdmin.from('tenants').update({ 
       ai_trial_used: true, 
       ai_trial_ends_at: endsAt.toISOString(),
       is_ai_active: true

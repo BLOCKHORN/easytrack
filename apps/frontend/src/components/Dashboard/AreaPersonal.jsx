@@ -290,7 +290,7 @@ export default function AreaPersonal() {
                   Estás viendo una simulación basada en un local promedio que registra <strong className="text-white">1.500 paquetes mensuales</strong>. 
                   Con el plan PRO, estos gráficos se llenarán con la realidad de tu negocio en tiempo real.
                   <br/><br/>
-                  <span className="text-brand-400 font-bold">💡 Consejo estratégico:</span> Nuestros clientes usan esta exactitud analítica para auditar qué agencias son rentables y exigir aumentos. Varios locales han pasado de cobrar 0,30€ a <strong>0,70€ por paquete</strong> demostrando su volumen real a empresas como Celeritas.
+                  <span className="text-brand-400 font-bold">💡 Consejo estratégico:</span> Nuestros clientes usan esta exactitud analítica para auditar qué agencias son rentables y exigir aumentos. Varios locales han pasado de cobrar 0,30€ a <strong>0,50€ por paquete</strong> demostrando su volumen real a empresas como UPS.
                 </p>
               </div>
               <div className="w-full md:w-auto shrink-0 flex flex-col gap-3">
