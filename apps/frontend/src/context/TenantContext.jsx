@@ -20,13 +20,13 @@ export function TenantProvider({ children }) {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
       
-      // Si el servidor rechaza el token (Sesión Zombi), destruimos la sesión local radicalmente
+      // Expulsión elegante: Limpiamos y redirigimos a login con parámetro
       if (r.status === 401) {
         try { await supabase.auth.signOut(); } catch(e) {}
         localStorage.clear();
         sessionStorage.clear();
         setTenant(null);
-        window.location.href = '/';
+        window.location.href = '/login?reason=expired';
         return;
       }
 
@@ -46,12 +46,10 @@ export function TenantProvider({ children }) {
   useEffect(() => {
     let unsub;
     
-    // Check inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
       fetchTenant(session);
     });
 
-    // Suscripción a cambios
     const { data: authListener } = supabase.auth.onAuthStateChange((_evt, session) => {
       fetchTenant(session);
     });
