@@ -98,17 +98,17 @@ exports.escanearEtiqueta = async (req, res) => {
         p_tenant_id: tenant_id,
         p_prompt_tokens: pTokens,
         p_completion_tokens: cTokens
-      }).catch(err => console.error(err));
+      }).then(({error}) => {
+        if (error) console.error(error);
+      });
     }
 
     const cleanedText = textOutput.replace(/```json\s*|```/g, '').trim();
     
-    // --- ZONA DE CAZA DE ERRORES JSON ---
     let parsedRaw;
     try {
       parsedRaw = JSON.parse(cleanedText);
     } catch (parseErr) {
-      // Si la IA devuelve basura, te lo mostramos en el móvil
       return res.status(500).json({ 
         error: `ERROR PARSEANDO JSON: ${parseErr.message}. IA devolvió: ${cleanedText.substring(0, 80)}...` 
       });
@@ -127,8 +127,6 @@ exports.escanearEtiqueta = async (req, res) => {
     if (error?.message && error.message.includes('API key not valid')) return res.status(500).json({ error: 'Clave de API de Gemini no válida.' });
     if (error?.status === 429 || (error?.message && error.message.includes('quota'))) return res.status(429).json({ error: 'Límite de peticiones a la IA alcanzado.' });
     
-    // --- CHIVATO PARA EL MÓVIL ---
-    const mensajeReal = error?.message || error?.toString() || "Error desconocido";
-    return res.status(500).json({ error: `DEBUG MÓVIL: ${mensajeReal}` });
+    return res.status(500).json({ error: `Error interno: ${error.message || 'Desconocido'}` });
   }
 };
