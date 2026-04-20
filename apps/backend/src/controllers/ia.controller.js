@@ -11,9 +11,9 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const buildPrompt = (companiaFija) => {
   const baseInstructions = `
     Eres un experto operario de almacén logístico.
-    Analiza TODA LA IMAGEN y extrae los datos.
+    Analiza TODA LA IMAGEN y extrae los datos solicitados.
     Corrige errores ópticos obvios (ej: "Iberra" -> "Ibarra"). 
-    Respeta nombres extranjeros exactamente como están impresos.
+    Respeta nombres extranjeros exactamente como están impresos, no los españolices.
     DEVUELVE ÚNICAMENTE UN JSON VÁLIDO. NINGÚN TEXTO EXTRA. Usa las claves cortas indicadas.
   `;
 
@@ -65,7 +65,6 @@ exports.escanearEtiqueta = async (req, res) => {
             model: modelName,
             generationConfig: { 
               responseMimeType: "application/json",
-              maxOutputTokens: 100, 
               temperature: 0.1 
             }
           });
@@ -99,16 +98,22 @@ exports.escanearEtiqueta = async (req, res) => {
         p_tenant_id: tenant_id,
         p_prompt_tokens: pTokens,
         p_completion_tokens: cTokens
-      }).then(({error}) => {
-        if (error) console.error(error);
-      });
+      }).catch(err => console.error(err));
     }
 
-    // Limpieza a prueba de balas que ya te funcionaba
     const cleanedText = textOutput.replace(/```json\s*|```/g, '').trim();
-    const parsedRaw = JSON.parse(cleanedText);
     
-    // Mapeamos las claves cortas (c, e, t) a las que espera tu frontend para no romper nada
+    // --- ZONA DE CAZA DE ERRORES JSON ---
+    let parsedRaw;
+    try {
+      parsedRaw = JSON.parse(cleanedText);
+    } catch (parseErr) {
+      // Si la IA devuelve basura, te lo mostramos en el móvil
+      return res.status(500).json({ 
+        error: `ERROR PARSEANDO JSON: ${parseErr.message}. IA devolvió: ${cleanedText.substring(0, 80)}...` 
+      });
+    }
+    
     const parsedJson = {
       cliente: parsedRaw.c || parsedRaw.cliente || "",
       compania: compania_fija ? compania_fija : (parsedRaw.e || parsedRaw.compania || "Otros"),
@@ -118,10 +123,12 @@ exports.escanearEtiqueta = async (req, res) => {
     return res.json(parsedJson);
 
   } catch (error) {
-    console.error("Error analizando etiqueta:", error);
     if (error?.status === 503) return res.status(503).json({ error: 'Nuestros servidores de IA están saturados. Reintenta en 3 segundos.' });
     if (error?.message && error.message.includes('API key not valid')) return res.status(500).json({ error: 'Clave de API de Gemini no válida.' });
     if (error?.status === 429 || (error?.message && error.message.includes('quota'))) return res.status(429).json({ error: 'Límite de peticiones a la IA alcanzado.' });
-    return res.status(500).json({ error: 'Error interno analizando la etiqueta.' });
+    
+    // --- CHIVATO PARA EL MÓVIL ---
+    const mensajeReal = error?.message || error?.toString() || "Error desconocido";
+    return res.status(500).json({ error: `DEBUG MÓVIL: ${mensajeReal}` });
   }
 };
