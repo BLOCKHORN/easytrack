@@ -90,27 +90,38 @@ exports.escanearEtiqueta = async (req, res) => {
     const textOutput = response.text();
     
     if (tenant_id) {
-      const usage = response.usageMetadata;
-      const pTokens = usage?.promptTokenCount || 0;
-      const cTokens = usage?.candidatesTokenCount || 0;
+      try {
+        const usage = response.usageMetadata;
+        const pTokens = usage?.promptTokenCount || 0;
+        const cTokens = usage?.candidatesTokenCount || 0;
 
-      supabase.rpc('increment_ai_usage', {
-        p_tenant_id: tenant_id,
-        p_prompt_tokens: pTokens,
-        p_completion_tokens: cTokens
-      }).then(({error}) => {
-        if (error) console.error(error);
-      });
+        await supabase.rpc('increment_ai_usage', {
+          p_tenant_id: tenant_id,
+          p_prompt_tokens: pTokens,
+          p_completion_tokens: cTokens
+        });
+      } catch (usageError) {
+        console.error("Error silencioso guardando uso de tokens:", usageError);
+      }
     }
 
-    const cleanedText = textOutput.replace(/```json\s*|```/g, '').trim();
+    // --- ZONA DE EXTRACCIÓN QUIRÚRGICA DE JSON ---
+    let cleanedText = textOutput.replace(/```json\s*|```/g, '').trim();
     
+    // Buscamos el inicio y el fin reales del JSON para ignorar saludos tipo "Here is..."
+    const startIndex = cleanedText.indexOf('{');
+    const endIndex = cleanedText.lastIndexOf('}');
+    
+    if (startIndex !== -1 && endIndex !== -1) {
+      cleanedText = cleanedText.substring(startIndex, endIndex + 1);
+    }
+
     let parsedRaw;
     try {
       parsedRaw = JSON.parse(cleanedText);
     } catch (parseErr) {
       return res.status(500).json({ 
-        error: `ERROR PARSEANDO JSON: ${parseErr.message}. IA devolvió: ${cleanedText.substring(0, 80)}...` 
+        error: `ERROR PARSEANDO JSON: ${parseErr.message}. IA devolvió: ${textOutput.substring(0, 80)}...` 
       });
     }
     
