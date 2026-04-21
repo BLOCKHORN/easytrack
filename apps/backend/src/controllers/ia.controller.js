@@ -46,7 +46,7 @@ exports.escanearEtiqueta = async (req, res) => {
   try {
     const { imageBase64, tenant_id, compania_fija } = req.body;
     
-    if (!imageBase64) return res.status(400).json({ error: 'Falta la imagen.' });
+    if (!imageBase64) return res.status(400).json({ error: 'Falta la imagen de la etiqueta.' });
 
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
     const imagePart = { inlineData: { data: base64Data, mimeType: "image/jpeg" } };
@@ -101,14 +101,12 @@ exports.escanearEtiqueta = async (req, res) => {
           p_completion_tokens: cTokens
         });
       } catch (usageError) {
-        console.error("Error silencioso guardando uso de tokens:", usageError);
+        console.error(usageError);
       }
     }
 
-    // --- ZONA DE EXTRACCIÓN QUIRÚRGICA DE JSON ---
     let cleanedText = textOutput.replace(/```json\s*|```/g, '').trim();
     
-    // Buscamos el inicio y el fin reales del JSON para ignorar saludos tipo "Here is..."
     const startIndex = cleanedText.indexOf('{');
     const endIndex = cleanedText.lastIndexOf('}');
     
@@ -120,8 +118,9 @@ exports.escanearEtiqueta = async (req, res) => {
     try {
       parsedRaw = JSON.parse(cleanedText);
     } catch (parseErr) {
+      console.error("Parse Error:", parseErr.message, textOutput.substring(0, 80));
       return res.status(500).json({ 
-        error: `ERROR PARSEANDO JSON: ${parseErr.message}. IA devolvió: ${textOutput.substring(0, 80)}...` 
+        error: 'La IA no ha podido descifrar esta etiqueta. Encuadra un poco mejor y vuelve a disparar.' 
       });
     }
     
@@ -134,10 +133,12 @@ exports.escanearEtiqueta = async (req, res) => {
     return res.json(parsedJson);
 
   } catch (error) {
-    if (error?.status === 503) return res.status(503).json({ error: 'Nuestros servidores de IA están saturados. Reintenta en 3 segundos.' });
-    if (error?.message && error.message.includes('API key not valid')) return res.status(500).json({ error: 'Clave de API de Gemini no válida.' });
-    if (error?.status === 429 || (error?.message && error.message.includes('quota'))) return res.status(429).json({ error: 'Límite de peticiones a la IA alcanzado.' });
+    console.error("IA Error:", error?.message || error);
     
-    return res.status(500).json({ error: `Error interno: ${error.message || 'Desconocido'}` });
+    if (error?.status === 503) return res.status(503).json({ error: 'La IA está procesando demasiados paquetes a la vez. Dale 3 segundos y repite.' });
+    if (error?.message && error.message.includes('API key not valid')) return res.status(500).json({ error: 'Problema de conexión con el núcleo. Avisa a soporte.' });
+    if (error?.status === 429 || (error?.message && error.message.includes('quota'))) return res.status(429).json({ error: 'Has fundido los plomos. Límite de escaneos de IA alcanzado.' });
+    
+    return res.status(500).json({ error: 'La IA está que echa humo ahora mismo. Vuelve a intentarlo.' });
   }
 };
