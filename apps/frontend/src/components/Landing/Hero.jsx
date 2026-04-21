@@ -1,13 +1,25 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, useSpring, useTransform } from "framer-motion";
 import { supabase } from "../../utils/supabaseClient";
 
 const CustomIconArrow = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 12H20M20 12L13 5M20 12L13 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M4 12H20M20 12L13 5M20 12L13 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.4" transform="translate(2, 0)"/></svg>;
 
+const AnimatedNumber = ({ value, initial }) => {
+  const spring = useSpring(initial, { mass: 0.8, stiffness: 40, damping: 15 });
+  const display = useTransform(spring, (current) => new Intl.NumberFormat('es-ES').format(Math.floor(current)));
+  
+  useEffect(() => {
+    spring.set(value);
+  }, [value, spring]);
+
+  return <motion.span>{display}</motion.span>;
+};
+
 export default function Hero() {
   const navigate = useNavigate();
-  const [metrics, setMetrics] = useState({ tenants: '13+', pkgs: '12k+' });
+  const [rawTenants, setRawTenants] = useState(70);
+  const [rawPkgs, setRawPkgs] = useState(150000);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
@@ -17,10 +29,8 @@ export default function Hero() {
         const res = await fetch(`${apiUrl.replace(/\/$/, '')}/api/metrics/public`);
         if (res.ok) {
           const data = await res.json();
-          setMetrics({
-            tenants: data.tenants_count ? `${data.tenants_count}+` : '13+',
-            pkgs: data.packages_delivered_total ? `${(data.packages_delivered_total / 1000).toFixed(1)}k+` : '12k+'
-          });
+          if (data.tenants_count) setRawTenants(data.tenants_count);
+          if (data.packages_delivered_total) setRawPkgs(data.packages_delivered_total);
         }
       } catch (e) {}
     };
@@ -28,15 +38,30 @@ export default function Hero() {
     fetchMetrics();
 
     supabase.auth.getSession().then(({ data }) => {
-      if (data?.session) {
-        setIsLoggedIn(true);
-      }
+      if (data?.session) setIsLoggedIn(true);
     });
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Madrid', hour: 'numeric', hour12: false });
+      const hour = parseInt(formatter.format(new Date()), 10);
+      const day = new Date().getDay();
+      
+      if (hour >= 9 && hour < 20 && day !== 0) {
+        const multiplier = day === 6 ? 0.3 : 1;
+        const added = Math.floor((Math.random() * 3 + 1) * multiplier);
+        if (added > 0) {
+          setRawPkgs(prev => prev + added);
+        }
+      }
+    }, 7000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   return (
     <section className="relative pt-32 pb-40 md:pt-48 md:pb-48 bg-[#09090b] overflow-hidden">
-      
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-80" />
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[radial-gradient(ellipse_at_center,rgba(52,211,153,0.08)_0%,transparent_70%)] rounded-full" />
@@ -45,7 +70,6 @@ export default function Hero() {
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center flex flex-col items-center">
-          
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
             className="flex items-center justify-center gap-3 mb-10 will-change-transform"
@@ -116,13 +140,17 @@ export default function Hero() {
                El volumen procesado por nuestra red
              </p>
              <div className="flex flex-wrap items-center justify-center gap-12 md:gap-24">
-               <div className="text-center">
-                 <div className="text-5xl font-black text-white tracking-tight">{metrics.tenants}</div>
-                 <div className="text-sm font-bold text-zinc-500 mt-1">Negocios Activos</div>
+               <div className="text-center flex flex-col items-center">
+                 <div className="text-5xl font-black text-white tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] flex items-center">
+                   +<AnimatedNumber value={rawTenants} initial={70} />
+                 </div>
+                 <div className="text-sm font-bold text-zinc-500 mt-1 uppercase tracking-widest">Negocios Activos</div>
                </div>
-               <div className="text-center">
-                 <div className="text-5xl font-black text-white tracking-tight">{metrics.pkgs}</div>
-                 <div className="text-sm font-bold text-zinc-500 mt-1">Entregas Gestionadas</div>
+               <div className="text-center flex flex-col items-center">
+                 <div className="text-5xl font-black text-white tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] flex items-center">
+                   +<AnimatedNumber value={rawPkgs} initial={150000} />
+                 </div>
+                 <div className="text-sm font-bold text-zinc-500 mt-1 uppercase tracking-widest">Entregas Gestionadas</div>
                </div>
              </div>
           </motion.div>

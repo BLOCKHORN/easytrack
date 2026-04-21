@@ -52,7 +52,7 @@ exports.escanearEtiqueta = async (req, res) => {
     const imagePart = { inlineData: { data: base64Data, mimeType: "image/jpeg" } };
     const promptText = buildPrompt(compania_fija);
 
-    const models = ["gemini-2.5-flash", "gemini-2-flash"];
+    const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
     let result;
     let lastError;
 
