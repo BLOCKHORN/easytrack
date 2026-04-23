@@ -4,13 +4,20 @@ import { motion } from "framer-motion";
 import { FaArrowRight, FaCheckCircle } from "react-icons/fa";
 import { supabase } from "../../utils/supabaseClient";
 
-const IconLogoRoute = () => (
-  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="5" cy="18" r="3"/>
-    <circle cx="19" cy="6" r="3"/>
-    <path d="M5 15v-4a4 4 0 0 1 4-4h6a4 4 0 0 0 4-4V6"/>
-  </svg>
-);
+const TypewriterLogo = ({ size = "text-4xl", dotColor = "text-brand-500", cursorColor = "bg-brand-500", textColor = "text-white" }) => {
+  const text = "easytrack";
+  return (
+    <div className={`flex items-center ${size} font-black tracking-tighter ${textColor} select-none outline-none`}>
+      {text.split("").map((char, index) => (
+        <motion.span key={index} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.08, duration: 0.1 }}>
+          {char}
+        </motion.span>
+      ))}
+      <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: text.length * 0.08, duration: 0.1 }} className={dotColor}>.</motion.span>
+      <motion.span animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity, duration: 0.8 }} className={`w-1.5 h-8 ${cursorColor} ml-1 inline-block`} />
+    </div>
+  );
+};
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 18 18">
@@ -58,9 +65,8 @@ export default function Registro() {
       <div className="hidden lg:flex lg:w-5/12 bg-zinc-950 flex-col justify-between p-12 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-brand-900/30 via-zinc-950 to-zinc-950"></div>
         <div className="relative z-10">
-          <Link to="/" className="inline-flex items-center gap-2 outline-none group">
-            <div className="text-brand-500 transition-transform group-hover:scale-110"><IconLogoRoute /></div>
-            <span className="text-4xl font-black tracking-tighter lowercase text-white">easy<span className="text-zinc-400">track</span></span>
+          <Link to="/" className="inline-block outline-none">
+            <TypewriterLogo />
           </Link>
         </div>
         <div className="relative z-10 mb-10">
@@ -76,8 +82,8 @@ export default function Registro() {
       <div className="w-full lg:w-7/12 flex items-center justify-center p-6 sm:p-12 min-h-screen lg:min-h-0 bg-white">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-[440px]">
           <div className="lg:hidden flex justify-center mb-10">
-            <Link to="/" className="text-3xl font-black tracking-tighter lowercase select-none">
-              <span className="text-slate-800 font-medium">easy</span><span className="text-slate-950">track</span>
+            <Link to="/" className="outline-none">
+              <TypewriterLogo size="text-3xl" textColor="text-zinc-950" />
             </Link>
           </div>
           <div className="text-center lg:text-left mb-10">

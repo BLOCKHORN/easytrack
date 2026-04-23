@@ -190,7 +190,7 @@ export default function Hero() {
             </div>
 
             <div className="flex flex-col lg:items-end group">
-              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.4em] mb-1 group-hover:text-brand-400 transition-colors">Paquetes Escaneados</span>
+              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.4em] mb-1 group-hover:text-brand-400 transition-colors">Paquetes Entregados</span>
               <div className="text-6xl md:text-8xl font-[900] text-white tracking-tighter tabular-nums leading-none">
                 +<AnimatedNumber value={rawPkgs} initial={150000} />
               </div>
