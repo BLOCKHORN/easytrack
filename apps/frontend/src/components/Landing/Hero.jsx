@@ -19,6 +19,13 @@ const ROTATING_TEXTS = [
   "experto en sistemas"
 ];
 
+const CLIENT_INITIALS = [
+  { in: "EB", name: "Estanco Benidoleig" },
+  { in: "PJ", name: "Papelería Jiménez" },
+  { in: "KR", name: "Kiosco Rivas" },
+  { in: "PL", name: "Punto Pack López" }
+];
+
 const AnimatedNumber = ({ value, initial }) => {
   const spring = useSpring(initial, { mass: 0.8, stiffness: 40, damping: 15 });
   const display = useTransform(spring, (current) => new Intl.NumberFormat('es-ES').format(Math.floor(current)));
@@ -79,13 +86,10 @@ export default function Hero() {
     <section className="relative pt-20 pb-32 md:pt-24 md:pb-40 bg-[#09090b] overflow-hidden min-h-[90vh] flex items-center">
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:6rem_6rem]" />
-        
-        {/* FIX DEFINITIVO: Ruido inyectado como Data URI para evitar el error 404 */}
         <div 
             className="absolute inset-0 opacity-[0.03] pointer-events-none" 
             style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}
         />
-        
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-[radial-gradient(circle_at_50%_0%,rgba(20,184,166,0.08)_0%,transparent_70%)]" />
       </div>
 
@@ -93,6 +97,7 @@ export default function Hero() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           
           <div className="flex flex-col items-center md:items-start text-center md:text-left">
+            {/* Texto Rotativo */}
             <div className="flex flex-col md:flex-row items-center gap-2 mb-4 text-lg md:text-xl font-medium text-zinc-500 tracking-tight">
               <span>No necesitas un</span>
               <div className="relative h-7 overflow-hidden min-w-[200px] text-zinc-300 inline-block text-center md:text-left font-black">
@@ -135,7 +140,8 @@ export default function Hero() {
               Digitalizamos la lógica física de tu local para que dejes de buscar paquetes y empieces a facturar más.
             </motion.p>
 
-            <div className="flex flex-col sm:flex-row items-center gap-4 w-full mb-10">
+            {/* Botones */}
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full mb-12">
               <motion.button 
                 whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                 transition={{ type: "spring", stiffness: 400, damping: 25 }}
@@ -158,23 +164,33 @@ export default function Hero() {
               </motion.button>
             </div>
 
-            <button onClick={scrollToTestimonials} className="flex items-center gap-3 group hover:opacity-80 transition-opacity">
-              <div className="flex -space-x-2.5">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="w-7 h-7 rounded-full border-2 border-[#09090b] overflow-hidden bg-zinc-800">
-                    <img src={`https://i.pravatar.cc/100?img=${i+20}`} alt="user" className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" />
+            {/* Social Proof Realista (Negocios de España) */}
+            <button 
+              onClick={scrollToTestimonials} 
+              className="flex flex-col sm:flex-row items-center gap-4 group hover:bg-white/[0.03] p-3 -ml-3 rounded-2xl transition-all"
+            >
+              <div className="flex -space-x-3">
+                {CLIENT_INITIALS.map((client, i) => (
+                  <div key={i} title={client.name} className="w-9 h-9 rounded-full border-2 border-[#09090b] bg-zinc-800 flex items-center justify-center text-[10px] font-black text-zinc-400 group-hover:text-brand-400 group-hover:border-zinc-700 transition-all">
+                    {client.in}
                   </div>
                 ))}
               </div>
               <div className="text-left leading-none">
-                <div className="flex gap-0.5 mb-1">
-                  {[...Array(5)].map((_, i) => <IconStar key={i} />)}
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex gap-0.5">
+                    {[...Array(5)].map((_, i) => <IconStar key={i} />)}
+                  </div>
+                  <span className="px-1.5 py-0.5 bg-brand-500/10 text-brand-400 text-[8px] font-black uppercase rounded border border-brand-500/20">Verificado</span>
                 </div>
-                <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">+{rawTenants} puntos activos</p>
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                  Confianza de +{rawTenants} negocios <span className="w-1 h-1 rounded-full bg-zinc-700" /> España
+                </p>
               </div>
             </button>
           </div>
 
+          {/* Lado Derecho: Métricas */}
           <div className="relative flex flex-col gap-8 lg:items-end justify-center">
             <div className="lg:flex items-center gap-3 px-3 py-1.5 rounded-full border border-white/5 bg-white/[0.02] backdrop-blur-sm hidden">
                <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse shadow-[0_0_8px_rgba(20,184,166,1)]" />
@@ -196,7 +212,6 @@ export default function Hero() {
               </div>
               <div className="w-full lg:w-56 h-[1px] bg-gradient-to-r lg:bg-gradient-to-l from-brand-500/50 to-transparent mt-2" />
             </div>
-
           </div>
 
         </div>
