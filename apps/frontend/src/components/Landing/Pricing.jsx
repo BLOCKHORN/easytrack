@@ -19,7 +19,7 @@ export default function Pricing() {
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-zinc-950 tracking-tighter leading-[1.1] mb-8">
             Gestión logística.<br/>
-            <span className="text-emerald-600">Escala sin fricción.</span>
+            <span className="text-brand-600">Escala sin fricción.</span>
           </h2>
           
           <div className="flex bg-zinc-100 p-1.5 rounded-2xl border border-zinc-200 w-fit mx-auto shadow-inner">

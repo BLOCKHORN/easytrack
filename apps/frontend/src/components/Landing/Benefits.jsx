@@ -100,12 +100,7 @@ export default function Benefits() {
 
       <div className="max-w-7xl mx-auto mt-10 relative z-10">
         <div className="text-center max-w-4xl mx-auto mb-20 relative z-10">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
-            className="inline-block px-5 py-2 bg-white text-zinc-950 text-[10px] font-[900] uppercase tracking-[0.2em] rounded-full mb-6 border border-zinc-200 shadow-sm"
-          >
-            Orden Quirúrgico
-          </motion.div>
+
           {/* Añadido pt-2 y pb-2 con leading-[1.1] para evitar recortes en la fuente gruesa */}
           <motion.h2 
             initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
