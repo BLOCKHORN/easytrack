@@ -15,25 +15,30 @@ function deriveCadence(price, sub) {
 
 function computeEntitlements({ tenant = null, subscription = null } = {}) {
   const planId = tenant?.plan_id || 'free';
-  const softBlocked = !!tenant?.soft_blocked;
+  const VIP_TENANTS = ['463e2871-32de-4880-bddc-e1072acb7f59'];
+  const isVip = VIP_TENANTS.includes(tenant?.id);
   
-  // Cálculo de los 14 días (si no hay fecha_creacion, asume 0 para no regalar trials a cuentas legacy sin fecha)
+  const softBlocked = isVip ? false : !!tenant?.soft_blocked;
+  
   const createdAt = tenant?.fecha_creacion ? new Date(tenant.fecha_creacion).getTime() : 0;
   const daysSinceCreation = (Date.now() - createdAt) / 86400000;
   const isFirst14Days = daysSinceCreation <= 14;
-  
-  const VIP_TENANTS = ['463e2871-32de-4880-bddc-e1072acb7f59'];
-  const isVip = VIP_TENANTS.includes(tenant?.id);
   
   const trialQuota = isVip ? 1000000 : (Number.isFinite(tenant?.trial_quota) ? tenant.trial_quota : 250);
   const trialUsed = Number(tenant?.trial_used ?? 0);
   const quotaOk = trialUsed < trialQuota;
 
-  const isPaidPlan = planId === 'pro' || isVip;
-
   const subStatus = String(subscription?.status || '').toLowerCase();
-  const hasActiveStripeSub = ['active', 'trialing', 'past_due'].includes(subStatus);
-  const subscriptionActive = hasActiveStripeSub || isPaidPlan;
+  const hasStripeInvolved = !!tenant?.stripe_customer_id || !!subscription?.provider_subscription_id;
+  
+  let subscriptionActive = false;
+  if (isVip) {
+    subscriptionActive = true;
+  } else if (hasStripeInvolved && subscription) {
+    subscriptionActive = ['active', 'trialing', 'past_due'].includes(subStatus);
+  } else {
+    subscriptionActive = planId === 'pro';
+  }
 
   const aiStatus = subscriptionActive ? 'unlimited' : 'locked';
 
@@ -42,11 +47,10 @@ function computeEntitlements({ tenant = null, subscription = null } = {}) {
     canUseWhatsAppClient: subscriptionActive,
     aiStatus,
     supportType: subscriptionActive ? 'direct_whatsapp' : 'none',
-    unlimitedPackages: subscriptionActive || isFirst14Days // <-- BARRA LIBRE ACTIVADA
+    unlimitedPackages: subscriptionActive || isFirst14Days
   };
 
-  const hasStripeInvolved = !!tenant?.stripe_customer_id || !!subscription?.provider_subscription_id;
-  const isManualOverride = isPaidPlan && !hasStripeInvolved;
+  const isManualOverride = subscriptionActive && !hasStripeInvolved && !isVip;
 
   const price = subscription?.price || null;
   const product = subscription?.product || null;
@@ -54,12 +58,12 @@ function computeEntitlements({ tenant = null, subscription = null } = {}) {
   
   const planInfo = subscriptionActive ? {
     id: subscription?.provider_subscription_id || subscription?.id || 'manual-override',
-    name: pickPlanName({ ...subscription, price, product }) || (planId === 'pro' ? 'Pro' : 'VIP'),
-    status: isManualOverride ? 'manual' : (subStatus || 'active'),
-    cancel_at_period_end: !!subscription?.cancel_at_period_end,
+    name: pickPlanName({ ...subscription, price, product }) || (isVip ? 'VIP' : 'Pro'),
+    status: isVip ? 'active' : (isManualOverride ? 'manual' : (subStatus || 'active')),
+    cancel_at_period_end: isVip ? false : !!subscription?.cancel_at_period_end,
     currency: price?.currency || subscription?.currency || 'EUR',
-    cadence: isManualOverride ? 'manual' : cadence,
-    current_period_end: subscription?.current_period_end || null,
+    cadence: (isVip || isManualOverride) ? 'manual' : cadence,
+    current_period_end: isVip ? null : (subscription?.current_period_end || null),
   } : null;
 
   return {
@@ -71,8 +75,8 @@ function computeEntitlements({ tenant = null, subscription = null } = {}) {
     is_paid: subscriptionActive,
     trial: { 
       active: !subscriptionActive && !isVip, 
-      is_unlimited_phase: isFirst14Days, // Mandamos estado al front
-      days_remaining: isFirst14Days ? Math.max(0, 14 - Math.floor(daysSinceCreation)) : 0, // Días exactos
+      is_unlimited_phase: isFirst14Days,
+      days_remaining: isFirst14Days ? Math.max(0, 14 - Math.floor(daysSinceCreation)) : 0,
       quota: trialQuota, 
       used: trialUsed, 
       remaining: Math.max(0, trialQuota - trialUsed), 

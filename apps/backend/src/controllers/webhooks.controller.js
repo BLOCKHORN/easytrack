@@ -116,18 +116,11 @@ async function handleEvent(evt) {
       break;
     }
     case 'customer.subscription.created':
-    case 'customer.subscription.updated': {
+    case 'customer.subscription.updated':
+    case 'customer.subscription.deleted': {
       const sub = evt.data.object;
       const tenantId = sub.metadata?.tenant_id || await findTenantByCustomer(sub.customer);
       if (tenantId) await upsertSubscription(tenantId, sub);
-      break;
-    }
-    case 'customer.subscription.deleted': {
-      const sub = evt.data.object;
-      const tenantId = await findTenantByCustomer(sub.customer);
-      if (tenantId) {
-        await supabase.from('tenants').update({ plan_id: 'free' }).eq('id', tenantId);
-      }
       break;
     }
     case 'invoice.paid': {
@@ -155,6 +148,6 @@ exports.stripeWebhook = async (req, res) => {
     await handleEvent(event);
     return res.json({ received: true });
   } catch (err) {
-    return res.status(200).send('Event received but processing failed internally');
+    return res.status(500).send('Internal Server Error');
   }
 };

@@ -25,7 +25,9 @@ async function enrichWithStripe(row) {
       product: product ? { id: product.id, name: product.name } : null,
     };
   } catch (e) {
-    console.warn('[fetchSubscriptionForTenant] enrich falló:', e?.message);
+    if (e.statusCode === 404) {
+      return { ...row, status: 'canceled' };
+    }
     return row;
   }
 }
