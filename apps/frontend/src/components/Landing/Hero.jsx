@@ -76,18 +76,22 @@ export default function Hero() {
   };
 
   return (
-    // Reducción de padding vertical (pt-24 -> pt-20, pb-48 -> pb-32)
     <section className="relative pt-20 pb-32 md:pt-24 md:pb-40 bg-[#09090b] overflow-hidden min-h-[90vh] flex items-center">
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:6rem_6rem]" />
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+        
+        {/* FIX DEFINITIVO: Ruido inyectado como Data URI para evitar el error 404 */}
+        <div 
+            className="absolute inset-0 opacity-[0.03] pointer-events-none" 
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}
+        />
+        
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-[radial-gradient(circle_at_50%_0%,rgba(20,184,166,0.08)_0%,transparent_70%)]" />
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           
-          {/* LADO IZQUIERDO: NARRATIVA COMPACTA */}
           <div className="flex flex-col items-center md:items-start text-center md:text-left">
             <div className="flex flex-col md:flex-row items-center gap-2 mb-4 text-lg md:text-xl font-medium text-zinc-500 tracking-tight">
               <span>No necesitas un</span>
@@ -166,12 +170,11 @@ export default function Hero() {
                 <div className="flex gap-0.5 mb-1">
                   {[...Array(5)].map((_, i) => <IconStar key={i} />)}
                 </div>
-                <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">+70 puntos activos</p>
+                <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">+{rawTenants} puntos activos</p>
               </div>
             </button>
           </div>
 
-          {/* LADO DERECHO: MÉTRICAS COMPACTADAS */}
           <div className="relative flex flex-col gap-8 lg:items-end justify-center">
             <div className="lg:flex items-center gap-3 px-3 py-1.5 rounded-full border border-white/5 bg-white/[0.02] backdrop-blur-sm hidden">
                <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse shadow-[0_0_8px_rgba(20,184,166,1)]" />
@@ -187,17 +190,13 @@ export default function Hero() {
             </div>
 
             <div className="flex flex-col lg:items-end group">
-              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.4em] mb-1 group-hover:text-brand-400 transition-colors">Paquetes Entregados</span>
+              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.4em] mb-1 group-hover:text-brand-400 transition-colors">Paquetes Escaneados</span>
               <div className="text-6xl md:text-8xl font-[900] text-white tracking-tighter tabular-nums leading-none">
                 +<AnimatedNumber value={rawPkgs} initial={150000} />
               </div>
               <div className="w-full lg:w-56 h-[1px] bg-gradient-to-r lg:bg-gradient-to-l from-brand-500/50 to-transparent mt-2" />
             </div>
 
-            <div className="hidden lg:block text-right opacity-20 font-mono text-[9px] text-zinc-500 leading-tight">
-               SYSTEM_STATUS: OPERATIONAL <br />
-               UPTIME_GLOBAL: 99.9%
-            </div>
           </div>
 
         </div>
