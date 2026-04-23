@@ -368,7 +368,7 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
 export default function AdminDashboard() {
   const [tenants, setTenants] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [pendingReviews, setPendingReviews] = useState([]); 
+  const [adminReviews, setAdminReviews] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -384,7 +384,7 @@ export default function AdminDashboard() {
       const [resT, resL, resR] = await Promise.all([
         supabase.rpc('admin_get_all_tenants'),
         supabase.rpc('admin_get_global_carrier_stats', { p_time_range: globalTimeFilter }),
-        supabase.from('reviews').select('id, rating, comentario, created_at, tenants(nombre_empresa)').eq('status', 'pending') 
+        supabase.from('reviews').select('id, rating, comentario, status, created_at, tenants(nombre_empresa)').order('created_at', { ascending: false })
       ]);
       
       if (resT.error) throw resT.error;
@@ -398,7 +398,7 @@ export default function AdminDashboard() {
 
       setTenants(tenantsWithCost);
       setLeaderboard(resL.data || []);
-      setPendingReviews(resR.data || []);
+      setAdminReviews(resR.data || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -417,7 +417,7 @@ export default function AdminDashboard() {
     try {
       const { error } = await supabase.from('reviews').update({ status: newStatus }).eq('id', reviewId);
       if (error) throw error;
-      setPendingReviews(prev => prev.filter(r => r.id !== reviewId));
+      setAdminReviews(prev => prev.map(r => r.id === reviewId ? { ...r, status: newStatus } : r));
     } catch (error) {
       alert("Error procesando reseña: " + error.message);
     }
@@ -507,31 +507,55 @@ export default function AdminDashboard() {
         ) : (
           <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
             
-            {/* INBOX DE RESEÑAS PENDIENTES */}
-            {pendingReviews.length > 0 && (
+            {/* GESTOR DE RESEÑAS (HISTÓRICO) */}
+            {adminReviews.length > 0 && (
               <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-2xl p-6 shadow-xl mb-8">
                 <div className="flex items-center gap-2 mb-4">
                   <IconSparkles className="text-indigo-400" />
-                  <h3 className="text-sm font-black text-indigo-400 uppercase tracking-widest">Feedback Pendiente ({pendingReviews.length})</h3>
+                  <h3 className="text-sm font-black text-indigo-400 uppercase tracking-widest">Gestión de Reseñas ({adminReviews.length})</h3>
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {pendingReviews.map(rev => (
-                    <div key={rev.id} className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 flex flex-col justify-between">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                  {adminReviews.map(rev => (
+                    <div 
+                      key={rev.id} 
+                      className={`border rounded-xl p-4 flex flex-col justify-between transition-all ${
+                        rev.status === 'approved' ? 'bg-emerald-950/10 border-emerald-500/20' : 
+                        rev.status === 'rejected' ? 'bg-red-950/10 border-red-500/20 opacity-60' : 
+                        'bg-zinc-950 border-zinc-800'
+                      }`}
+                    >
                       <div>
                         <div className="flex justify-between items-start mb-2">
-                          <span className="font-bold text-white text-sm">{rev.tenants?.nombre_empresa}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white text-sm">{rev.tenants?.nombre_empresa}</span>
+                            {rev.status === 'approved' && <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[8px] px-1.5 py-0.5 rounded uppercase tracking-widest font-black">Validada</span>}
+                            {rev.status === 'pending' && <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[8px] px-1.5 py-0.5 rounded uppercase tracking-widest font-black">Pendiente</span>}
+                            {rev.status === 'rejected' && <span className="bg-red-500/10 text-red-500 border border-red-500/20 text-[8px] px-1.5 py-0.5 rounded uppercase tracking-widest font-black">Oculta</span>}
+                          </div>
                           <span className="text-amber-400 text-xs font-black tracking-widest">{rev.rating} / 5</span>
                         </div>
                         <p className="text-zinc-400 text-xs italic mb-4">"{rev.comentario}"</p>
                       </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => handleReviewAction(rev.id, 'approved')} className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest py-2 rounded-lg transition-colors">
-                          Aprobar
-                        </button>
-                        <button onClick={() => handleReviewAction(rev.id, 'rejected')} className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 text-[10px] font-black uppercase tracking-widest py-2 rounded-lg transition-colors">
-                          Descartar
-                        </button>
-                      </div>
+                      
+                      {rev.status === 'pending' ? (
+                        <div className="flex gap-2">
+                          <button onClick={() => handleReviewAction(rev.id, 'approved')} className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest py-2 rounded-lg transition-colors">
+                            Aprobar
+                          </button>
+                          <button onClick={() => handleReviewAction(rev.id, 'rejected')} className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 text-[10px] font-black uppercase tracking-widest py-2 rounded-lg transition-colors">
+                            Descartar
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end pt-2 border-t border-zinc-800/50 mt-2">
+                          <button 
+                            onClick={() => handleReviewAction(rev.id, rev.status === 'approved' ? 'rejected' : 'approved')} 
+                            className="text-[10px] font-black uppercase tracking-widest py-1.5 px-3 rounded transition-colors text-zinc-500 hover:text-white"
+                          >
+                            {rev.status === 'approved' ? 'Revocar y Ocultar' : 'Volver a Aprobar'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

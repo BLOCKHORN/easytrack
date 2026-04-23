@@ -1,13 +1,13 @@
+'use strict';
+
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../../utils/supabaseClient';
 import Hero from './Hero';
 import Benefits from './Benefits';
 import HowItWorks from './HowItWorks';
 import ROI from './ROI';
 import Testimonials from './Testimonials';
 import Pricing from './Pricing';
-import WhatsAppFab from './WhatsAppFab';
 import ContrastSection from './ContrastSection';
 import InteractiveAudit from './InteractiveAudit';
 
@@ -17,48 +17,23 @@ export default function LandingPage() {
   const [showAudit, setShowAudit] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
+  // Dejamos que React Router y la URL controlen todo para que funcionen los botones Atrás/Adelante
   useEffect(() => {
-    const checkAuditStatus = async () => {
-      const params = new URLSearchParams(location.search);
-      const forceAudit = params.get('audit') === 'true';
-      const hasSeenAudit = localStorage.getItem('et_audit_complete');
-
-      if (forceAudit) {
-        setShowAudit(true);
-        setIsChecking(false);
-        navigate('/', { replace: true });
-        return;
-      }
-
-      if (hasSeenAudit) {
-        setShowAudit(false);
-        setIsChecking(false);
-        return;
-      }
-
-      const { data } = await supabase.auth.getSession();
-      
-      if (data?.session) {
-        localStorage.setItem('et_audit_complete', 'true');
-        setShowAudit(false);
-      } else {
-        setShowAudit(true);
-      }
-      
-      setIsChecking(false);
-    };
-
-    checkAuditStatus();
-  }, [location.search, navigate]);
+    const params = new URLSearchParams(location.search);
+    if (params.get('audit') === 'true') {
+      setShowAudit(true);
+    } else {
+      setShowAudit(false);
+    }
+    setIsChecking(false);
+  }, [location.search]);
 
   const handleAuditComplete = () => {
-    localStorage.setItem('et_audit_complete', 'true');
-    setShowAudit(false);
+    // Al cerrar, navegamos a la raíz. Esto se registra en el historial.
+    navigate('/', { replace: true });
   };
 
-  if (isChecking) {
-    return null; 
-  }
+  if (isChecking) return null;
 
   if (showAudit) {
     return <InteractiveAudit onComplete={handleAuditComplete} />;
