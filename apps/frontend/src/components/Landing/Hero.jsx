@@ -217,11 +217,23 @@ export default function Hero() {
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 w-full pointer-events-none z-20 leading-none translate-y-1">
-        <svg viewBox="0 0 1440 100" preserveAspectRatio="none" className="w-full h-16 md:h-24 block">
-          <path fill="#f8fafc" d="M0,0 Q720,130 1440,0 L1440,100 L0,100 Z" />
-        </svg>
-      </div>
+<div className="absolute bottom-0 left-0 w-full pointer-events-none z-20 leading-none">
+  <svg 
+    viewBox="0 0 1440 100" 
+    preserveAspectRatio="none" 
+    className="w-full h-12 md:h-24 block translate-y-[1px]" // h-12 en móvil, h-24 en desktop
+  >
+    <path 
+      fill="#f8fafc"
+      d="M0 30 
+         Q 360 -10, 720 30 
+         T 1440 30 
+         V 100 
+         H 0 
+         Z" 
+    />
+  </svg>
+</div>
     </section>
   );
 }

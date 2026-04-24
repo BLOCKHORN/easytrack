@@ -308,42 +308,46 @@ exports.guardarCarriers = async (req, res) => {
 
     const { carriers, sync = true } = req.body || {};
     
-    // Solo comprobamos que sea un Array. Permitimos que esté vacío (length === 0).
     if (!Array.isArray(carriers)) {
       return res.status(400).json({ error: 'Payload inválido: carriers no es un array' });
     }
 
+    // 1. Obtener los IDs reales que ya existen en la base de datos para este local
+    const { data: existing } = await supabase
+      .from('empresas_transporte_tenant')
+      .select('id, nombre')
+      .eq('tenant_id', tenantId);
+      
+    const idMap = new Map((existing || []).map(e => [e.nombre, e.id]));
+
+    // 2. Mapear los datos de entrada
     const rows = carriers
-      .map(c => ({
-        tenant_id: tenantId,
-        nombre: String(c?.nombre || '').trim(),
-        ingreso_por_entrega: Number.isFinite(+c?.ingreso_por_entrega) ? +c.ingreso_por_entrega : 0,
-        activo: typeof c?.activo === 'boolean' ? c.activo : true,
-        color: typeof c?.color === 'string' ? c.color.trim().slice(0, 7) : null,
-        notas: typeof c?.notas === 'string' ? c.notas.trim() : null,
-      }))
+      .map(c => {
+        const nombreLimpio = String(c?.nombre || '').trim();
+        return {
+          id: idMap.get(nombreLimpio) || undefined, // Si existe, lo actualiza. Si no, genera uno nuevo.
+          tenant_id: tenantId,
+          nombre: nombreLimpio,
+          ingreso_por_entrega: Number.isFinite(+c?.ingreso_por_entrega) ? +c.ingreso_por_entrega : 0,
+          activo: typeof c?.activo === 'boolean' ? c.activo : true,
+          color: typeof c?.color === 'string' ? c.color.trim().slice(0, 7) : null,
+          notas: typeof c?.notas === 'string' ? c.notas.trim() : null,
+        };
+      })
       .filter(r => !!r.nombre);
 
-    // Si el usuario nos envía agencias, hacemos el upsert
+    // 3. Upsert Seguro basado en la clave primaria (ID)
     if (rows.length > 0) {
       const { error: upErr } = await supabase
         .from('empresas_transporte_tenant')
-        .upsert(rows, { onConflict: 'tenant_id, nombre' });
+        .upsert(rows, { onConflict: 'id' }); // FIX DEFINITIVO
       if (upErr) throw upErr;
     }
 
-    // Proceso Sync: Borrar de la BD las agencias que el usuario quitó del frontend
+    // 4. Proceso Sync (Eliminar las que se hayan quitado)
     if (sync) {
       const keep = new Set(rows.map(r => r.nombre));
-      
-      const { data: existentes, error: exErr } = await supabase
-        .from('empresas_transporte_tenant')
-        .select('nombre')
-        .eq('tenant_id', tenantId);
-        
-      if (exErr) throw exErr;
-
-      const toDelete = (existentes || []).map(e => e.nombre).filter(n => !keep.has(n));
+      const toDelete = (existing || []).map(e => e.nombre).filter(n => !keep.has(n));
       
       if (toDelete.length > 0) {
         const { error: delErr } = await supabase
