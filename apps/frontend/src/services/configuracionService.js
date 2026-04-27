@@ -17,7 +17,6 @@ export async function guardarCarriers(carriersPayload, token, { sync = true } = 
     } catch {}
   }
 
-  // 🔥 FIX: Actualizado a la nueva ruta /ubicaciones/carriers 🔥
   const res = await fetch(`${API_URL}/ubicaciones/carriers`, {
     method: 'POST',
     headers: {
@@ -32,21 +31,24 @@ export async function guardarCarriers(carriersPayload, token, { sync = true } = 
   return out;
 }
 
-/**
- * Cargar empresas de transporte configuradas para el tenant (lectura directa Supabase).
- * Devuelve: [{ id, tenant_id, nombre, ingreso_por_entrega, activo, color, notas }]
- */
 export async function cargarCarriers({ tenantId }) {
-  const { data, error } = await supabase
-    .from('empresas_transporte_tenant')
-    .select('id, tenant_id, nombre, ingreso_por_entrega, activo, color, notas')
-    .eq('tenant_id', tenantId)
-    .eq('activo', true)
-    .order('nombre', { ascending: true });
+  try {
+    const { data: sdata } = await supabase.auth.getSession();
+    const token = sdata?.session?.access_token || null;
+    
+    const res = await fetch(`${API_URL}/ubicaciones/carriers`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      }
+    });
 
-  if (error) {
+    if (!res.ok) throw new Error('Error al cargar empresas configuradas');
+    const out = await res.json();
+    return out.empresas || [];
+  } catch (error) {
     console.error('[cargarCarriers] Error', error);
-    throw new Error('No se pudo obtener la lista de empresas configuradas');
+    return [];
   }
-  return Array.isArray(data) ? data : [];
 }

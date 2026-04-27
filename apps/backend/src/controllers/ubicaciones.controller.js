@@ -181,8 +181,10 @@ exports.upsertUbicaciones = async (req, res) => {
     const byLabel = new Map(existRows.map(r => [up(r.label), r]));
     const incomingLabels = new Set();
 
-    const upsertPayload = [];
-    let inserted = 0, updated = 0, reactivated = 0;
+    const toInsert = [];
+    const toUpdate = [];
+    
+    let reactivated = 0;
 
     for (let i = 0; i < rowsIn.length; i++) {
       const u = rowsIn[i];
@@ -195,18 +197,22 @@ exports.upsertUbicaciones = async (req, res) => {
       if (exists) {
         const mustUpdate = (exists.orden !== targetOrden) || (up(exists.label) !== labelUpper) || (!exists.activo);
         if (mustUpdate) {
-          upsertPayload.push({ id: exists.id, tenant_id: tenantId, label: labelUpper, orden: targetOrden, activo: true });
-          if (!exists.activo) reactivated++; else updated++;
+          toUpdate.push({ id: exists.id, tenant_id: tenantId, label: labelUpper, orden: targetOrden, activo: true });
+          if (!exists.activo) reactivated++;
         }
       } else {
-        upsertPayload.push({ tenant_id: tenantId, label: labelUpper, orden: targetOrden, activo: true });
-        inserted++;
+        toInsert.push({ tenant_id: tenantId, label: labelUpper, orden: targetOrden, activo: true });
       }
     }
 
-    if (upsertPayload.length > 0) {
-      const { error: upsertErr } = await supabase.from('ubicaciones').upsert(upsertPayload, { onConflict: 'id' });
-      if (upsertErr) throw upsertErr;
+    if (toUpdate.length > 0) {
+      const { error: updErr } = await supabase.from('ubicaciones').upsert(toUpdate, { onConflict: 'id' });
+      if (updErr) throw updErr;
+    }
+
+    if (toInsert.length > 0) {
+      const { error: insErr } = await supabase.from('ubicaciones').insert(toInsert);
+      if (insErr) throw insErr;
     }
 
     const missingRows = existRows.filter(r => !incomingLabels.has(up(r.label)));
@@ -266,7 +272,7 @@ exports.upsertUbicaciones = async (req, res) => {
 
     const payload = {
       ok: true,
-      ...(dbg ? { debug: { inserted, updated, reactivated, archived, packagesDeleted, targets, deletedPackageIds: packagesDeleted ? affectedIds : [], meta: { cols, order } } } : {})
+      ...(dbg ? { debug: { inserted: toInsert.length, updated: toUpdate.length, reactivated, archived, packagesDeleted, targets, deletedPackageIds: packagesDeleted ? affectedIds : [], meta: { cols, order } } } : {})
     };
     return res.json(payload);
   } catch (e) {
@@ -312,7 +318,6 @@ exports.guardarCarriers = async (req, res) => {
       return res.status(400).json({ error: 'Payload inválido: carriers no es un array' });
     }
 
-    // 1. Obtener los IDs reales que ya existen en la base de datos para este local
     const { data: existing } = await supabase
       .from('empresas_transporte_tenant')
       .select('id, nombre')
@@ -320,33 +325,48 @@ exports.guardarCarriers = async (req, res) => {
       
     const idMap = new Map((existing || []).map(e => [e.nombre, e.id]));
 
-    // 2. Mapear los datos de entrada
-    const rows = carriers
-      .map(c => {
-        const nombreLimpio = String(c?.nombre || '').trim();
-        return {
-          id: idMap.get(nombreLimpio) || undefined, // Si existe, lo actualiza. Si no, genera uno nuevo.
-          tenant_id: tenantId,
-          nombre: nombreLimpio,
-          ingreso_por_entrega: Number.isFinite(+c?.ingreso_por_entrega) ? +c.ingreso_por_entrega : 0,
-          activo: typeof c?.activo === 'boolean' ? c.activo : true,
-          color: typeof c?.color === 'string' ? c.color.trim().slice(0, 7) : null,
-          notas: typeof c?.notas === 'string' ? c.notas.trim() : null,
-        };
-      })
-      .filter(r => !!r.nombre);
+    const toInsert = [];
+    const toUpdate = [];
 
-    // 3. Upsert Seguro basado en la clave primaria (ID)
-    if (rows.length > 0) {
+    carriers.forEach(c => {
+      const nombreLimpio = String(c?.nombre || '').trim();
+      if (!nombreLimpio) return;
+
+      const payload = {
+        tenant_id: tenantId,
+        nombre: nombreLimpio,
+        ingreso_por_entrega: Number.isFinite(+c?.ingreso_por_entrega) ? +c.ingreso_por_entrega : 0,
+        activo: typeof c?.activo === 'boolean' ? c.activo : true,
+        color: typeof c?.color === 'string' ? c.color.trim().slice(0, 7) : null,
+        notas: typeof c?.notas === 'string' ? c.notas.trim() : null,
+      };
+
+      const existingId = idMap.get(nombreLimpio);
+      
+      if (existingId) {
+        payload.id = existingId; 
+        toUpdate.push(payload);
+      } else {
+        toInsert.push(payload); 
+      }
+    });
+
+    if (toUpdate.length > 0) {
       const { error: upErr } = await supabase
         .from('empresas_transporte_tenant')
-        .upsert(rows, { onConflict: 'id' }); // FIX DEFINITIVO
+        .upsert(toUpdate, { onConflict: 'id' }); 
       if (upErr) throw upErr;
     }
 
-    // 4. Proceso Sync (Eliminar las que se hayan quitado)
+    if (toInsert.length > 0) {
+      const { error: insErr } = await supabase
+        .from('empresas_transporte_tenant')
+        .insert(toInsert);
+      if (insErr) throw insErr;
+    }
+
     if (sync) {
-      const keep = new Set(rows.map(r => r.nombre));
+      const keep = new Set(carriers.map(r => String(r.nombre || '').trim()).filter(Boolean));
       const toDelete = (existing || []).map(e => e.nombre).filter(n => !keep.has(n));
       
       if (toDelete.length > 0) {
@@ -360,9 +380,37 @@ exports.guardarCarriers = async (req, res) => {
       }
     }
 
-    res.json({ ok: true, carriers: rows });
+    res.json({ ok: true, msg: "Carriers guardados con éxito" });
   } catch (error) {
-    console.error("Error en guardarCarriers:", error);
     res.status(500).json({ error: 'No se pudieron guardar los carriers' });
+  }
+};
+
+exports.obtenerCarriers = async (req, res) => {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) return res.status(403).json({ error: 'Tenant no resuelto' });
+
+    const { data: tenantCarriers, error: errTenant } = await supabase
+      .from('empresas_transporte_tenant')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('nombre');
+
+    if (errTenant) throw errTenant;
+
+    const { data: globalCarriers, error: errGlobal } = await supabase
+      .from('empresas_transporte')
+      .select('*')
+      .order('nombre');
+
+    if (errGlobal) throw errGlobal;
+
+    return res.json({ 
+      empresas: tenantCarriers || [],
+      disponibles: globalCarriers || []
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Error interno al cargar empresas de transporte' });
   }
 };

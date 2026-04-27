@@ -7,23 +7,9 @@ const { fetchSubscriptionForTenant } = require('../utils/subscription');
 const up = (s = '') => String(s || '').trim().toUpperCase();
 
 async function resolveTenantId(req) {
-  if (req.query?.tenantId) return String(req.query.tenantId);
-  if (req.query?.tenant_id) return String(req.query.tenant_id);
   if (req.tenant?.id) return String(req.tenant.id);
   if (req.tenantId) return String(req.tenantId);
-
-  const auth = req.headers.authorization || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-  if (!token) return null;
-
-  try {
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data?.user) return null;
-    const { data: map } = await supabase.from('memberships').select('tenant_id').eq('user_id', data.user.id).limit(1);
-    return map?.[0]?.tenant_id ? String(map[0].tenant_id) : null;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 async function getEmpresaId(tenantId, nombre) {
@@ -65,7 +51,7 @@ function applyCommonFilters(qb, { estado, compania, ubicacion, search }) {
 exports.listarPaquetes = async (req, res) => {
   try {
     const tenantId = await resolveTenantId(req);
-    if (!tenantId) return res.json({ paquetes: [] });
+    if (!tenantId) return res.status(403).json({ error: 'No autorizado' });
     
     const { limit, offset, all, estado, compania, ubicacion, search, order = 'fecha_llegada', dir = 'desc' } = req.query || {};
     const cols = `id, tenant_id, nombre_cliente, empresa_transporte, empresa_id, fecha_llegada, entregado, fecha_entregado, ingreso_generado, ubicacion_id, ubicacion_label, telefono`;
@@ -94,7 +80,7 @@ exports.listarPaquetes = async (req, res) => {
 exports.contarPaquetes = async (req, res) => {
   try {
     const tenantId = await resolveTenantId(req);
-    if (!tenantId) return res.json({ total: 0, entregados: 0, pendientes: 0 });
+    if (!tenantId) return res.status(403).json({ error: 'No autorizado' });
     
     const { estado, compania, ubicacion, search } = req.query || {};
     const { data, error } = await supabase.rpc('contar_kpis_paquetes', {
@@ -114,9 +100,10 @@ exports.contarPaquetes = async (req, res) => {
 
 exports.crearPaquete = async (req, res) => {
   try {
-    const { tenant_id, nombre_cliente, empresa_transporte, ubicacion_id, ubicacion_label, balda_id, compartimento, telefono } = req.body || {};
-    const tenantId = tenant_id || (await resolveTenantId(req));
-    if (!tenantId) return res.status(400).json({ error: 'Falta tenant_id' });
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) return res.status(403).json({ error: 'No autorizado' });
+
+    const { nombre_cliente, empresa_transporte, ubicacion_id, ubicacion_label, balda_id, compartimento, telefono } = req.body || {};
 
     const { data: tenantData, error: tErr } = await supabase.from('tenants').select('*').eq('id', tenantId).single();
     if (tErr || !tenantData) return res.status(404).json({ error: 'Tenant no encontrado' });
@@ -235,6 +222,8 @@ exports.eliminarPaquete = async (req, res) => {
   try {
     const id = req.params.id;
     const tenantId = await resolveTenantId(req);
+    if (!tenantId) return res.status(403).json({ error: 'No autorizado' });
+
     const { data, error } = await supabase.from('packages').delete().eq('id', id).eq('tenant_id', tenantId).select('id').single();
     
     if (error || !data) return res.status(404).json({ error: 'No encontrado' });

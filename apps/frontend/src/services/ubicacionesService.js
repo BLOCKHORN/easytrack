@@ -3,9 +3,6 @@ import { debugLog, isDebug } from '../utils/logger';
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
-/* ==============================
-   Helpers
-   ============================== */
 function ensureOk(res, text) {
   if (res.ok) return;
   let msg = 'Error de red al guardar/cargar ubicaciones';
@@ -23,32 +20,27 @@ function asJson(text) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
-/**
- * Firmas admitidas:
- *  - NUEVA: guardarUbicaciones({ tenantId, ubicaciones, meta, deletions?, forceDeletePackages? }, token)
- *  - ANTIGUA: guardarUbicaciones(token, tenantId, ubicaciones, meta)
- */
 function normalizePayloadAndToken(a, b, c, d) {
   const looksLikeToken = (v) => typeof v === 'string' && v.split('.').length >= 2 && v.length > 20;
 
   if (looksLikeToken(a)) {
-    // Firma antigua
     const token = a;
     const tenantId = b;
     const ubicaciones = Array.isArray(c) ? c : [];
     const metaIn = d || {};
     const meta = {
       cols: Number.isFinite(Number(metaIn.cols)) ? Number(metaIn.cols) : 5,
+      rows: Number.isFinite(Number(metaIn.rows)) ? Number(metaIn.rows) : undefined,
       order: (metaIn.order || metaIn.orden) === 'vertical' ? 'vertical' : 'horizontal',
     };
     return [{ tenantId, ubicaciones, meta, deletions: [], forceDeletePackages: false }, token];
   }
 
-  // Firma nueva
   const payload = a || {};
   const token = b;
   const meta = {
     cols: Number.isFinite(Number(payload?.meta?.cols)) ? Number(payload.meta.cols) : 5,
+    rows: Number.isFinite(Number(payload?.meta?.rows)) ? Number(payload.meta.rows) : undefined,
     order: (payload?.meta?.order || payload?.meta?.orden) === 'vertical' ? 'vertical' : 'horizontal',
   };
   return [{
@@ -60,15 +52,10 @@ function normalizePayloadAndToken(a, b, c, d) {
   }, token];
 }
 
-/* ==============================
-   API
-   ============================== */
-
-// GET ubicaciones + meta
 export async function cargarUbicaciones(token, tenantId) {
   const url = new URL(`${API}/api/ubicaciones`);
   if (tenantId) url.searchParams.set('tenant_id', tenantId);
-  if (isDebug) url.searchParams.set('debug', '1'); // solo pedimos debug si está activo
+  if (isDebug) url.searchParams.set('debug', '1');
 
   debugLog('[ubicacionesService.cargarUbicaciones] GET', url.toString());
 
@@ -89,13 +76,13 @@ export async function cargarUbicaciones(token, tenantId) {
   const metaRaw = body?.meta || {};
   const meta = {
     cols: Number.isFinite(Number(metaRaw.cols)) ? Number(metaRaw.cols) : (Number(body?.cols) || 5),
+    rows: Number.isFinite(Number(metaRaw.rows)) ? Number(metaRaw.rows) : undefined,
     order: (metaRaw.order || metaRaw.orden || body?.order || body?.orden || 'horizontal'),
   };
 
   return { ubicaciones, meta, debug: body?.debug || null };
 }
 
-// POST full (estructura + meta + deletions/force)
 export async function guardarUbicaciones(a, b, c, d) {
   const [payload, token] = normalizePayloadAndToken(a, b, c, d);
 
@@ -138,10 +125,9 @@ export async function guardarUbicaciones(a, b, c, d) {
     throw e;
   }
 
-  return json; // { ok: true, debug: {...} }
+  return json; 
 }
 
-// PATCH meta (solo presentación)
 export async function patchUbicacionesMeta(token, tenantId, meta) {
   const url = `${API}/api/ubicaciones/meta${isDebug ? '?debug=1' : ''}`;
   debugLog('[ubicacionesService.patchMeta] PATCH', url, { tenant_id: tenantId, meta });

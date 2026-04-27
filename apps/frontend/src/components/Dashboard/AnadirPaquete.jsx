@@ -6,7 +6,8 @@ import { getTenantIdOrThrow } from '../../utils/tenant';
 import { crearPaqueteBackend, obtenerPaquetesBackend } from '../../services/paquetesService';
 import { cargarUbicaciones } from '../../services/ubicacionesService';
 
-let __PAGE_CACHE = {
+// Carga en el entorno global para limpiar desde ConfigPage
+window.__AP_PAGE_CACHE = window.__AP_PAGE_CACHE || {
   loaded: false,
   tenant: null,
   aiStatus: 'locked',
@@ -21,13 +22,13 @@ const IconCheck = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="no
 const IconLayers = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
 const IconSparkles = ({ className = "w-[18px] h-[18px]" }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>;
 const IconInfo = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
-const IconLightbulb = ({ className = "w-[18px] h-[18px]" }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.2 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>;
-const IconCheckCircle = ({ className = "w-[18px] h-[18px]" }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
 const IconLock = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
 const IconScan = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.5-1.5"/></svg>;
 const IconPhone = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
 const IconSpinner = ({ className = "animate-spin h-5 w-5 text-current" }) => <svg className={className} viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>;
 const IconWhatsapp = ({ className = "w-[18px] h-[18px]" }) => <svg className={className} viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.487-1.761-1.66-2.059-.173-.297-.018-.458.13-.606.134-.133-.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>;
+const IconArrowRight = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>;
+const IconCheckCircle = ({ className = "w-[18px] h-[18px]" }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
 
 const toUpperVis = (s='') => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
 const clamp = (v,min,max) => Math.max(min, Math.min(max, v));
@@ -73,51 +74,6 @@ const playMagicChime = () => {
     playNote(1046.50, now + 0.3, 1.0); 
   } catch {}
 };
-
-function buildPosToIdx(count, cols, orientation) {
-  const n = Math.max(0, count | 0);
-  const c = Math.max(1, cols | 0);
-  if (orientation === 'horizontal') return Array.from({ length: n }, (_, p) => p);
-  const rows = Math.ceil(n / c);
-  const orderPos = [];
-  for (let col = 0; col < c; col++) {
-    for (let row = 0; row < rows; row++) {
-      const pos = row * c + col;
-      if (pos < n) orderPos.push(pos);
-    }
-  }
-  const posToIdx = Array(n).fill(0);
-  orderPos.forEach((pos, idx) => { posToIdx[pos] = idx; });
-  return posToIdx;
-}
-
-const idxFromLabel = (label) => {
-  const m = /^B\s*(\d+)$/i.exec(String(label||'').trim());
-  return m ? (parseInt(m[1],10)-1) : null;
-};
-
-function makeVisualUbicaciones(rawUbis, meta) {
-  const cols = clamp(parseInt(meta?.cols ?? 5,10) || 5, 1, 12);
-  const order = (meta?.order || meta?.orden) === 'vertical' ? 'vertical' : 'horizontal';
-  const sorted = (rawUbis || []).map((u,i) => ({
-    id    : u.id ?? u.ubicacion_id ?? `temp-${i}`,
-    label : String(u.label || u.codigo || `B${i+1}`).toUpperCase(),
-    orden : Number.isFinite(Number(u.orden)) ? Number(u.orden) : i,
-    activo: u.activo ?? true
-  }));
-  const count = sorted.length || 0;
-  const byIdx = Array(count).fill(null);
-  for (const u of sorted) {
-    const k = idxFromLabel(u.label);
-    if (k != null && k >= 0 && k < count) byIdx[k] = u;
-  }
-  for (let k = 0; k < count; k++) {
-    if (!byIdx[k]) byIdx[k] = { id: `ghost-${k}`, label: `B${k+1}`, orden: k, activo: true };
-  }
-  const posToIdx = buildPosToIdx(count, cols, order);
-  const visual = Array.from({ length: count }, (_, pos) => byIdx[posToIdx[pos]]);
-  return { visual, cols, order };
-}
 
 function levenshtein(a, b) {
   a = toUpperVis(a); b = toUpperVis(b);
@@ -230,22 +186,20 @@ const CameraScanner = ({ onCapture, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black flex flex-col">
+    <div className="fixed inset-0 z-[200] bg-zinc-950 flex flex-col">
       <div className="relative flex-1 flex items-center justify-center overflow-hidden">
         <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
-        <div className="relative w-64 h-64 border-2 border-brand-400 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
-           <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-10 h-0.5 bg-brand-400/50" />
-              <div className="h-10 w-0.5 bg-brand-400/50 absolute" />
-           </div>
+        <div className="relative w-72 h-40 border border-white/50 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] flex flex-col items-center justify-center">
+           <div className="w-12 h-0.5 bg-[#14B07E] mb-8" />
+           <div className="w-12 h-0.5 bg-[#14B07E]" />
         </div>
-        <p className="absolute bottom-10 text-white font-black text-sm uppercase tracking-widest bg-black/40 px-4 py-2 rounded-full backdrop-blur-md">Encuadra la etiqueta</p>
+        <p className="absolute bottom-10 text-white font-bold text-sm uppercase tracking-widest bg-black/60 px-5 py-2.5 rounded-lg backdrop-blur-md">Encuadra la etiqueta</p>
       </div>
       <canvas ref={canvasRef} className="hidden" />
-      <div className="bg-zinc-950 p-8 flex items-center justify-between pb-12">
-        <button onClick={onClose} className="text-white font-bold text-sm hover:text-brand-400 transition-colors">CANCELAR</button>
-        <button onClick={capture} className="w-20 h-20 bg-white rounded-full border-8 border-zinc-800 active:scale-90 transition-transform flex items-center justify-center shadow-xl shadow-brand-500/20">
-           <div className="w-14 h-14 rounded-full border-2 border-zinc-950" />
+      <div className="bg-zinc-950 p-8 flex items-center justify-between pb-12 border-t border-zinc-800">
+        <button onClick={onClose} className="text-zinc-400 font-bold text-sm hover:text-white transition-colors">CANCELAR</button>
+        <button onClick={capture} className="w-16 h-16 bg-white rounded-full border-4 border-zinc-800 active:scale-90 transition-transform flex items-center justify-center">
+           <div className="w-12 h-12 rounded-full border border-zinc-950" />
         </button>
         <div className="w-16" />
       </div>
@@ -258,15 +212,15 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const location = useLocation();
   const { tenantSlug } = useParams();
 
-  const [isInitializing, setIsInitializing] = useState(!__PAGE_CACHE.loaded);
-  const [tenant, setTenant] = useState(__PAGE_CACHE.tenant);
-  const [aiStatus, setAiStatus] = useState(__PAGE_CACHE.aiStatus);
+  const [isInitializing, setIsInitializing] = useState(!window.__AP_PAGE_CACHE.loaded);
+  const [tenant, setTenant] = useState(window.__AP_PAGE_CACHE.tenant);
+  const [aiStatus, setAiStatus] = useState(window.__AP_PAGE_CACHE.aiStatus);
   
-  const [companias, setCompanias] = useState(__PAGE_CACHE.companias);
+  const [companias, setCompanias] = useState(window.__AP_PAGE_CACHE.companias);
   const [compania, setCompania]   = useState(() => {
-    if (!__PAGE_CACHE.loaded) return '';
+    if (!window.__AP_PAGE_CACHE.loaded) return '';
     const last = localStorage.getItem('ap_last_company');
-    return (last && __PAGE_CACHE.companias.includes(last)) ? last : (__PAGE_CACHE.companias[0] || '');
+    return (last && window.__AP_PAGE_CACHE.companias.includes(last)) ? last : (window.__AP_PAGE_CACHE.companias[0] || '');
   });
   
   const [cliente, setCliente]     = useState('');
@@ -278,22 +232,22 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const [multiNames, setMultiNames] = useState(() => Array.from({length:5}, ()=>''));
   const [batchSameCompany, setBatchSameCompany] = useState(true);
   const [batchCompany, setBatchCompany] = useState(() => {
-    if (!__PAGE_CACHE.loaded) return '';
+    if (!window.__AP_PAGE_CACHE.loaded) return '';
     const last = localStorage.getItem('ap_last_company');
-    return (last && __PAGE_CACHE.companias.includes(last)) ? last : (__PAGE_CACHE.companias[0] || '');
+    return (last && window.__AP_PAGE_CACHE.companias.includes(last)) ? last : (window.__AP_PAGE_CACHE.companias[0] || '');
   });
   const [multiCompanies, setMultiCompanies] = useState(() => Array.from({length:5}, () => {
-    if (!__PAGE_CACHE.loaded) return '';
+    if (!window.__AP_PAGE_CACHE.loaded) return '';
     const last = localStorage.getItem('ap_last_company');
-    return (last && __PAGE_CACHE.companias.includes(last)) ? last : (__PAGE_CACHE.companias[0] || '');
+    return (last && window.__AP_PAGE_CACHE.companias.includes(last)) ? last : (window.__AP_PAGE_CACHE.companias[0] || '');
   }));
   const [multiSaving, setMultiSaving] = useState(false);
 
   const [sugCliente, setSugCliente] = useState(null); 
   const [matchInfo, setMatchInfo] = useState(null);  
 
-  const [rawUbicaciones, setRawUbicaciones] = useState(__PAGE_CACHE.rawUbicaciones);
-  const [metaUbi, setMetaUbi] = useState(__PAGE_CACHE.metaUbi);
+  const [rawUbicaciones, setRawUbicaciones] = useState(window.__AP_PAGE_CACHE.rawUbicaciones);
+  const [metaUbi, setMetaUbi] = useState(window.__AP_PAGE_CACHE.metaUbi);
   const [penalizedSlots, setPenalizedSlots] = useState({});
 
   const [limiteAlcanzado, setLimiteAlcanzado] = useState(false);
@@ -304,7 +258,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const [isScanning, setIsScanning] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
 
-  const [paquetesLocales, setPaquetesLocales] = useState(__PAGE_CACHE.paquetesPendientes);
+  const [paquetesLocales, setPaquetesLocales] = useState(window.__AP_PAGE_CACHE.paquetesPendientes);
   const paquetes = propsPaquetes || paquetesLocales;
 
   const [slotSel, setSlotSel] = useState(null);
@@ -317,10 +271,14 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const inputClienteRef = useRef(null);
   const flyLayerRef = useRef(null);
 
-  const { visual: ubicaciones, cols } = useMemo(
-    () => makeVisualUbicaciones(rawUbicaciones, metaUbi),
-    [rawUbicaciones, metaUbi]
-  );
+  const cols = clamp(parseInt(metaUbi?.cols ?? 5, 10) || 5, 1, 12);
+  
+  const ubicaciones = useMemo(() => {
+    return [...rawUbicaciones].sort((a,b) => (a.orden ?? 0) - (b.orden ?? 0)).map((u, i) => ({
+      ...u,
+      label: String(u.label || u.codigo || `B${i+1}`).toUpperCase()
+    }));
+  }, [rawUbicaciones]);
 
   const extraStyles = `
   @keyframes flyCurve {
@@ -331,11 +289,11 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   .fly-parcel {
     position: fixed; z-index: 9999; top: 0; left: 0; pointer-events: none;
     display: flex; align-items: center; justify-content: center;
-    width: 40px; height: 40px; background: #14b8a6; color: white; border-radius: 10px;
-    box-shadow: 0 10px 25px -5px rgba(20, 184, 166, 0.5);
+    width: 40px; height: 40px; background: #18181b; color: white; border-radius: 8px;
+    border: 1px solid #3f3f46;
     opacity: 0;
   }
-  .fly-parcel.animate { animation: flyCurve 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+  .fly-parcel.animate { animation: flyCurve 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
   `;
 
   useEffect(() => {
@@ -352,9 +310,9 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
           setPenalizedSlots(storedPenalties);
         } catch(e) {}
 
-        const [limitsRes, companiesRes, ubiData, pkgsData] = await Promise.all([
+        const [limitsRes, carriersRes, ubiData, pkgsData] = await Promise.all([
           fetch(`${API_URL}/api/limits/me`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({})),
-          supabase.from('empresas_transporte_tenant').select('nombre').eq('tenant_id', tid).then(r => r.data || []),
+          fetch(`${API_URL}/api/ubicaciones/carriers`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({ empresas: [] })),
           cargarUbicaciones(token, tid).catch(() => ({})),
           !propsPaquetes ? obtenerPaquetesBackend(token, { estado: 'pendiente', all: 1 }).catch(() => []) : Promise.resolve(null)
         ]);
@@ -366,18 +324,18 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         const nombreEmpresa = limitsData?.tenant?.nombre_empresa || '';
         const newTenant = { id: tid, nombre_empresa: nombreEmpresa };
         
-        const listaCompanias = companiesRes.map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+        const listaCompanias = (carriersRes.empresas || []).map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b));
         const newRawUbis = Array.isArray(ubiData?.ubicaciones) ? ubiData.ubicaciones : [];
         const newMeta = { cols: ubiData?.meta?.cols ?? 5, order: ubiData?.meta?.order ?? ubiData?.meta?.orden ?? 'horizontal' };
 
-        __PAGE_CACHE = {
+        window.__AP_PAGE_CACHE = {
            loaded: true,
            tenant: newTenant,
            aiStatus: newAiStatus,
            companias: listaCompanias,
            rawUbicaciones: newRawUbis,
            metaUbi: newMeta,
-           paquetesPendientes: pkgsData ? (Array.isArray(pkgsData) ? pkgsData : []) : __PAGE_CACHE.paquetesPendientes
+           paquetesPendientes: pkgsData ? (Array.isArray(pkgsData) ? pkgsData : []) : window.__AP_PAGE_CACHE.paquetesPendientes
         };
 
         setTenant(newTenant);
@@ -695,7 +653,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       parcel.style.setProperty('--ex', `${ex}px`);
       parcel.style.setProperty('--ey', `${ey}px`);
       
-      setTimeout(() => { try { layer.removeChild(parcel); } catch {} }, 800);
+      setTimeout(() => { try { layer.removeChild(parcel); } catch {} }, 600);
     } catch {}
   }, [slotSel]);
 
@@ -753,7 +711,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         ubicacion_label: slotSel.label,
         entregado: false
       };
-      __PAGE_CACHE.paquetesPendientes = [...__PAGE_CACHE.paquetesPendientes, newPkg];
+      window.__AP_PAGE_CACHE.paquetesPendientes = [...window.__AP_PAGE_CACHE.paquetesPendientes, newPkg];
       
       if (actualizarPaquetes) await actualizarPaquetes();
       setPaquetesLocales(prev => [...prev, newPkg]);
@@ -830,7 +788,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
 
       localStorage.setItem('ap_last_company', batchSameCompany ? batchCompany : compania);
       
-      __PAGE_CACHE.paquetesPendientes = [...__PAGE_CACHE.paquetesPendientes, ...nuevosPaquetes];
+      window.__AP_PAGE_CACHE.paquetesPendientes = [...window.__AP_PAGE_CACHE.paquetesPendientes, ...nuevosPaquetes];
       if (actualizarPaquetes) await actualizarPaquetes();
       setPaquetesLocales(prev => [...prev, ...nuevosPaquetes]);
       
@@ -855,13 +813,6 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
     playChime(150);
   }, [sugCliente, setLeadingName, pickForClient]);
 
-  const getOccStyle = (count) => {
-    if (count === 0) return "bg-zinc-50 border-zinc-200 text-zinc-400 hover:bg-zinc-100";
-    if (count <= 4) return "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100";
-    if (count <= 9) return "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100";
-    return "bg-red-50 border-red-200 text-red-700 hover:bg-red-100";
-  };
-
   const suggestionPulse = !!(sugCliente || matchInfo?.label);
   const selectedPulse   = !!(seleccionManual || sugCliente || matchInfo?.label);
 
@@ -872,12 +823,12 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       case 'trial_active':
         return <><IconScan /> Escáner IA (Prueba)</>;
       case 'trial_available':
-        return <><IconSparkles className="w-4 h-4 text-brand-400" /> Probar Escáner IA Gratis</>;
+        return <><IconSparkles className="w-4 h-4" /> Probar Escáner IA</>;
       default:
         return (
           <div className="flex items-center gap-2">
             <IconSparkles className="w-4 h-4 text-zinc-500" /> 
-            <span>Escaneo Inteligente IA</span>
+            <span>Escaneo Inteligente</span>
             <div className="ml-1 opacity-50"><IconLock /></div>
           </div>
         );
@@ -887,7 +838,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   if (isInitializing) {
     return (
       <div className={`bg-white flex flex-col items-center justify-center ${modoRapido ? 'h-[400px]' : 'min-h-[60vh] rounded-[2rem] border border-zinc-200/80 mx-auto max-w-5xl'}`}>
-        <div className="w-10 h-10 border-4 border-zinc-200 border-t-brand-500 rounded-full animate-spin mb-4" />
+        <div className="w-10 h-10 border-4 border-zinc-200 border-t-[#14B07E] rounded-full animate-spin mb-4" />
         <p className="text-zinc-400 font-bold text-sm uppercase tracking-widest">Sincronizando local...</p>
       </div>
     );
@@ -901,7 +852,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       {!modoRapido && (
         <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-5">
           <div className="flex items-center gap-4">
-            <div className="hidden sm:flex w-12 h-12 bg-zinc-950 rounded-2xl items-center justify-center text-white shadow-md shrink-0">
+            <div className="hidden sm:flex w-12 h-12 bg-zinc-950 rounded-2xl items-center justify-center text-white shadow-sm shrink-0">
               <IconBox />
             </div>
             <div>
@@ -917,12 +868,12 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
               else if (aiStatus === 'trial_available') setShowTrialModal(true);
               else setShowUpgradePro(true);
             }}
-            className={`flex items-center justify-center gap-2.5 px-4 py-2.5 sm:py-3 rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] transition-all active:scale-95 ${
+            className={`flex items-center justify-center gap-2.5 px-4 py-2.5 sm:py-3 rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-all active:scale-95 ${
               ['unlimited', 'trial_active'].includes(aiStatus)
-                ? 'bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/20'
+                ? 'bg-zinc-900 hover:bg-zinc-800 text-white shadow-md'
                 : aiStatus === 'trial_available'
-                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-                  : 'bg-zinc-950 text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-200 shadow-xl'
+                  ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300 shadow-sm'
+                  : 'bg-zinc-50 text-zinc-400 border border-zinc-200 hover:bg-zinc-100'
             }`}
           >
             {renderScannerButton()}
@@ -943,17 +894,17 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
               <input 
                 ref={inputClienteRef} type="text" value={cliente} 
                 onChange={e => { setLeadingName(e.target.value); setSeleccionManual(false); }} 
-                className={`w-full px-3 sm:px-4 py-2.5 sm:py-3.5 bg-zinc-50 border rounded-xl outline-none font-black text-base sm:text-lg text-zinc-950 transition-all focus:ring-4 focus:ring-brand-500/20 ${sugCliente ? 'border-brand-300 shadow-[0_0_15px_rgba(20,184,166,0.15)]' : 'border-zinc-200'}`} 
+                className={`w-full px-3 sm:px-4 py-2.5 sm:py-3.5 bg-zinc-50 border rounded-xl outline-none font-black text-base sm:text-lg text-zinc-950 transition-colors focus:bg-white focus:border-[#14B07E] ${sugCliente ? 'border-[#14B07E] bg-white' : 'border-zinc-200'}`} 
                 placeholder="Escanea o escribe..." 
                 autoComplete="off" 
               />
               <AnimatePresence>
                 {sugCliente && toUpperVis(leadingName) !== toUpperVis(sugCliente.name) && (
-                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="absolute z-10 w-full mt-2">
-                    <button type="button" onClick={aceptarSugerenciaCliente} className="w-full text-left px-3 sm:px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl shadow-lg flex items-center gap-3 hover:bg-brand-100 transition-colors group">
-                      <div className="text-brand-500 animate-pulse"><IconSparkles /></div>
-                      <div className="text-sm sm:text-base font-bold text-brand-900">
-                        ¿Querías decir <strong className="font-black group-hover:text-brand-600 transition-colors">{sugCliente.name}</strong>?
+                  <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="absolute z-10 w-full mt-2">
+                    <button type="button" onClick={aceptarSugerenciaCliente} className="w-full text-left px-3 sm:px-4 py-3 bg-white border border-[#14B07E]/30 rounded-xl shadow-md flex items-center gap-3 hover:bg-[#14B07E]/5 transition-colors">
+                      <div className="text-[#14B07E]"><IconInfo /></div>
+                      <div className="text-sm sm:text-base font-medium text-zinc-700">
+                        ¿Querías decir <strong className="font-black text-[#14B07E]">{sugCliente.name}</strong>?
                       </div>
                     </button>
                   </motion.div>
@@ -961,7 +912,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
               </AnimatePresence>
 
               {matchInfo?.label && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 mt-2 text-[10px] sm:text-xs font-bold text-amber-700 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 mt-2 text-[10px] sm:text-xs font-bold text-zinc-700 bg-zinc-100 px-3 py-2 rounded-lg border border-zinc-200">
                   <IconInfo /> Otro paquete en {matchInfo.label}.
                 </motion.div>
               )}
@@ -969,26 +920,26 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
 
             <div className="space-y-1.5">
               <label className="text-[10px] sm:text-xs font-black text-zinc-500 uppercase tracking-widest">Compañía</label>
-              <select value={compania} onChange={e => setCompania(e.target.value)} className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 outline-none font-black text-base sm:text-lg text-zinc-950 transition-all cursor-pointer">
+              <select value={compania} onChange={e => setCompania(e.target.value)} className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl outline-none font-black text-base sm:text-lg text-zinc-950 transition-colors focus:bg-white focus:border-[#14B07E] cursor-pointer">
                 {companias.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-[10px] sm:text-xs font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1.5"><IconPhone /> Teléfono (Opcional)</label>
-              <input type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="Ej: 600123456" className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/20 outline-none font-bold text-base sm:text-lg text-zinc-950 transition-all" />
+              <input type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="Ej: 600123456" className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl outline-none font-bold text-base sm:text-lg text-zinc-950 transition-colors focus:bg-white focus:border-[#14B07E]" />
             </div>
 
             <div className="space-y-1.5 md:col-span-1">
               <label className="text-[10px] sm:text-xs font-black text-zinc-500 uppercase tracking-widest">Aviso WhatsApp</label>
-              <label className={`flex items-center justify-between w-full h-[46px] sm:h-[56px] px-3 sm:px-4 rounded-xl border transition-all cursor-pointer ${telefono.trim() ? (enviarWhatsapp ? 'border-[#25D366] bg-[#25D366]/10 text-[#25D366]' : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300') : 'border-zinc-100 bg-zinc-50 opacity-60 cursor-not-allowed'}`}>
+              <label className={`flex items-center justify-between w-full h-[46px] sm:h-[56px] px-3 sm:px-4 rounded-xl border transition-all cursor-pointer ${telefono.trim() ? (enviarWhatsapp ? 'border-[#14B07E] bg-[#14B07E] text-white shadow-sm shadow-[#14B07E]/20' : 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400') : 'border-zinc-100 bg-zinc-50 opacity-60 cursor-not-allowed'}`}>
                 <div className="flex items-center gap-2">
                   <IconWhatsapp />
-                  <span className="text-xs sm:text-sm font-black">Activar aviso</span>
+                  <span className="text-xs sm:text-sm font-bold">Avisar</span>
                 </div>
-                <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${telefono.trim() && enviarWhatsapp ? 'bg-[#25D366]' : 'bg-zinc-300'}`}>
+                <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${telefono.trim() && enviarWhatsapp ? 'bg-white' : 'bg-zinc-300'}`}>
                   <input type="checkbox" className="sr-only" checked={enviarWhatsapp && !!telefono.trim()} onChange={e => setEnviarWhatsapp(e.target.checked)} disabled={!telefono.trim()} />
-                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${telefono.trim() && enviarWhatsapp ? 'translate-x-4' : 'translate-x-1'}`} />
+                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${telefono.trim() && enviarWhatsapp ? 'translate-x-4 bg-[#14B07E]' : 'translate-x-1 bg-white'}`} />
                 </div>
               </label>
             </div>
@@ -998,18 +949,18 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                <div className="flex items-center gap-3">
                  <label className="text-sm font-black text-zinc-700">Cantidad:</label>
-                 <select value={multiCount} onChange={(e)=> applyNewMultiCount(e.target.value)} className="px-3 sm:px-4 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-black outline-none cursor-pointer focus:ring-4 focus:ring-brand-500/20">
+                 <select value={multiCount} onChange={(e)=> applyNewMultiCount(e.target.value)} className="px-3 sm:px-4 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-black outline-none cursor-pointer focus:border-[#14B07E]">
                    {[2,3,4,5,6,8,10,15,20].map(n => <option key={n} value={n}>{n} paquetes</option>)}
                  </select>
                </div>
                <label className="flex items-center gap-2 text-sm font-black text-zinc-700 cursor-pointer">
-                 <input type="checkbox" checked={batchSameCompany} onChange={e => setBatchSameCompany(e.target.checked)} className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500" />
+                 <input type="checkbox" checked={batchSameCompany} onChange={e => setBatchSameCompany(e.target.checked)} className="w-4 h-4 rounded text-[#14B07E] border-zinc-300 focus:ring-[#14B07E]" />
                  Misma compañía
                </label>
              </div>
              
              {batchSameCompany && (
-                <select value={batchCompany} onChange={e => setBatchCompany(e.target.value)} className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 bg-white border border-zinc-200 rounded-xl font-black text-base sm:text-lg text-zinc-950 outline-none focus:ring-4 focus:ring-brand-500/20">
+                <select value={batchCompany} onChange={e => setBatchCompany(e.target.value)} className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 bg-white border border-zinc-300 rounded-xl font-black text-base sm:text-lg text-zinc-950 outline-none focus:border-[#14B07E]">
                   {companias.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
              )}
@@ -1017,9 +968,9 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 pt-1">
                {multiNames.map((n, i) => (
                   <div key={i} className="flex gap-2">
-                    <input type="text" value={n} onChange={e => { const v = e.target.value; setMultiNames(p => { const np=[...p]; np[i]=toUpperVis(v); return np;}); if(i===0){setLeadingName(v); setSeleccionManual(false);} }} className="w-full px-3 py-2 sm:py-3 bg-white border border-zinc-200 rounded-lg focus:ring-4 focus:ring-brand-500/20 outline-none font-black text-zinc-950 text-sm" placeholder={`Cliente #${i+1}...`} />
+                    <input type="text" value={n} onChange={e => { const v = e.target.value; setMultiNames(p => { const np=[...p]; np[i]=toUpperVis(v); return np;}); if(i===0){setLeadingName(v); setSeleccionManual(false);} }} className="w-full px-3 py-2 sm:py-3 bg-white border border-zinc-200 rounded-lg focus:border-[#14B07E] outline-none font-bold text-zinc-950 text-sm" placeholder={`Cliente #${i+1}...`} />
                     {!batchSameCompany && (
-                      <select value={multiCompanies[i]} onChange={e => { const v=e.target.value; setMultiCompanies(p=>{ const np=[...p]; np[i]=v; return np;})}} className="w-1/3 px-1 py-2 sm:py-3 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-black outline-none">
+                      <select value={multiCompanies[i]} onChange={e => { const v=e.target.value; setMultiCompanies(p=>{ const np=[...p]; np[i]=v; return np;})}} className="w-1/3 px-1 py-2 sm:py-3 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-bold outline-none focus:border-[#14B07E]">
                         {companias.map(c => <option key={c} value={c}>{c.substring(0,6)}</option>)}
                       </select>
                     )}
@@ -1029,29 +980,43 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
           </div>
         )}
 
-        <div className="py-4 my-4 border-y border-zinc-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex flex-row items-center justify-center gap-3 sm:gap-6 w-full sm:w-auto">
-            <div className={`flex flex-col items-center justify-center w-full max-w-[140px] sm:max-w-[180px] p-2.5 sm:p-4 rounded-xl border-2 transition-all ${suggestionPulse ? 'bg-amber-50 border-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.2)]' : 'bg-zinc-50 border-zinc-200'}`}>
-              <span className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest mb-1 ${suggestionPulse ? 'text-amber-600' : 'text-zinc-400'}`}>
-                <IconLightbulb className="w-3 h-3 sm:w-4 sm:h-4" /> Sugerido
+        <div className="py-4 my-4 border-y border-zinc-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          
+          {/* PANEL DE ENRUTAMIENTO (Routing Summary) */}
+          <div className="flex flex-col sm:flex-row items-stretch w-full md:w-auto bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
+            
+            <div className={`flex flex-col justify-center px-5 py-3.5 border-b sm:border-b-0 sm:border-r border-zinc-200 transition-colors w-full sm:w-40 ${suggestionPulse ? 'bg-[#14B07E]/5' : 'bg-zinc-50'}`}>
+              <span className="text-[9px] sm:text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                {suggestionPulse ? <IconSparkles className="w-3 h-3 text-[#14B07E]" /> : null}
+                IA Sugiere
               </span>
-              <span className="text-2xl sm:text-3xl font-black text-zinc-900">{suggestedLabel || '—'}</span>
+              <span className={`text-2xl sm:text-3xl font-black tracking-tight ${suggestionPulse ? 'text-zinc-900' : 'text-zinc-400'}`}>
+                {suggestedLabel || '—'}
+              </span>
             </div>
 
-            <div className={`flex flex-col items-center justify-center w-full max-w-[140px] sm:max-w-[180px] p-2.5 sm:p-4 rounded-xl border-2 transition-all ${selectedPulse ? 'bg-brand-50 border-brand-400 shadow-[0_0_15px_rgba(45,212,191,0.3)]' : 'bg-zinc-50 border-zinc-200'}`}>
-              <span className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest mb-1 ${selectedPulse ? 'text-brand-600' : 'text-zinc-400'}`}>
-                <IconCheckCircle className="w-3 h-3 sm:w-4 sm:h-4" /> Elegido
-              </span>
-              <span className="text-2xl sm:text-3xl font-black text-zinc-900">{slotSel?.label || '—'}</span>
+            <div className="hidden sm:flex items-center justify-center px-4 bg-zinc-50 text-zinc-300">
+               <IconArrowRight />
             </div>
+
+            <div className={`flex flex-col justify-center px-5 py-3.5 transition-colors w-full sm:w-48 ${selectedPulse ? 'bg-[#14B07E] text-white shadow-inner' : 'bg-white text-zinc-900'}`}>
+              <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest mb-1 flex items-center gap-1.5 ${selectedPulse ? 'text-white/80' : 'text-zinc-400'}`}>
+                {selectedPulse ? <IconCheckCircle className="w-3 h-3" /> : null}
+                Destino Final
+              </span>
+              <span className="text-3xl sm:text-4xl font-black tracking-tighter">
+                {slotSel?.label || '—'}
+              </span>
+            </div>
+            
           </div>
 
           <button 
             type="submit" 
             disabled={loading || !puedeGuardar} 
-            className="w-full sm:w-auto px-8 py-3.5 sm:py-4 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 disabled:text-zinc-400 text-white font-black text-base sm:text-lg rounded-xl shadow-lg shadow-brand-500/30 transition-all flex items-center justify-center gap-2 active:scale-95 shrink-0"
+            className="w-full md:w-auto h-full min-h-[64px] px-8 bg-[#14B07E] hover:bg-[#129A6E] disabled:bg-zinc-100 disabled:text-zinc-400 text-white font-black text-base sm:text-lg rounded-xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 shrink-0 border border-transparent disabled:border-zinc-200"
           >
-            {loading ? <div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin"/> : (activeTab==='single' ? 'Guardar paquete' : `Guardar ${multiCount}`)}
+            {loading ? <div className="w-5 h-5 border-4 border-zinc-400 border-t-[#14B07E] rounded-full animate-spin"/> : (activeTab==='single' ? 'Guardar paquete' : `Guardar ${multiCount}`)}
           </button>
         </div>
 
@@ -1060,43 +1025,51 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
             <div>
               <label className="text-[10px] sm:text-xs font-black text-zinc-900 uppercase tracking-widest">Estructura del Local</label>
             </div>
-            <div className="hidden sm:flex items-center gap-3 text-[9px] font-black text-zinc-500 uppercase tracking-wider bg-zinc-50 px-2.5 py-1.5 rounded-lg border border-zinc-200">
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-zinc-300"/> Vacía</div>
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-400"/> Libre</div>
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-400"/> Media</div>
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"/> Llena</div>
-            </div>
           </div>
 
+          {/* MAPA VISUAL ESTILO PLANO CON MAPA DE CALOR ELEGANTE (TEXTO SIEMPRE NEGRO/GRIS OSCURO) */}
           <div 
             className="grid gap-1.5 sm:gap-3 pb-4" 
-            style={{ gridTemplateColumns: `repeat(${cols || 5}, minmax(0, 1fr))` }}
+            style={{ gridTemplateColumns: `repeat(${metaUbi?.cols || 5}, minmax(0, 1fr))` }}
           >
-            {ubicaciones.map(u => {
+            {Array.from({ length: (metaUbi?.cols || 5) * Math.max(1, Math.ceil((ubicaciones.reduce((max, u) => Math.max(max, u.orden ?? 0), -1) + 1) / (metaUbi?.cols || 5))) }).map((_, i) => {
+              const u = ubicaciones.find(x => x.orden === i);
+              
+              if (!u) {
+                return <div key={`empty-${i}`} className="opacity-0 pointer-events-none aspect-square sm:aspect-auto sm:min-h-[4rem]" />;
+              }
+
               const count = occupancy.get(u.id) || occupancy.get(u.label) || 0;
               const isSelected = slotSel?.id === u.id || slotSel?.label === u.label;
               const isSuggested = suggestedLabel && u.label === suggestedLabel && !seleccionManual;
               
-              let finalClasses = getOccStyle(count);
+              // MAPA DE CALOR B2B (Muted backgrounds, crisp black text)
+              let finalClasses = "bg-white border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:bg-zinc-50"; 
+              if (count > 0 && count <= 4) finalClasses = "bg-[#E8F7F2] border-[#A7E2CE] text-zinc-900 hover:bg-[#D4EFE6]";
+              else if (count >= 5 && count <= 9) finalClasses = "bg-[#FFFBEB] border-[#FDE047] text-zinc-900 hover:bg-[#FEF3C7]";
+              else if (count >= 10) finalClasses = "bg-[#FEF2F2] border-[#FECACA] text-zinc-900 hover:bg-[#FEE2E2]";
+
+              // ESTADOS VISUALES
               if (isSelected) {
-                finalClasses = 'bg-zinc-950 border-zinc-950 text-white shadow-md ring-2 ring-zinc-950/20 transform scale-[1.02] z-20';
+                finalClasses = 'bg-[#14B07E] border-[#14B07E] text-white shadow-md transform scale-[1.02] z-20';
               } else if (isSuggested) {
-                finalClasses = 'bg-amber-50 border-amber-400 text-amber-900 shadow-[0_0_10px_rgba(251,191,36,0.4)] ring-1 ring-amber-300 z-10 animate-pulse';
+                // Marco limpio que indica sugerencia sin robar protagonismo al seleccionado
+                finalClasses = 'bg-white border-[#14B07E] border-2 border-dashed text-zinc-900 z-10 hover:bg-zinc-50'; 
               }
 
               return (
                 <button
-                  key={u.id}
+                  key={u.id || `lbl-${u.label}`}
                   type="button"
                   data-ubi-label={u.label}
                   onClick={() => { setSlotSel(u); setSeleccionManual(true); }}
                   className={`
-                    relative flex flex-col items-center justify-center py-2 sm:py-5 rounded-lg sm:rounded-xl transition-all border-2 outline-none
+                    relative flex flex-col items-center justify-center py-3 sm:py-5 rounded-lg sm:rounded-xl transition-all border outline-none aspect-square sm:aspect-auto
                     ${finalClasses}
                   `}
                 >
-                  <span className="text-base sm:text-2xl font-black tracking-tight">{u.label}</span>
-                  <span className={`text-[8px] sm:text-[10px] font-bold mt-0.5 ${isSelected ? 'text-zinc-400' : ''}`}>{count} paq.</span>
+                  <span className="text-sm sm:text-2xl font-black tracking-tight">{u.label}</span>
+                  <span className="text-[8px] sm:text-[10px] font-bold mt-0.5 opacity-70 uppercase tracking-wider">{count} paq.</span>
                 </button>
               );
             })}
@@ -1105,6 +1078,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
 
       </form>
 
+      {/* MODALES LIMPIOS */}
       {showCamera && <CameraScanner onCapture={processAIScan} onClose={() => setShowCamera(false)} />}
 
       <AnimatePresence>
@@ -1113,16 +1087,14 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
             exit={{ opacity: 0 }} 
-            className="fixed inset-0 z-[300] bg-zinc-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-6"
+            className="fixed inset-0 z-[300] bg-zinc-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-6"
           >
-            <div className="relative flex items-center justify-center w-40 h-40 mb-10">
-              <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} className="absolute w-full h-full bg-brand-500/20 rounded-full blur-2xl" />
-              <motion.div animate={{ rotate: 360 }} transition={{ duration: 8, repeat: Infinity, ease: "linear" }} className="absolute w-32 h-32 border-2 border-dashed border-brand-500/50 rounded-full" />
-              <motion.div animate={{ rotate: -360 }} transition={{ duration: 12, repeat: Infinity, ease: "linear" }} className="absolute w-24 h-24 border border-brand-400/30 rounded-full" />
-              <div className="relative z-10 text-brand-400"><IconSparkles className="w-16 h-16" /></div>
+            <div className="relative flex items-center justify-center w-32 h-32 mb-8">
+              <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }} className="absolute w-24 h-24 border-2 border-dashed border-[#14B07E] rounded-full" />
+              <div className="relative z-10 text-[#14B07E]"><IconScan className="w-10 h-10" /></div>
             </div>
-            <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-3 text-center">La IA está leyendo la etiqueta</h3>
-            <p className="text-zinc-400 font-medium text-base sm:text-lg text-center max-w-sm">Extrayendo datos clave del cliente y la compañía con precisión milimétrica.</p>
+            <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight mb-2 text-center">Procesando Etiqueta</h3>
+            <p className="text-[#14B07E]/70 font-medium text-sm text-center max-w-xs">Extrayendo datos clave mediante visión artificial...</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1131,18 +1103,15 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         {showTrialModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowTrialModal(false)} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" />
-            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-6 sm:p-10 text-center border border-zinc-200 overflow-hidden">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/10 blur-[60px] rounded-full pointer-events-none" />
-              <div className="relative z-10">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 border border-indigo-100 text-indigo-500"><IconSparkles className="w-6 h-6" /></div>
-                <h3 className="text-2xl sm:text-3xl font-black text-zinc-950 tracking-tight mb-3">Prueba Pistoleo IA</h3>
-                <p className="text-zinc-500 font-bold mb-6 sm:mb-8 text-sm sm:text-base leading-relaxed">Como usuario Plus, tienes un pase especial. Disfruta de <strong>7 días de escáner inteligente ilimitado</strong>. Sin compromisos ni cobros sorpresa.</p>
-                <div className="flex flex-col gap-3">
-                  <button onClick={handleActivateTrial} disabled={activatingTrial} className="w-full py-3.5 sm:py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-base sm:text-lg rounded-xl shadow-lg shadow-indigo-600/30 transition-all active:scale-95 flex items-center justify-center gap-2">
-                    {activatingTrial ? <IconSpinner /> : 'Activar mis 7 días gratis'}
-                  </button>
-                  <button onClick={() => setShowTrialModal(false)} disabled={activatingTrial} className="w-full py-3.5 sm:py-4 bg-zinc-100 text-zinc-600 font-bold text-sm sm:text-base rounded-xl hover:bg-zinc-200 transition-colors">Ahora no</button>
-                </div>
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white rounded-3xl shadow-xl w-full max-w-md p-6 sm:p-8 border border-zinc-200">
+              <div className="w-14 h-14 bg-zinc-100 rounded-2xl flex items-center justify-center mb-5 border border-zinc-200 text-zinc-900"><IconSparkles className="w-6 h-6" /></div>
+              <h3 className="text-xl font-black text-zinc-950 tracking-tight mb-2">Prueba Pistoleo IA</h3>
+              <p className="text-zinc-600 font-medium mb-6 text-sm leading-relaxed">Como usuario Plus, disfruta de <strong>7 días de escáner inteligente ilimitado</strong>. Sin compromisos ni cobros sorpresa.</p>
+              <div className="flex flex-col gap-2">
+                <button onClick={handleActivateTrial} disabled={activatingTrial} className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2">
+                  {activatingTrial ? <IconSpinner /> : 'Activar prueba de 7 días'}
+                </button>
+                <button onClick={() => setShowTrialModal(false)} disabled={activatingTrial} className="w-full py-3 bg-white border border-zinc-200 text-zinc-600 font-bold text-sm rounded-xl hover:bg-zinc-50 transition-colors">Cerrar</button>
               </div>
             </motion.div>
           </div>
@@ -1153,16 +1122,13 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         {limiteAlcanzado && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" />
-            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-6 sm:p-10 text-center border border-zinc-200 overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-brand-500/10 blur-[50px] rounded-full pointer-events-none" />
-              <div className="relative z-10">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6"><IconLock /></div>
-                <h3 className="text-2xl sm:text-3xl font-black text-zinc-950 tracking-tight mb-3">Límite alcanzado</h3>
-                <p className="text-zinc-500 font-bold mb-6 sm:mb-8 text-sm sm:text-base leading-relaxed">Has procesado tus paquetes gratuitos. Pásate a Plus para disfrutar de volumen ilimitado, notificaciones automáticas y analítica completa.</p>
-                <div className="flex flex-col gap-3">
-                  <button onClick={() => navigate(tenantSlug ? `/${tenantSlug}/dashboard/facturacion` : '/dashboard/facturacion')} className="w-full py-3.5 sm:py-4 bg-zinc-950 text-white font-black text-base sm:text-lg rounded-xl shadow-xl shadow-zinc-950/20 hover:bg-zinc-800 transition-all active:scale-95">Ver Planes</button>
-                  <button onClick={() => setLimiteAlcanzado(false)} className="w-full py-3.5 sm:py-4 bg-zinc-100 text-zinc-600 font-bold text-sm sm:text-base rounded-xl hover:bg-zinc-200 transition-colors">Cerrar y ver paquetes</button>
-                </div>
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white rounded-3xl shadow-xl w-full max-w-md p-6 sm:p-8 border border-zinc-200">
+              <div className="w-14 h-14 bg-zinc-100 rounded-2xl flex items-center justify-center mb-5 border border-zinc-200 text-zinc-900"><IconLock /></div>
+              <h3 className="text-xl font-black text-zinc-950 tracking-tight mb-2">Límite alcanzado</h3>
+              <p className="text-zinc-600 font-medium mb-6 text-sm leading-relaxed">Has procesado tus paquetes gratuitos. Pásate a Plus para volumen ilimitado y automatización.</p>
+              <div className="flex flex-col gap-2">
+                <button onClick={() => navigate(tenantSlug ? `/${tenantSlug}/dashboard/facturacion` : '/dashboard/facturacion')} className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-colors">Ver Planes</button>
+                <button onClick={() => setLimiteAlcanzado(false)} className="w-full py-3 bg-white border border-zinc-200 text-zinc-600 font-bold text-sm rounded-xl hover:bg-zinc-50 transition-colors">Volver</button>
               </div>
             </motion.div>
           </div>
@@ -1172,57 +1138,18 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
       <AnimatePresence>
         {showUpgradePro && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }} 
-              className="absolute inset-0 bg-zinc-950/80 backdrop-blur-md" 
-              onClick={() => setShowUpgradePro(false)}
-            />
-            
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 30 }} 
-              animate={{ scale: 1, opacity: 1, y: 0 }} 
-              exit={{ scale: 0.9, opacity: 0, y: 30 }} 
-              className="relative bg-zinc-950 border border-zinc-800 rounded-[2.5rem] shadow-2xl w-full max-w-md p-6 sm:p-10 text-center overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-40 h-40 bg-brand-500/10 blur-[80px] rounded-full pointer-events-none" />
-              
-              <div className="relative z-10">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-zinc-900 rounded-3xl flex items-center justify-center mx-auto mb-6 sm:mb-8 border border-zinc-800 shadow-inner group">
-                  <div className="text-brand-400">
-                    <IconSparkles className="w-8 h-8 sm:w-10 sm:h-10" />
-                  </div>
-                </div>
-
-                <p className="text-[9px] sm:text-[10px] font-black text-brand-500 uppercase tracking-[0.3em] mb-2 sm:mb-3">Feature_Locked</p>
-                <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tighter mb-3 sm:mb-4">Escaneo Inteligente</h3>
-                
-                <p className="text-zinc-400 font-medium mb-8 sm:mb-10 leading-relaxed text-xs sm:text-sm">
-                  {aiStatus === 'trial_expired' 
-                    ? "Tu acceso de prueba ha caducado. Actualiza a una licencia PRO para restaurar el escáner de red neuronal y el autocompletado." 
-                    : "Utiliza el motor de visión artificial para procesar etiquetas en milisegundos. Función reservada para plan PRO."}
-                </p>
-
-                <div className="flex flex-col gap-3">
-                  <button 
-                    onClick={() => navigate(tenantSlug ? `/${tenantSlug}/dashboard/facturacion` : '/dashboard/facturacion')} 
-                    className="w-full py-3.5 sm:py-4 bg-brand-500 hover:bg-brand-400 text-zinc-950 font-black text-xs sm:text-sm uppercase tracking-widest rounded-2xl shadow-lg shadow-brand-500/20 transition-all active:scale-95"
-                  >
-                    Mejorar a PRO
-                  </button>
-                  
-                  <button 
-                    onClick={() => setShowUpgradePro(false)} 
-                    className="w-full py-3.5 sm:py-4 bg-transparent text-zinc-500 hover:text-white font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors"
-                  >
-                    Volver al modo manual
-                  </button>
-                </div>
-              </div>
-              
-              <div className="absolute bottom-4 left-0 right-0 opacity-[0.03] font-mono text-[6px] sm:text-[8px] text-white pointer-events-none select-none">
-                AI_ENGINE_V3 // NEURAL_LINK_STABLE // ROOT_ACCESS_REQUIRED
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm" onClick={() => setShowUpgradePro(false)} />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-zinc-950 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8 text-left">
+              <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center mb-5 border border-zinc-700 text-white"><IconSparkles className="w-5 h-5" /></div>
+              <h3 className="text-xl font-black text-white tracking-tight mb-2">Escaneo Inteligente</h3>
+              <p className="text-zinc-400 font-medium mb-6 text-sm leading-relaxed">
+                {aiStatus === 'trial_expired' 
+                  ? "Tu acceso de prueba ha caducado. Actualiza a una licencia PRO para restaurar el escáner." 
+                  : "Utiliza el motor de visión artificial para procesar etiquetas. Función reservada para plan PRO."}
+              </p>
+              <div className="flex flex-col gap-2">
+                <button onClick={() => navigate(tenantSlug ? `/${tenantSlug}/dashboard/facturacion` : '/dashboard/facturacion')} className="w-full py-3 bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm rounded-xl transition-colors">Mejorar a PRO</button>
+                <button onClick={() => setShowUpgradePro(false)} className="w-full py-3 bg-zinc-900 border border-zinc-800 text-zinc-400 font-bold text-sm rounded-xl hover:text-white transition-colors">Cerrar</button>
               </div>
             </motion.div>
           </div>
@@ -1235,10 +1162,10 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
             initial={{ opacity: 0, y: 50, scale: 0.9, x: '-50%' }} 
             animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }} 
             exit={{ opacity: 0, y: 20, scale: 0.9, x: '-50%' }}
-            className="fixed bottom-24 md:bottom-8 left-1/2 bg-zinc-950 text-white px-5 sm:px-6 py-3.5 sm:py-4 rounded-2xl shadow-2xl font-black text-sm sm:text-base flex items-center gap-3 z-[9999] border border-zinc-800 whitespace-nowrap"
+            className="fixed bottom-24 md:bottom-8 left-1/2 bg-zinc-900 text-white px-6 py-4 rounded-xl shadow-xl font-bold text-sm flex items-center gap-3 z-[9999] border border-zinc-800 whitespace-nowrap"
           >
-            <div className="text-emerald-400"><IconCheck /></div> 
-            Guardado en <span className="text-brand-400 bg-brand-400/10 px-2 py-0.5 rounded-md">{ultimoGuardado?.label}</span>
+            <IconCheck /> 
+            Guardado en <span className="bg-zinc-800 px-2 py-0.5 rounded-md border border-zinc-700">{ultimoGuardado?.label}</span>
           </motion.div>
         )}
       </AnimatePresence>

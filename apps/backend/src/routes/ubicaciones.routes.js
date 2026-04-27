@@ -10,8 +10,9 @@ const obtenerEstructura = typeof ctrl.obtenerEstructura === 'function' ? ctrl.ob
 const upsertUbicaciones = typeof ctrl.upsertUbicaciones === 'function' ? ctrl.upsertUbicaciones : null;
 const patchMeta         = typeof ctrl.patchMeta         === 'function' ? ctrl.patchMeta         : null;
 const guardarCarriers   = typeof ctrl.guardarCarriers   === 'function' ? ctrl.guardarCarriers   : null;
+const obtenerCarriers   = typeof ctrl.obtenerCarriers   === 'function' ? ctrl.obtenerCarriers   : null;
 
-if (!obtenerEstructura || !upsertUbicaciones || !patchMeta || !guardarCarriers) {
+if (!obtenerEstructura || !upsertUbicaciones || !patchMeta || !guardarCarriers || !obtenerCarriers) {
   throw new Error('[ubicaciones.routes] Controlador inválido: faltan exportaciones requeridas.');
 }
 
@@ -23,6 +24,7 @@ router.post('/estructura', upsertUbicaciones);
 
 router.patch('/meta', patchMeta);
 
+router.get('/carriers', obtenerCarriers);
 router.post('/carriers', guardarCarriers);
 
 module.exports = router;

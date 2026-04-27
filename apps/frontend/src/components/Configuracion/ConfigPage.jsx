@@ -1,6 +1,6 @@
 'use strict';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../utils/supabaseClient';
 import { getTenantData } from '../../utils/tenant';
@@ -25,8 +25,8 @@ const sameJSON = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const rowsFromCount = (n) => Array.from({ length: Math.min(parseInt(n || 0, 10) || 0, 5000) }, (_, i) => ({ label: `B${i + 1}`, codigo: `B${i + 1}`, orden: i }));
 
 const sanitizeUbicaciones = (rows = []) => rows.map((r, i) => ({
-  label: (r?.label || `B${i + 1}`).toUpperCase(),
-  codigo: (r?.codigo || r?.label || `B${i + 1}`).toUpperCase(),
+  label: String(r?.label || `B${i + 1}`).toUpperCase(),
+  codigo: String(r?.codigo || r?.label || `B${i + 1}`).toUpperCase(),
   orden: Number.isFinite(r?.orden) ? r.orden : i
 }));
 
@@ -39,9 +39,8 @@ export default function ConfigPage() {
   const [cargando, setCargando] = useState(true);
   
   const [ubiRows, setUbiRows] = useState([]);
-  const [ubiMeta, setUbiMeta] = useState({ cols: 5, orden: 'horizontal' });
+  const [ubiMeta, setUbiMeta] = useState({ cols: 5, rows: 5 });
   const [usageByCodigo, setUsageByCodigo] = useState({});
-  
   const [empresas, setEmpresas] = useState([]);
   const [empresasDisponibles, setEmpresasDisponibles] = useState([]);
   
@@ -49,67 +48,110 @@ export default function ConfigPage() {
   const [toast, setToast] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
   const [dirty, setDirty] = useState(false);
-  
+  const [resetKey, setResetKey] = useState(0);
+
   const pendingDeletionsRef = useRef([]);
   const forceDeleteRef = useRef(false);
 
   const mostrarToast = (mensaje, tipo = 'success') => setToast({ mensaje, tipo });
   const deepPack = () => ({ nombre, ubiRows, ubiMeta, empresas });
 
-  const loadData = async () => {
+  const revertirCambios = () => {
+    if (!snapshot) return;
+    setNombre(snapshot.nombre); setUbiRows(snapshot.ubiRows); setUbiMeta(snapshot.ubiMeta); setEmpresas(snapshot.empresas);
+    setDirty(false); setAccountDraft(null); pendingDeletionsRef.current = []; forceDeleteRef.current = false;
+    setResetKey(k => k + 1); 
+    mostrarToast('Cambios revertidos.');
+  };
+
+  const loadUbicacionesForTenant = async (tId) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!session?.user) return setCargando(false);
-      setUsuario(session.user);
-
-      const { tenant: ensuredTenant } = await getTenantData();
-      setTenant(ensuredTenant);
-      setNombre(ensuredTenant.nombre_empresa || '');
-
-      // 1. Cargar Empresas (Manteniendo formato Number para la comparación)
-      const { data: eData } = await supabase.from('empresas_transporte_tenant').select('*').eq('tenant_id', ensuredTenant.id);
-      const initialEmpresas = (eData || []).map(e => ({ ...e, ingreso_por_entrega: Number(e.ingreso_por_entrega) || 0 }));
-      setEmpresas(initialEmpresas);
-
-      const { data: avail } = await supabase.from('empresas_transporte').select('*').order('nombre');
-      setEmpresasDisponibles(avail || []);
-
-      // 2. Cargar Ubicaciones
-      let initialUbis = rowsFromCount(25);
-      let initialMeta = { cols: 5, orden: 'horizontal' };
-      try {
-        const resp = await cargarUbicaciones(token, ensuredTenant.id);
-        const arr = Array.isArray(resp?.ubicaciones) ? resp.ubicaciones : [];
-        initialUbis = arr.length ? sanitizeUbicaciones(arr) : initialUbis;
-        initialMeta = { cols: parseInt(resp?.meta?.cols || 5, 10), orden: resp?.meta?.orden === 'vertical' ? 'vertical' : 'horizontal' };
-      } catch (err) {}
+      const resp = await cargarUbicaciones(session?.access_token, tId);
+      const arr = Array.isArray(resp?.ubicaciones) ? resp.ubicaciones : [];
+      setUbiRows(arr.length ? sanitizeUbicaciones(arr) : rowsFromCount(25));
       
-      setUbiRows(initialUbis);
-      setUbiMeta(initialMeta);
+      const numCols = parseInt(resp?.meta?.cols || 5, 10);
+      let numRows = parseInt(resp?.meta?.rows, 10);
+      if (Number.isNaN(numRows) || numRows < 1) {
+        let maxIdx = -1;
+        arr.forEach(u => { if (u.orden > maxIdx) maxIdx = u.orden; });
+        numRows = Math.max(5, Math.ceil((maxIdx + 1) / numCols));
+      }
 
-      // 3. Cargar Usage
-      const { data: pkgs } = await supabase.from('packages').select('ubicacion_label').eq('tenant_id', ensuredTenant.id).not('ubicacion_label', 'is', null);
-      const map = {};
-      (pkgs || []).forEach(r => { const c = String(r.ubicacion_label).toUpperCase(); map[c] = (map[c] || 0) + 1; });
-      setUsageByCodigo(map);
-
-      // Creamos el snapshot CON LA DATA CARGADA (Evita falsos positivos de dirty)
-      setSnapshot({ nombre: ensuredTenant.nombre_empresa || '', ubiRows: initialUbis, ubiMeta: initialMeta, empresas: initialEmpresas });
-
-    } catch (err) {
-      mostrarToast('Error cargando configuración.', 'error');
-    } finally { 
-      setCargando(false); 
+      setUbiMeta({ cols: numCols, rows: numRows });
+    } catch {
+      setUbiRows(rowsFromCount(25));
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  const loadUsageData = async (tId) => {
+    const { data } = await supabase.from('packages').select('ubicacion_label').eq('tenant_id', tId).not('ubicacion_label', 'is', null);
+    const map = {};
+    (data || []).forEach(r => { const c = String(r.ubicacion_label).toUpperCase(); map[c] = (map[c] || 0) + 1; });
+    setUsageByCodigo(map);
+  };
+
+useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user }, error: userErr } = await supabase.auth.getUser();
+        if (userErr || !user) return setCargando(false);
+        setUsuario(user);
+
+        const { tenant: ensuredTenant } = await getTenantData();
+        setTenant(ensuredTenant);
+        setNombre(ensuredTenant.nombre_empresa || '');
+
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        const respCarriers = await fetch(`${API_BASE}/api/ubicaciones/carriers`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        // SOLO SE LEE UNA VEZ EL JSON
+        if (respCarriers.ok) {
+          const jsonCarriers = await respCarriers.json();
+          setEmpresas((jsonCarriers.empresas || []).map(e => ({ 
+            ...e, 
+            ingreso_por_entrega: Number.isFinite(Number(e.ingreso_por_entrega)) ? Number(e.ingreso_por_entrega) : 0 
+          })));
+          setEmpresasDisponibles(jsonCarriers.disponibles || []);
+        } else {
+          setEmpresas([]);
+          setEmpresasDisponibles([]);
+        }
+
+        // Ahora sí llegará hasta aquí y cargará el lienzo de cajas
+        await Promise.all([
+          loadUbicacionesForTenant(ensuredTenant.id), 
+          loadUsageData(ensuredTenant.id)
+        ]);
+      } catch (err) {
+        mostrarToast('Error cargando configuración.', 'error');
+      } finally { 
+        setCargando(false); 
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (cargando) return;
+    setSnapshot({ nombre, ubiRows, ubiMeta, empresas });
+  }, [cargando]);
 
   useEffect(() => {
     if (!snapshot) return;
     setDirty(!sameJSON(deepPack(), snapshot));
   }, [nombre, ubiRows, ubiMeta, empresas, snapshot]);
+
+  const handleUbicacionesChange = useCallback(({ ubicaciones, meta, deletions, forceDeletePackages }) => {
+    setUbiRows(ubicaciones);
+    setUbiMeta(prev => ({ ...prev, cols: meta.cols, rows: meta.rows })); 
+    pendingDeletionsRef.current = deletions;
+    forceDeleteRef.current = forceDeletePackages;
+  }, []);
 
   const handleGuardar = async () => {
     if (!dirty && !accountDraft) return navigate('/dashboard');
@@ -130,18 +172,19 @@ export default function ConfigPage() {
         await guardarUbicaciones({
           tenantId: tenant.id,
           ubicaciones: sanitizeUbicaciones(ubiRows),
-          meta: { cols: ubiMeta.cols, order: ubiMeta.orden },
+          meta: { cols: ubiMeta.cols, rows: ubiMeta.rows },
           deletions: pendingDeletionsRef.current,
           forceDeletePackages: forceDeleteRef.current
         }, token);
 
-        const carriers = empresas.filter(e => e.nombre).map(e => ({
-          nombre: e.nombre,
-          ingreso_por_entrega: Number(e.ingreso_por_entrega) || 0,
+        const carriersToSave = empresas.filter(e => String(e.nombre).trim() !== '').map(e => ({
+          nombre: String(e.nombre).trim(),
+          ingreso_por_entrega: parseFloat(e.ingreso_por_entrega) || 0,
           color: e.color || null,
           activo: e.activo ?? true
         }));
-        await guardarCarriers(carriers, token, { sync: true });
+        
+        await guardarCarriers(carriersToSave, token, { sync: true });
       }
 
       if (accountDraft) {
@@ -149,13 +192,14 @@ export default function ConfigPage() {
         if (accountDraft.pwd1) await applyPasswordDraft({ currentEmail: usuario.email, pwd1: accountDraft.pwd1, pwd2: accountDraft.pwd2 });
       }
 
+      if (window.__AP_PAGE_CACHE) window.__AP_PAGE_CACHE.loaded = false;
+      if (window.__SHELF_CACHE) window.__SHELF_CACHE.loaded = false;
+
       mostrarToast('Cambios guardados con éxito.');
       setTimeout(() => navigate('/dashboard'), 500);
     } catch (err) {
-      mostrarToast(err.message || 'Error al guardar los cambios.', 'error');
-    } finally { 
-      setGuardando(false); 
-    }
+      mostrarToast(err.message || 'Error al guardar configuración.', 'error');
+    } finally { setGuardando(false); }
   };
 
   if (cargando) return <Skeleton />;
@@ -168,13 +212,20 @@ export default function ConfigPage() {
         <div>
           <h1 className="text-3xl font-black text-zinc-950 tracking-tight flex items-center gap-3"><IconSettings /> Ajustes</h1>
         </div>
-        <button 
-          onClick={handleGuardar}
-          disabled={guardando || (!dirty && !accountDraft)}
-          className="px-8 py-3 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all"
-        >
-          {guardando ? 'Guardando...' : 'Guardar'}
-        </button>
+        <div className="flex items-center gap-3">
+          {dirty && (
+            <button onClick={revertirCambios} className="px-6 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold text-sm uppercase tracking-widest rounded-xl transition-all">
+              Deshacer
+            </button>
+          )}
+          <button 
+            onClick={handleGuardar}
+            disabled={guardando || (!dirty && !accountDraft)}
+            className="px-8 py-3 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all shadow-sm"
+          >
+            {guardando ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
       </header>
 
       <div className="space-y-12">
@@ -187,21 +238,18 @@ export default function ConfigPage() {
         />
 
         <Ubicaciones 
+          key={`ubi-canvas-${resetKey}`}
           initial={ubiRows} 
           initialMeta={ubiMeta} 
           tenantId={tenant?.id}
           usageByCodigo={usageByCodigo}
-          onChange={({ ubicaciones, meta, deletions, forceDeletePackages }) => {
-            setUbiRows(ubicaciones);
-            setUbiMeta(meta);
-            pendingDeletionsRef.current = deletions;
-            forceDeleteRef.current = forceDeletePackages;
-          }}
+          onToast={mostrarToast}
+          onChange={handleUbicacionesChange}
         />
 
         <PinCard tenantId={tenant?.id} onToast={mostrarToast} />
         <AccountSettings usuario={usuario} onDraftChange={setAccountDraft} />
-        <ImportWizard onToast={mostrarToast} onDone={loadData} />
+        <ImportWizard onToast={mostrarToast} onDone={() => loadUsageData(tenant.id)} />
       </div>
     </main>
   );
