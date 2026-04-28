@@ -26,9 +26,9 @@ function Switch({ checked, onChange }) {
 const FALLBACK_COMPANIAS = [
   { nombre: 'Amazon Logistics' }, { nombre: 'Boyacá' }, { nombre: 'Celeritas' }, 
   { nombre: 'Correos' }, { nombre: 'Correos Express' }, { nombre: 'DHL' }, 
-  { nombre: 'DPD' }, { nombre: 'GLS' }, { nombre: 'InPost' }, { nombre: 'MRW' }, 
-  { nombre: 'Nacex' }, { nombre: 'Paack' }, { nombre: 'SEUR' }, { nombre: 'UPS' }, 
-  { nombre: 'Vinted Go' }, { nombre: 'Zeleris' }
+  { nombre: 'DPD' }, { nombre: 'EcoScooting' }, { nombre: 'GLS' }, { nombre: 'InPost' }, 
+  { nombre: 'MRW' }, { nombre: 'Nacex' }, { nombre: 'Paack' }, { nombre: 'SEUR' }, 
+  { nombre: 'UPS' }, { nombre: 'Vinted Go' }, { nombre: 'Zeleris' }
 ];
 
 export default function CarriersCard({
@@ -123,7 +123,6 @@ export default function CarriersCard({
 
                 <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 w-full lg:w-auto">
                   
-                  {/* NUEVO: Input numérico en lugar de Select gigante */}
                   <div className="flex-1 sm:w-36 sm:flex-none">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1.5 block">
                       Tarifa <span className="text-zinc-400 normal-case tracking-normal">(Sin IVA)</span>
