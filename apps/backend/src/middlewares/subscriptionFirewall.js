@@ -20,12 +20,11 @@ const AUTH_ONLY_EXACT = new Set([
   '/api/tenants/me',
 ]);
 
-// ⬇️ añadimos '/api/tenants' completo para lecturas de estado
 const AUTH_ONLY_PREFIXES = [
   '/api/dashboard',
   '/api/imagenes',
   '/api/limits',
-  '/api/tenants',   // <— NUEVO
+  '/api/tenants',
   '/api/config',
 ];
 
@@ -35,7 +34,7 @@ function pickAuthMiddleware(mod) {
   if (typeof mod === 'function') return mod;
   if (mod && typeof mod.requireAuth === 'function') return mod.requireAuth;
   if (mod && typeof mod.default === 'function') return mod.default;
-  throw new Error('[subscriptionFirewall] requireAuth no es un middleware Express');
+  throw new Error('requireAuth no es un middleware Express');
 }
 
 function normalizeAppPath(path) {
@@ -44,6 +43,7 @@ function normalizeAppPath(path) {
   if (m && !path.startsWith('/api/')) return m[2];
   return path;
 }
+
 const startsWithAny = (p, arr) => arr.some(x => p.startsWith(x));
 const isPublicPrefix = (p) => startsWithAny(p, PUBLIC_PREFIXES);
 
@@ -67,7 +67,7 @@ module.exports = function subscriptionFirewall() {
 
     if (AUTH_ONLY_EXACT.has(path)) {
       res.setHeader('X-SubFirewall', 'auth-only-exact');
-      return requireAuth(req, res, next);
+      return rawRequireAuth.tokenOnly(req, res, next);
     }
 
     if (startsWithAny(path, AUTH_ONLY_PREFIXES)) {

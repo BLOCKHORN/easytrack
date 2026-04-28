@@ -2,13 +2,13 @@
 
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const requireAuth = require('../middlewares/requireAuth');
+const { tokenOnly } = require('../middlewares/requireAuth');
 const tenantsController = require('../controllers/tenants.controller');
 
-router.get('/me', requireAuth, tenantsController.obtenerTenantMe);
-router.post('/me', requireAuth, tenantsController.actualizarTenantMe);
-router.put('/me', requireAuth, tenantsController.actualizarTenantMe);
-router.patch('/me', requireAuth, tenantsController.actualizarTenantMe);
-router.post('/me/ai-trial', requireAuth, tenantsController.activarPruebaIA);
+router.get('/me', tokenOnly, tenantsController.obtenerTenantMe);
+router.post('/me', tokenOnly, tenantsController.actualizarTenantMe);
+router.put('/me', tokenOnly, tenantsController.actualizarTenantMe);
+router.patch('/me', tokenOnly, tenantsController.actualizarTenantMe);
+router.post('/me/ai-trial', tokenOnly, tenantsController.activarPruebaIA);
 
 module.exports = router;

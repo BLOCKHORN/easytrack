@@ -63,6 +63,18 @@ async function strictUser(req, res, next) {
   }
 }
 
+async function tokenOnly(req, res, next) {
+  try {
+    const user = await resolveUser(req);
+    if (!user) return res.status(401).json({ error: 'Token inválido o no proporcionado.' });
+    
+    attach(req, { user });
+    next();
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno de autenticación.' });
+  }
+}
+
 async function optional(req, res, next) {
   try {
     const user = await resolveUser(req);
@@ -83,7 +95,7 @@ function requireTenantSlug(paramName = 'tenantSlug') {
   };
 }
 
-const exported = Object.assign(strictUser, { optional, strictUser, requireTenantSlug });
+const exported = Object.assign(strictUser, { optional, strictUser, requireTenantSlug, tokenOnly });
 module.exports = exported;
 module.exports.requireAuth = exported;
 module.exports.default = exported;
