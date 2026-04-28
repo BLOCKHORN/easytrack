@@ -43,7 +43,21 @@ async function resolveTenantForUser(userId, slug, email) {
   }
 
   const { data } = await query.limit(1).maybeSingle();
-  return data?.tenants || null;
+  if (data?.tenants) return data.tenants;
+
+  if (email) {
+    let orphanQuery = supabase.from('tenants').select('id, slug, email, nombre_empresa').ilike('email', email);
+    if (slug) orphanQuery = orphanQuery.eq('slug', slug);
+    
+    const { data: orphan } = await orphanQuery.limit(1).maybeSingle();
+    
+    if (orphan) {
+      await supabase.from('memberships').insert([{ user_id: userId, tenant_id: orphan.id }]);
+      return orphan;
+    }
+  }
+
+  return null;
 }
 
 async function strictUser(req, res, next) {
@@ -52,7 +66,7 @@ async function strictUser(req, res, next) {
     if (!user) return res.status(401).json({ error: 'Token inválido o no proporcionado.' });
 
     const slug = req.params?.tenantSlug || req.params?.slug;
-    const tenant = await resolveTenantForUser(user.id, slug, slug ? null : user.email);
+    const tenant = await resolveTenantForUser(user.id, slug, user.email);
     
     if (!tenant) return res.status(403).json({ error: 'Acceso denegado a este negocio.' });
 
@@ -79,7 +93,7 @@ async function optional(req, res, next) {
   try {
     const user = await resolveUser(req);
     const slug = req.params?.tenantSlug || req.params?.slug;
-    const tenant = user ? await resolveTenantForUser(user.id, slug, slug ? null : user.email) : null;
+    const tenant = user ? await resolveTenantForUser(user.id, slug, user.email) : null;
     
     attach(req, { user, tenant });
     next();
