@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, useNavigate, useParams, useLocation, Outlet } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
-import AnalyticsTracker from './components/Routing/AnalyticsTracker'; // <-- IMPORTACIÓN NUEVA
+import AnalyticsTracker from './components/Routing/AnalyticsTracker'; 
 
 import LandingPage from './components/Landing/LandingPage';
 import DashboardLayout from './components/Dashboard/DashboardLayout';
@@ -11,6 +11,7 @@ import BuscarPaquete from './components/Dashboard/BuscarPaquete';
 import VerEstantes from './components/Dashboard/VerEstantes';
 import AreaPersonal from './components/Dashboard/AreaPersonal';
 import ConfigPage from './components/Configuracion/ConfigPage';
+import PartnerDashboard from './components/Dashboard/PartnerDashboard'; // <-- IMPORTACIÓN NUEVA
 
 import Registro from './components/Auth/Registro';
 import CrearPassword from './components/Auth/CrearPassword';
@@ -43,6 +44,7 @@ import AdminRoute from './components/Routing/AdminRoute';
 import AdminLayout from './components/Admin/AdminLayout';
 import AdminDashboard from './components/Admin/AdminDashboard';
 import AdminRadar from './components/Admin/AdminRadar';
+import AdminPartners from './components/Admin/AdminPartners';
 
 import { useModal } from './context/ModalContext';
 import { useTenant } from './context/TenantContext';
@@ -160,7 +162,7 @@ export default function App() {
 
   return (
     <Router>
-      <AnalyticsTracker /> {/* <-- INYECTADO AQUÍ */}
+      <AnalyticsTracker />
       <ScrollWithHash />
       <Routes>
         {/* PUBLIC ROUTES */}
@@ -185,6 +187,7 @@ export default function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="negocios" element={<AdminDashboard />} />
             <Route path="radar" element={<AdminRadar />} />
+            <Route path="partners" element={<AdminPartners />} />
           </Route>
         </Route>
 
@@ -211,6 +214,7 @@ export default function App() {
           <Route path="buscar" element={<BuscarPaquete />} />
           <Route path="almacen" element={<VerEstantes />} />
           <Route path="personal" element={<AreaPersonal />} />
+          <Route path="referidos" element={<PartnerDashboard />} /> {/* <-- NUEVA RUTA AQUÍ */}
           
           <Route path="facturacion" element={<Billing />} />
           <Route path="configuracion" element={<ConfigPage />} />

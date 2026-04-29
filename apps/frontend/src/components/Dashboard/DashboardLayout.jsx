@@ -1,12 +1,10 @@
-'use strict';
-
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../utils/supabaseClient';
-
-// Importamos el nuevo sistema de reseñas
 import ReviewBanner from './ReviewBanner';
+
+const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
 
 const TypewriterLogo = ({ size = "text-2xl", cursorHeight = "h-6" }) => {
   const text = "easytrack";
@@ -35,15 +33,40 @@ const IconCreditCard = () => <svg width="20" height="20" viewBox="0 0 24 24" fil
 const IconMenu = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
 const IconX = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 const IconScan = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.5-1.5"/></svg>;
+const IconUsers = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 
 export default function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isPartner, setIsPartner] = useState(false);
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkPartnerStatus = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const res = await fetch(`${API_BASE}/api/partners/me`, {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (data.isPartner && isMounted) {
+            setIsPartner(true);
+          }
+        }
+      } catch (err) {}
+    };
+    checkPartnerStatus();
+    return () => { isMounted = false; };
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -58,6 +81,7 @@ export default function DashboardLayout() {
   ];
 
   const bottomItems = [
+    ...(isPartner ? [{ label: 'Mis Referidos', path: 'referidos', icon: <IconUsers /> }] : []),
     { label: 'Área financiera', path: 'personal', icon: <IconUser /> },
     { label: 'Facturación', path: 'facturacion', icon: <IconCreditCard /> },
     { label: 'Configuración', path: 'configuracion', icon: <IconSettings /> },
@@ -74,6 +98,7 @@ export default function DashboardLayout() {
   ];
 
   const mobileMenu = [
+    ...(isPartner ? [{ label: 'Mis Referidos', path: 'referidos', icon: <IconUsers /> }] : []),
     { label: 'Facturación', path: 'facturacion', icon: <IconCreditCard /> },
     { label: 'Configuración', path: 'configuracion', icon: <IconSettings /> },
   ];
@@ -197,9 +222,7 @@ export default function DashboardLayout() {
           transition={{ duration: 0.2 }}
           className="flex-1 p-5 md:p-8 max-w-[1440px] w-full mx-auto"
         >
-          {/* Banner de reseñas dinámico */}
           <ReviewBanner />
-          
           <Outlet />
         </motion.div>
       </main>

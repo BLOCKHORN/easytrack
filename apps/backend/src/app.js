@@ -3,6 +3,8 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const cron = require('node-cron');
+const { processCommissionsAutomated } = require('./controllers/partners.controller');
 
 const app = express();
 app.disable('x-powered-by');
@@ -18,6 +20,7 @@ const dashboardRoutes = require('./routes/dashboard.routes');
 const areaPersonalRoutes = require('./routes/areaPersonal.routes');
 const authRoutes = require('./routes/auth.routes');
 const tenantsRoutes = require('./routes/tenants.routes');
+const partnersRoutes = require('./routes/partners.routes');
 const billingRoutes = require('./routes/billing.routes');
 const limitsRoutes = require('./routes/limits.routes');
 const importRoutes = require('./routes/import.routes');
@@ -112,6 +115,8 @@ authOnly('/:tenantSlug/api/ia', iaRoutes);
 
 authOnly('/api/admin/radar', radarRoutes);
 
+app.use('/api/partners', requireAuth.tokenOnly, partnersRoutes);
+
 app.use('/api/tenants', subscriptionFirewall(), tenantsRoutes);
 
 app.use((req, res) => {
@@ -122,6 +127,12 @@ app.use((req, res) => {
 app.use((err, _req, res, _next) => {
   const status = err.status || 500;
   res.status(status).json({ ok: false, error: err.message || 'INTERNAL_ERROR' });
+});
+
+cron.schedule('0 3 * * *', async () => {
+  try {
+    await processCommissionsAutomated();
+  } catch (error) {}
 });
 
 const PORT = process.env.PORT || 3001;
