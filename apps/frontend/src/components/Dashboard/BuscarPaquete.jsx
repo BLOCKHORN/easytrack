@@ -304,6 +304,9 @@ export default function BuscarPaquete() {
     processSyncQueue();
     
     setKpiGlobal(prev => ({...prev, pendientes: Math.max(0, prev.pendientes - 1), entregados: prev.entregados + 1}));
+    if (window.__AP_PAGE_CACHE) {
+    window.__AP_PAGE_CACHE.loaded = false;
+  }
     showToast("Paquete entregado.");
   };
 

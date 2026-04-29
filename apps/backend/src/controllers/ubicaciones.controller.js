@@ -228,6 +228,7 @@ exports.upsertUbicaciones = async (req, res) => {
         .from('packages')
         .select('id, ubicacion_label')
         .eq('tenant_id', tenantId)
+        .eq('entregado', false)
         .in('ubicacion_label', targets);
 
       if (pkgErr) throw pkgErr;

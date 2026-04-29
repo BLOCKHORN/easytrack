@@ -86,7 +86,7 @@ export default function ConfigPage() {
   };
 
   const loadUsageData = async (tId) => {
-    const { data } = await supabase.from('packages').select('ubicacion_label').eq('tenant_id', tId).not('ubicacion_label', 'is', null);
+    const { data } = await supabase.from('packages').select('ubicacion_label').eq('tenant_id', tId).eq('entregado', false).not('ubicacion_label', 'is', null);
     const map = {};
     (data || []).forEach(r => { const c = String(r.ubicacion_label).toUpperCase(); map[c] = (map[c] || 0) + 1; });
     setUsageByCodigo(map);
