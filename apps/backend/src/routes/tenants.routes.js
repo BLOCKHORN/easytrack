@@ -10,5 +10,6 @@ router.post('/me', tokenOnly, tenantsController.actualizarTenantMe);
 router.put('/me', tokenOnly, tenantsController.actualizarTenantMe);
 router.patch('/me', tokenOnly, tenantsController.actualizarTenantMe);
 router.post('/me/ai-trial', tokenOnly, tenantsController.activarPruebaIA);
+router.post('/magic-link', tokenOnly, tenantsController.generarMagicLinkIncognito);
 
 module.exports = router;

@@ -135,3 +135,31 @@ exports.activarPruebaIA = async (req, res) => {
     return res.status(500).json({ ok: false, error: 'No se pudo activar la prueba de IA' });
   }
 };
+
+exports.generarMagicLinkIncognito = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+
+    const { data: isAdmin } = await supabaseAdmin
+      .from('superadmins')
+      .select('user_id')
+      .eq('user_id', adminId)
+      .single();
+
+    if (!isAdmin) return res.status(403).json({ ok: false, error: 'No autorizado' });
+
+    const emailObjetivo = req.body.email;
+    if (!emailObjetivo) return res.status(400).json({ ok: false, error: 'Email requerido' });
+
+    const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: emailObjetivo
+    });
+
+    if (error) throw error;
+
+    return res.json({ ok: true, link: data.properties.action_link });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'Error al generar el enlace de acceso' });
+  }
+};

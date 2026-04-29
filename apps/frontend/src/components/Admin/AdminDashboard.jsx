@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../../utils/supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
+import { apiFetch } from '../../utils/fetcher';
 
 const IconSearch = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const IconTerminal = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>;
@@ -127,6 +128,26 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
     }
   };
 
+  const handleMagicLink = async () => {
+    try {
+      const res = await apiFetch('/api/tenants/magic-link', {
+        method: 'POST',
+        body: { email: tenant.email }
+      });
+      
+      const data = await res.json();
+      
+      if (data.ok) {
+        await navigator.clipboard.writeText(data.link);
+        alert('ENLACE COPIADO AL PORTAPAPELES.\n\nÁbrelo estrictamente en una ventana de INCÓGNITO. Si lo abres aquí, perderás tu sesión de administrador.');
+      } else {
+        alert(data.error);
+      }
+    } catch (err) {
+      alert('Error de red al solicitar el acceso.');
+    }
+  };
+
   const totals = useMemo(() => {
     return statsData.reduce((acc, curr) => {
       acc.revenue += Number(curr.ingreso_total) || 0;
@@ -154,10 +175,10 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
           <IconBack /> Volver al listado
         </button>
         <button 
-          onClick={() => window.open(`/${tenant.slug}/dashboard`, '_blank')}
+          onClick={handleMagicLink}
           className="flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 px-4 py-2 rounded-lg border border-brand-200 transition-all"
         >
-          <IconTerminal /> Acceder como Root
+          <IconTerminal /> Generar Acceso Incógnito
         </button>
       </div>
 
