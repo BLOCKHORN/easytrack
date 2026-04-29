@@ -52,7 +52,7 @@ async function resolveTenantForUser(userId, slug, email) {
     const { data: orphan } = await orphanQuery.limit(1).maybeSingle();
     
     if (orphan) {
-      await supabase.from('memberships').insert([{ user_id: userId, tenant_id: orphan.id }]);
+      await supabase.from('memberships').insert([{ user_id: userId, tenant_id: orphan.id, role: 'owner' }]);
       return orphan;
     }
   }
