@@ -6,7 +6,6 @@ import { getTenantIdOrThrow } from '../../utils/tenant';
 import { crearPaqueteBackend, obtenerPaquetesBackend } from '../../services/paquetesService';
 import { cargarUbicaciones } from '../../services/ubicacionesService';
 
-// Carga en el entorno global para limpiar desde ConfigPage
 window.__AP_PAGE_CACHE = window.__AP_PAGE_CACHE || {
   loaded: false,
   tenant: null,
@@ -126,22 +125,31 @@ const CameraScanner = ({ onCapture, onClose }) => {
 
   useEffect(() => {
     let localStream = null;
+
     async function startCamera() {
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: 'environment', width: { ideal: 720 } } 
+          video: { facingMode: 'environment', width: { ideal: 1024 } } 
         });
-        if (videoRef.current) {
-          videoRef.current.srcObject = localStream;
-        } else {
-          localStream.getTracks().forEach(t => t.stop());
-        }
       } catch (err) {
-        alert("No se pudo acceder a la cámara. Revisa los permisos.");
-        onClose();
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { width: { ideal: 1024 } } 
+          });
+        } catch (fallbackErr) {
+          alert("No se pudo acceder a la cámara. Revisa los permisos del navegador.");
+          onClose();
+          return;
+        }
+      }
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = localStream;
       }
     }
+
     startCamera();
+
     return () => {
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
@@ -160,7 +168,7 @@ const CameraScanner = ({ onCapture, onClose }) => {
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
 
-    const MAX_DIMENSION = 800;
+    const MAX_DIMENSION = 1024;
     let width = video.videoWidth;
     let height = video.videoHeight;
 
@@ -181,6 +189,7 @@ const CameraScanner = ({ onCapture, onClose }) => {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, width, height);
     
+    // Mantenido a 0.5 para optimizar el consumo de tokens y ancho de banda
     const data = canvas.toDataURL('image/jpeg', 0.5); 
     onCapture(data);
   };

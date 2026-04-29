@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../../utils/supabaseClient";
 import { getTenantIdOrThrow } from "../../utils/tenant";
-import { eliminarPaqueteBackend } from "../../services/paquetesService";
+import { eliminarPaqueteBackend, editarPaqueteBackend } from "../../services/paquetesService";
 import { cargarUbicaciones } from "../../services/ubicacionesService";
 
 // --- SISTEMA DE CACHÉ EN MEMORIA (SWR) ---
@@ -20,16 +20,10 @@ const IconEye = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none
 const IconEyeSlash = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>;
 const IconTrash = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>;
 const IconTimes = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const IconGrip = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>;
+const IconCheck = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>;
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-
-// --- LÓGICA DE MAPA DE CALOR (SOBRIA, TIPO B2B) ---
-const getShelfStyle = (count) => {
-  if (count === 0) return { bgColor: 'bg-white border-zinc-200', titleColor: 'text-zinc-400', countColor: 'text-zinc-400' };
-  if (count <= 4)  return { bgColor: 'bg-[#E8F7F2] border-[#A7E2CE]', titleColor: 'text-zinc-900', countColor: 'text-[#0d7a56]' };
-  if (count <= 9)  return { bgColor: 'bg-[#FFFBEB] border-[#FDE047]', titleColor: 'text-zinc-900', countColor: 'text-amber-800' };
-  return { bgColor: 'bg-[#FEF2F2] border-[#FECACA]', titleColor: 'text-zinc-900', countColor: 'text-red-800' };
-};
 
 export default function VerEstantes() {
   const [loading, setLoading] = useState(!__SHELF_CACHE.loaded);
@@ -41,9 +35,17 @@ export default function VerEstantes() {
   const [ocultarVacias, setOcultarVacias] = useState(false);
   const [mostrarNombres, setMostrarNombres] = useState(false);
   
-  // Estado para el modal
+  // Estado UI
   const [slotSeleccionado, setSlotSeleccionado] = useState(null);
   const [revealedPkgs, setRevealedPkgs] = useState({});
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedPkgId, setDraggedPkgId] = useState(null);
+  const [toastMsg, setToastMsg] = useState(null);
+
+  const showToast = (msg, isError = false) => {
+    setToastMsg({ msg, isError });
+    setTimeout(() => setToastMsg(null), 3500);
+  };
 
   useEffect(() => {
     let cancel = false;
@@ -64,13 +66,7 @@ export default function VerEstantes() {
         const newPkgs = (!pkgsRes.error && pkgsRes.data) ? pkgsRes.data : [];
         const newMeta = { cols: ubiRes.meta?.cols ?? 5, order: ubiRes.meta?.order ?? ubiRes.meta?.orden ?? 'horizontal' };
 
-        __SHELF_CACHE = {
-          loaded: true,
-          ubicaciones: newUbis,
-          paquetes: newPkgs,
-          metaUbi: newMeta
-        };
-
+        __SHELF_CACHE = { loaded: true, ubicaciones: newUbis, paquetes: newPkgs, metaUbi: newMeta };
         setUbicaciones(newUbis);
         setPaquetes(newPkgs);
         setMetaUbi(newMeta);
@@ -85,6 +81,7 @@ export default function VerEstantes() {
     return () => { cancel = true; };
   }, []);
 
+  // --- LÓGICA DE ELIMINAR ---
   const onDeletePkg = async (id) => {
     if (!window.confirm("¿Estás seguro de que deseas eliminar este paquete?")) return;
     try {
@@ -95,35 +92,106 @@ export default function VerEstantes() {
       setPaquetes(updatedPkgs);
       __SHELF_CACHE.paquetes = updatedPkgs;
 
-      // Actualizar modal si está abierto
       setSlotSeleccionado(prev => {
         if (!prev) return null;
         const remaining = prev.pkgs.filter(p => p.id !== id);
         if (remaining.length === 0) return null; 
         return { ...prev, pkgs: remaining, count: remaining.length };
       });
+      showToast("Paquete eliminado");
     } catch (e) { 
-      alert("Error eliminando el paquete."); 
+      showToast("Error eliminando el paquete", true); 
+    }
+  };
+
+  // --- LÓGICA INFALIBLE DE DRAG & DROP ---
+  const handleDragEnd = async (e, info, pkg) => {
+    // 1. Apagamos el estado de drag
+    setIsDragging(false);
+    setDraggedPkgId(null);
+    
+    // 2. Extraemos los nodos del DOM
+    const draggedEl = document.getElementById(`pkg-drag-${pkg.id}`);
+    const panelEl = document.getElementById('inspector-panel');
+
+    // 3. Forzamos la invisibilidad del modal y del paquete para que el raycast atraviese todo
+    if (draggedEl) draggedEl.style.visibility = 'hidden';
+    if (panelEl) panelEl.style.pointerEvents = 'none';
+
+    // 4. Disparamos el raycast exactamente en las coordenadas del puntero
+    const el = document.elementFromPoint(info.point.x, info.point.y);
+
+    // 5. Restauramos la UI
+    if (draggedEl) draggedEl.style.visibility = 'visible';
+    if (panelEl) panelEl.style.pointerEvents = '';
+
+    // 6. Buscamos si hemos caído en una zona válida
+    const dropZone = el?.closest('[data-drop-ubi]');
+    if (!dropZone) return; 
+
+    const targetLabel = dropZone.getAttribute('data-drop-ubi');
+    const targetId = dropZone.getAttribute('data-drop-id') || null;
+
+    if (targetLabel && targetLabel !== pkg.ubicacion_label) {
+      moverPaquete(pkg, targetId, targetLabel);
+    }
+  };
+
+  const moverPaquete = async (pkg, newId, newLabel) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Update optimista de UI instantáneo
+      const updatedPkgs = paquetes.map(p => 
+        p.id === pkg.id ? { ...p, ubicacion_id: newId, ubicacion_label: newLabel } : p
+      );
+      setPaquetes(updatedPkgs);
+      __SHELF_CACHE.paquetes = updatedPkgs;
+
+      // Quitar del inspector actual de forma suave
+      setSlotSeleccionado(prev => {
+        if (!prev) return null;
+        const remaining = prev.pkgs.filter(p => p.id !== pkg.id);
+        if (remaining.length === 0) return null; 
+        return { ...prev, pkgs: remaining, count: remaining.length };
+      });
+
+      showToast(`Movido a ${newLabel}`);
+
+      // Persistir en backend silenciosamente
+      await editarPaqueteBackend({
+        id: pkg.id,
+        nombre_cliente: pkg.nombre_cliente,
+        empresa_transporte: pkg.empresa_transporte,
+        ubicacion_id: newId,
+        ubicacion_label: newLabel
+      }, session.access_token);
+
+    } catch (err) {
+      showToast("Error al mover el paquete", true);
     }
   };
 
   const toggleRevealOne = (id) => setRevealedPkgs(prev => ({ ...prev, [id]: !prev[id] }));
-  
   const toggleRevealAll = () => {
     if (mostrarNombres) { 
-      setMostrarNombres(false); 
-      setRevealedPkgs({}); 
+      setMostrarNombres(false); setRevealedPkgs({}); 
     } else { 
-      setMostrarNombres(true); 
-      const all = {}; 
-      paquetes.forEach(p => all[p.id] = true); 
-      setRevealedPkgs(all); 
+      setMostrarNombres(true); const all = {}; paquetes.forEach(p => all[p.id] = true); setRevealedPkgs(all); 
     }
   };
 
   const cols = clamp(parseInt(metaUbi?.cols ?? 5, 10) || 5, 1, 12);
   const maxOrden = ubicaciones.reduce((max, u) => Math.max(max, u.orden ?? 0), -1);
   const totalSlots = cols * Math.max(1, Math.ceil((maxOrden + 1) / cols));
+
+  const getShelfStyle = (count, isSelected) => {
+    if (isSelected) return { bgColor: 'bg-zinc-900 border-zinc-900 scale-[1.02] shadow-xl z-20', titleColor: 'text-white', countColor: 'text-zinc-400' };
+    if (count === 0) return { bgColor: 'bg-white border-zinc-200', titleColor: 'text-zinc-400', countColor: 'text-zinc-400' };
+    if (count <= 4)  return { bgColor: 'bg-[#E8F7F2] border-[#A7E2CE] hover:border-[#14B07E]', titleColor: 'text-zinc-900', countColor: 'text-[#0d7a56]' };
+    if (count <= 9)  return { bgColor: 'bg-[#FFFBEB] border-[#FDE047] hover:border-amber-400', titleColor: 'text-zinc-900', countColor: 'text-amber-800' };
+    return { bgColor: 'bg-[#FEF2F2] border-[#FECACA] hover:border-red-400', titleColor: 'text-zinc-900', countColor: 'text-red-800' };
+  };
 
   if (loading) return (
     <div className="flex items-center justify-center h-[60vh]">
@@ -132,13 +200,29 @@ export default function VerEstantes() {
   );
 
   return (
-    <div className="space-y-8 font-sans pb-20">
+    <div className="space-y-8 font-sans pb-20 relative min-h-screen">
+      
+      {/* TOAST FLOTANTE */}
+      <AnimatePresence>
+        {toastMsg && (
+          <motion.div 
+            initial={{ opacity: 0, y: -50, x: '-50%' }} 
+            animate={{ opacity: 1, y: 0, x: '-50%' }} 
+            exit={{ opacity: 0, y: -20, x: '-50%' }}
+            className={`fixed top-24 left-1/2 z-[9999] px-5 sm:px-6 py-3 rounded-xl shadow-lg font-black text-white text-sm sm:text-base flex items-center gap-3 border ${toastMsg.isError ? 'bg-red-600 border-red-500' : 'bg-[#14B07E] border-[#14B07E]'} whitespace-nowrap`}
+          >
+            {toastMsg.isError ? <IconTimes /> : <IconCheck />}
+            {toastMsg.msg}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-zinc-200">
         <div>
           <h1 className="text-3xl sm:text-4xl font-black text-zinc-950 tracking-tight flex items-center gap-3 mb-1">
             <IconGrid /> Infraestructura
           </h1>
-          <p className="text-sm sm:text-base font-bold text-zinc-600">Estado de carga real de tus ubicaciones.</p>
+          <p className="text-sm sm:text-base font-bold text-zinc-600">Estado de carga real. Selecciona para inspeccionar o arrastra paquetes.</p>
         </div>
       </div>
 
@@ -175,32 +259,33 @@ export default function VerEstantes() {
           const pkgsInUbi = paquetes.filter(p => String(p.ubicacion_label || '').toUpperCase() === lbl);
           const count = pkgsInUbi.length;
           
-          // Lógica de Búsqueda y Atenuación
-          const s = search.toLowerCase();
-          let isMatch = true;
+          const isSelected = slotSeleccionado?.label === lbl;
           
+          let isMatch = true;
+          const s = search.toLowerCase();
           if (s) {
             const matchUbi = lbl.toLowerCase().includes(s);
             const matchPkgs = pkgsInUbi.some(p => (p.nombre_cliente || '').toLowerCase().includes(s) || (p.empresa_transporte || '').toLowerCase().includes(s));
             isMatch = matchUbi || matchPkgs;
           }
-          
-          if (ocultarVacias && count === 0) {
-            isMatch = false;
-          }
+          if (ocultarVacias && count === 0) isMatch = false;
 
-          const style = getShelfStyle(count);
-          // Si no hay match o está vacío (y el filtro lo pide), lo atenuamos sin romper el layout
+          const style = getShelfStyle(count, isSelected);
           const fadeClass = isMatch ? '' : 'opacity-25 grayscale pointer-events-none';
 
           return (
             <button
               key={u.id || `lbl-${u.label}`}
               type="button"
-              onClick={() => count > 0 && setSlotSeleccionado({ ...u, label: lbl, pkgs: pkgsInUbi, count })}
+              data-drop-ubi={lbl}
+              data-drop-id={u.id || ""}
+              onClick={() => {
+                if (isSelected) setSlotSeleccionado(null);
+                else if (count > 0) setSlotSeleccionado({ ...u, label: lbl, pkgs: pkgsInUbi, count });
+              }}
               className={`
                 relative flex flex-col items-center justify-center py-3 sm:py-5 rounded-lg sm:rounded-xl transition-all border outline-none aspect-square sm:aspect-auto
-                ${style.bgColor} ${fadeClass} ${count > 0 ? 'hover:scale-[1.02] hover:shadow-md hover:border-[#14B07E] cursor-pointer z-10' : 'cursor-default'}
+                ${style.bgColor} ${fadeClass} ${count > 0 ? 'hover:scale-[1.02] hover:shadow-md cursor-pointer' : 'cursor-default'}
               `}
             >
               <span className={`text-sm sm:text-2xl font-black tracking-tight ${style.titleColor}`}>{lbl}</span>
@@ -210,57 +295,87 @@ export default function VerEstantes() {
         })}
       </div>
 
-      {/* MODAL B2B DE GESTIÓN DEL ESTANTE */}
+      {/* INSPECTOR DE ESTANTE FLOTANTE (INTELIGENTE) */}
       <AnimatePresence>
         {slotSeleccionado && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" onClick={() => setSlotSeleccionado(null)} />
-            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white rounded-3xl shadow-xl w-full max-w-xl flex flex-col overflow-hidden border border-zinc-200 max-h-[85vh]">
-              
-              <div className="p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50 shrink-0">
-                <div>
-                  <h3 className="text-xl sm:text-2xl font-black text-zinc-950 tracking-tight flex items-center gap-2">
-                     Ubicación <span className="bg-zinc-200 px-2 py-0.5 rounded text-zinc-800">{slotSeleccionado.label}</span>
-                  </h3>
-                  <p className="text-[10px] sm:text-xs font-bold text-zinc-500 mt-1 uppercase tracking-widest">{slotSeleccionado.count} paquetes almacenados</p>
-                </div>
-                <button onClick={() => setSlotSeleccionado(null)} className="w-10 h-10 flex items-center justify-center bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-950 hover:bg-zinc-50 rounded-xl transition-colors shadow-sm"><IconTimes /></button>
+          <motion.div 
+            id="inspector-panel"
+            initial={{ opacity: 0, y: 50, scale: 0.95 }} 
+            animate={{ opacity: 1, y: 0, scale: 1 }} 
+            exit={{ opacity: 0, y: 50, scale: 0.95 }} 
+            className="fixed bottom-4 left-4 right-4 md:left-auto md:right-8 md:top-32 md:bottom-8 md:w-[400px] z-50 flex flex-col"
+          >
+            {/* Fondo Separado para Fading en Drag */}
+            <div className={`absolute inset-0 bg-white/95 backdrop-blur-3xl rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.4)] border border-zinc-200 transition-opacity duration-300 pointer-events-none ${isDragging ? 'opacity-10' : 'opacity-100'}`} />
+
+            {/* Cabecera */}
+            <div className={`p-5 border-b border-zinc-200 flex items-center justify-between rounded-t-3xl shrink-0 relative z-10 transition-opacity duration-300 ${isDragging ? 'opacity-0 pointer-events-none' : 'opacity-100 bg-white/50'}`}>
+              <div>
+                <h3 className="text-xl font-black text-zinc-950 tracking-tight flex items-center gap-2">
+                   Ubicación <span className="bg-[#14B07E]/10 text-[#14B07E] border border-[#14B07E]/20 px-2 py-0.5 rounded shadow-sm">{slotSeleccionado.label}</span>
+                </h3>
+                <p className="text-[10px] font-bold text-zinc-500 mt-1 uppercase tracking-widest">{slotSeleccionado.count} paquetes • Arrastra para mover</p>
               </div>
-              
-              <div className="p-4 sm:p-6 overflow-y-auto bg-zinc-50/30 space-y-3">
-                {slotSeleccionado.pkgs.map(p => {
-                  const revealed = revealedPkgs[p.id];
-                  return (
-                    <div key={p.id} className="group relative bg-white border border-zinc-200 rounded-xl p-4 shadow-sm hover:border-[#14B07E] transition-all">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-zinc-50 border border-zinc-200 text-zinc-500 font-black text-sm flex items-center justify-center shrink-0">
-                          {(p.nombre_cliente || '').slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0 pr-16">
-                          <p className="text-base font-bold text-zinc-900 truncate">
-                            {revealed || mostrarNombres ? p.nombre_cliente : '••••••••••••'}
-                          </p>
-                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest truncate mt-0.5">
-                            {p.empresa_transporte || 'Otros'}
-                          </p>
-                        </div>
+              <button onClick={() => setSlotSeleccionado(null)} className="w-10 h-10 flex items-center justify-center bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-950 hover:bg-zinc-50 rounded-xl transition-colors shadow-sm active:scale-95"><IconTimes /></button>
+            </div>
+            
+            {/* Lista de Paquetes Arrastrables */}
+            <div className={`p-4 sm:p-5 flex-1 space-y-3 rounded-b-3xl relative z-10 ${isDragging ? 'overflow-visible' : 'overflow-y-auto'}`}>
+              {slotSeleccionado.pkgs.map(p => {
+                const revealed = revealedPkgs[p.id];
+                const isThisDragging = draggedPkgId === p.id;
+                
+                return (
+                  <motion.div 
+                    key={p.id} 
+                    id={`pkg-drag-${p.id}`}
+                    layout
+                    drag
+                    dragSnapToOrigin
+                    dragElastic={0.2}
+                    onDragStart={() => { setIsDragging(true); setDraggedPkgId(p.id); }}
+                    onDragEnd={(e, info) => handleDragEnd(e, info, p)}
+                    whileDrag={{ 
+                      scale: 1.05, 
+                      zIndex: 9999, 
+                      cursor: 'grabbing',
+                      boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)"
+                    }}
+                    className={`group relative bg-white border border-zinc-200 rounded-xl p-4 shadow-sm hover:border-[#14B07E] transition-colors cursor-grab active:cursor-grabbing ${isDragging && !isThisDragging ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                  >
+                    <div className="absolute top-3 right-3 text-zinc-300 group-hover:text-zinc-400 pointer-events-none">
+                      <IconGrip />
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-zinc-50 border border-zinc-200 text-zinc-500 font-black text-sm flex items-center justify-center shrink-0 pointer-events-none">
+                        {(p.nombre_cliente || '').slice(0, 2).toUpperCase()}
                       </div>
-                      
-                      <div className="absolute top-1/2 -translate-y-1/2 right-3 flex gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-white pl-2">
-                        <button onClick={(e) => { e.stopPropagation(); toggleRevealOne(p.id); }} className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 border border-transparent hover:border-zinc-200 rounded-lg transition-colors" title="Mostrar/Ocultar">
-                          {revealed || mostrarNombres ? <IconEyeSlash /> : <IconEye />}
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); onDeletePkg(p.id); }} className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-colors" title="Eliminar">
-                          <IconTrash />
-                        </button>
+                      <div className="flex-1 min-w-0 pr-12 pointer-events-none">
+                        <p className="text-base font-bold text-zinc-900 truncate">
+                          {revealed || mostrarNombres ? p.nombre_cliente : '••••••••••••'}
+                        </p>
+                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest truncate mt-0.5">
+                          {p.empresa_transporte || 'Otros'}
+                        </p>
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-              
-            </motion.div>
-          </div>
+                    
+                    {/* Botones de acción (No interfieren con el drag) */}
+                    <div className="absolute bottom-3 right-3 flex gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-white pl-2">
+                      <button onClick={(e) => { e.stopPropagation(); toggleRevealOne(p.id); }} onPointerDown={e => e.stopPropagation()} className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 border border-transparent hover:border-zinc-200 rounded-lg transition-colors" title="Mostrar/Ocultar">
+                        {revealed || mostrarNombres ? <IconEyeSlash /> : <IconEye />}
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); onDeletePkg(p.id); }} onPointerDown={e => e.stopPropagation()} className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-colors" title="Eliminar">
+                        <IconTrash />
+                      </button>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+            
+          </motion.div>
         )}
       </AnimatePresence>
 
