@@ -145,7 +145,7 @@ exports.createCheckout = async (req, res) => {
     const subscriptionData = { metadata };
     if (shouldGiveTrial) subscriptionData.trial_period_days = 7;
 
-    const session = await stripe.checkout.sessions.create({
+    const sessionConfig = {
       mode: 'subscription',
       customer: stripeCustomerId,
       line_items: [{ price: priceId, quantity: 1 }],
@@ -160,7 +160,24 @@ exports.createCheckout = async (req, res) => {
       cancel_url: `${FRONTEND_URL}/${tenant.slug}/dashboard/facturacion`,
       locale: 'es',
       metadata
-    });
+    };
+
+    // INYECCIÓN DE CUPÓN REFERIDO
+    const { data: referral } = await supabase
+      .from('tenant_referrals')
+      .select('id')
+      .eq('referred_tenant_id', tenantId)
+      .eq('status', 'pending')
+      .maybeSingle();
+
+    if (referral) {
+      sessionConfig.allow_promotion_codes = false; // Bloqueamos otros códigos si ya trae descuento
+      sessionConfig.discounts = [{ 
+        coupon: planCode === 'pro_annual' ? 'REFERRAL_ANNUAL_50' : 'REFERRAL_MONTHLY_50' 
+      }];
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionConfig);
 
     return res.json({ ok:true, url: session.url });
   } catch (e) {
@@ -218,5 +235,37 @@ exports.createPortal = async (req, res) => {
     return res.json({ ok:true, url: portal.url });
   } catch (e) {
     return res.status(500).json({ ok:false, error: 'PORTAL_ERROR' });
+  }
+};
+exports.getReferralStats = async (req, res) => {
+  try {
+    const ensured = await ensureTenantForUser(req.user);
+    if (!ensured?.id) return res.status(400).json({ ok: false, error: 'TENANT_NOT_FOUND' });
+
+    const { data: refs } = await supabase
+      .from('tenant_referrals')
+      .select('id, status, created_at, referred_tenant_id')
+      .eq('referrer_tenant_id', ensured.id)
+      .order('created_at', { ascending: false });
+
+    let referrals = [];
+    if (refs && refs.length > 0) {
+      const ids = refs.map(r => r.referred_tenant_id);
+      const { data: tenants } = await supabase.from('tenants').select('id, nombre_empresa').in('id', ids);
+      
+      referrals = refs.map(r => {
+        const t = tenants?.find(x => x.id === r.referred_tenant_id);
+        return {
+          id: r.id,
+          status: r.status,
+          created_at: r.created_at,
+          nombre_empresa: t ? t.nombre_empresa : 'Negocio'
+        };
+      });
+    }
+
+    return res.json({ ok: true, slug: ensured.slug, referrals });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'STATS_ERROR' });
   }
 };

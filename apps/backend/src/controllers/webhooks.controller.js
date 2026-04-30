@@ -129,6 +129,42 @@ async function handleEvent(evt) {
       const sub = await stripe.subscriptions.retrieve(inv.subscription);
       const tenantId = await findTenantByCustomer(sub.customer);
       if (tenantId) await upsertSubscription(tenantId, sub);
+
+      // GESTIÓN DE REFERIDOS
+      if (inv.amount_paid > 0 && tenantId) {
+        const { data: ref } = await supabase
+          .from('tenant_referrals')
+          .select('id, status')
+          .eq('referred_tenant_id', tenantId)
+          .maybeSingle();
+
+        if (ref) {
+          const isAnnual = inv.lines?.data?.some(l => l.plan && l.plan.interval === 'year');
+          let amount = 0;
+
+          if (isAnnual) {
+            if (ref.status === 'pending') amount = 6000; // 60€ primer año
+          } else {
+            amount = 500; // 5€ todos los meses
+          }
+
+          if (amount > 0) {
+            const releaseDate = new Date();
+            releaseDate.setDate(releaseDate.getDate() + 15);
+
+            await supabase.from('pending_referral_credits').insert([{
+              referral_id: ref.id,
+              amount_cents: amount,
+              release_at: releaseDate.toISOString(),
+              stripe_invoice_id: inv.id
+            }]);
+          }
+
+          if (ref.status === 'pending') {
+            await supabase.from('tenant_referrals').update({ status: 'active' }).eq('id', ref.id);
+          }
+        }
+      }
       break;
     }
   }

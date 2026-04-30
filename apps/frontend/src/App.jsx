@@ -11,7 +11,8 @@ import BuscarPaquete from './components/Dashboard/BuscarPaquete';
 import VerEstantes from './components/Dashboard/VerEstantes';
 import AreaPersonal from './components/Dashboard/AreaPersonal';
 import ConfigPage from './components/Configuracion/ConfigPage';
-import PartnerDashboard from './components/Dashboard/PartnerDashboard'; // <-- IMPORTACIÓN NUEVA
+import PartnerDashboard from './components/Dashboard/PartnerDashboard';
+import ReferidosCliente from './components/Dashboard/ReferidosCliente'; // <-- IMPORTACIÓN NUEVA
 
 import Registro from './components/Auth/Registro';
 import CrearPassword from './components/Auth/CrearPassword';
@@ -214,7 +215,8 @@ export default function App() {
           <Route path="buscar" element={<BuscarPaquete />} />
           <Route path="almacen" element={<VerEstantes />} />
           <Route path="personal" element={<AreaPersonal />} />
-          <Route path="referidos" element={<PartnerDashboard />} /> {/* <-- NUEVA RUTA AQUÍ */}
+          <Route path="referidos" element={<PartnerDashboard />} /> 
+          <Route path="invitar" element={<ReferidosCliente />} /> {/* <-- NUEVA RUTA CLIENTE AQUÍ */}
           
           <Route path="facturacion" element={<Billing />} />
           <Route path="configuracion" element={<ConfigPage />} />

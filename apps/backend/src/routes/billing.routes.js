@@ -12,5 +12,6 @@ router.post('/prefill', requireAuth, billingController.prefillCustomer);
 router.post('/checkout', requireAuth, billingController.createCheckout);
 router.get('/checkout/verify', billingController.verifyCheckout);
 router.post('/portal', requireAuth, billingController.createPortal);
+router.get('/referrals/stats', requireAuth, billingController.getReferralStats);
 
 module.exports = router;

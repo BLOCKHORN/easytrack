@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { FaArrowRight, FaCheckCircle } from "react-icons/fa";
@@ -34,6 +34,14 @@ export default function Registro() {
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({ nombre_empresa: "", nombre_completo: "", email: "", password: "" });
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      localStorage.setItem('et_referral_slug', ref);
+    }
+  }, []);
+
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -46,11 +54,17 @@ export default function Registro() {
     setLoading(true);
     setError("");
     try {
+      const refSlug = localStorage.getItem('et_referral_slug') || undefined;
+      
       const { data, error: authErr } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
-          data: { full_name: formData.nombre_completo, nombre_empresa: formData.nombre_empresa },
+          data: { 
+            full_name: formData.nombre_completo, 
+            nombre_empresa: formData.nombre_empresa,
+            referred_by: refSlug
+          },
           emailRedirectTo: `${window.location.origin}/auth/email-confirmado`
         }
       });

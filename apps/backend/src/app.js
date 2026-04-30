@@ -4,11 +4,15 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const cron = require('node-cron');
+const Stripe = require('stripe');
+const { supabase } = require('./utils/supabaseClient');
 const { processCommissionsAutomated } = require('./controllers/partners.controller');
 
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' }) : null;
 
 const requireAuth = require('./middlewares/requireAuth');
 const subscriptionFirewall = require('./middlewares/subscriptionFirewall');
@@ -129,10 +133,40 @@ app.use((err, _req, res, _next) => {
   res.status(status).json({ ok: false, error: err.message || 'INTERNAL_ERROR' });
 });
 
+// CRONS
 cron.schedule('0 3 * * *', async () => {
   try {
     await processCommissionsAutomated();
   } catch (error) {}
+});
+
+cron.schedule('0 4 * * *', async () => {
+  if (!stripe) return;
+  try {
+    const { data: pending } = await supabase
+      .from('pending_referral_credits')
+      .select('*, tenant_referrals(referrer_tenant_id)')
+      .eq('processed', false)
+      .lte('release_at', new Date().toISOString());
+
+    for (const item of (pending || [])) {
+      const referrerId = item.tenant_referrals?.referrer_tenant_id;
+      if (!referrerId) continue;
+      
+      const { data: referrer } = await supabase.from('tenants').select('stripe_customer_id').eq('id', referrerId).maybeSingle();
+      
+      if (referrer?.stripe_customer_id) {
+        await stripe.customers.createBalanceTransaction(referrer.stripe_customer_id, {
+          amount: -item.amount_cents,
+          currency: 'eur',
+          description: `Crédito por referido activo (Ref: ${item.id})`
+        });
+        await supabase.from('pending_referral_credits').update({ processed: true }).eq('id', item.id);
+      }
+    }
+  } catch (error) { 
+    console.error('Error procesando referidos:', error); 
+  }
 });
 
 const PORT = process.env.PORT || 3001;

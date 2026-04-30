@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../../utils/supabaseClient";
@@ -18,6 +18,14 @@ export default function LoginModal({ onClose }) {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      localStorage.setItem('et_referral_slug', ref);
+    }
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
