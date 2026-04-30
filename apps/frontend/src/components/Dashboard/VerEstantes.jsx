@@ -40,6 +40,7 @@ export default function VerEstantes() {
   const [revealedPkgs, setRevealedPkgs] = useState({});
   const [isDragging, setIsDragging] = useState(false);
   const [draggedPkgId, setDraggedPkgId] = useState(null);
+  const [hoveredUbi, setHoveredUbi] = useState(null); // <--- NUEVO ESTADO PARA EL BRILLO
   const [toastMsg, setToastMsg] = useState(null);
 
   const showToast = (msg, isError = false) => {
@@ -81,7 +82,6 @@ export default function VerEstantes() {
     return () => { cancel = true; };
   }, []);
 
-  // --- LÓGICA DE ELIMINAR ---
   const onDeletePkg = async (id) => {
     if (!window.confirm("¿Estás seguro de que deseas eliminar este paquete?")) return;
     try {
@@ -104,33 +104,68 @@ export default function VerEstantes() {
     }
   };
 
-  // --- LÓGICA INFALIBLE DE DRAG & DROP ---
-  const handleDragEnd = async (e, info, pkg) => {
-    // 1. Apagamos el estado de drag
-    setIsDragging(false);
-    setDraggedPkgId(null);
-    
-    // 2. Extraemos los nodos del DOM
+  // --- NUEVA LÓGICA: DETECCIÓN POR EL CENTRO DE LA TARJETA ---
+  const handleDrag = (e, info, pkg) => {
     const draggedEl = document.getElementById(`pkg-drag-${pkg.id}`);
     const panelEl = document.getElementById('inspector-panel');
 
-    // 3. Forzamos la invisibilidad del modal y del paquete para que el raycast atraviese todo
-    if (draggedEl) draggedEl.style.visibility = 'hidden';
+    if (!draggedEl) return;
+
+    // Calculamos el centro visual exacto de la tarjeta arrastrada
+    const rect = draggedEl.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    // Ocultar temporalmente para que el raycast traspase
+    draggedEl.style.visibility = 'hidden';
     if (panelEl) panelEl.style.pointerEvents = 'none';
 
-    // 4. Disparamos el raycast exactamente en las coordenadas del puntero
-    const el = document.elementFromPoint(info.point.x, info.point.y);
+    // Lanzar raycast desde el centro visual
+    const el = document.elementFromPoint(centerX, centerY);
 
-    // 5. Restauramos la UI
-    if (draggedEl) draggedEl.style.visibility = 'visible';
+    // Restaurar inmediatamente
+    draggedEl.style.visibility = 'visible';
     if (panelEl) panelEl.style.pointerEvents = '';
 
-    // 6. Buscamos si hemos caído en una zona válida
     const dropZone = el?.closest('[data-drop-ubi]');
-    if (!dropZone) return; 
+    if (dropZone) {
+      const targetLabel = dropZone.getAttribute('data-drop-ubi');
+      if (hoveredUbi !== targetLabel) setHoveredUbi(targetLabel); // Activa el brillo
+    } else {
+      if (hoveredUbi !== null) setHoveredUbi(null); // Quita el brillo
+    }
+  };
 
-    const targetLabel = dropZone.getAttribute('data-drop-ubi');
-    const targetId = dropZone.getAttribute('data-drop-id') || null;
+  const handleDragEnd = async (e, info, pkg) => {
+    setIsDragging(false);
+    setDraggedPkgId(null);
+    setHoveredUbi(null); // Limpiamos el estado visual
+    
+    const draggedEl = document.getElementById(`pkg-drag-${pkg.id}`);
+    const panelEl = document.getElementById('inspector-panel');
+
+    let targetLabel = null;
+    let targetId = null;
+
+    if (draggedEl) {
+      const rect = draggedEl.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+
+      draggedEl.style.visibility = 'hidden';
+      if (panelEl) panelEl.style.pointerEvents = 'none';
+
+      const el = document.elementFromPoint(centerX, centerY);
+
+      draggedEl.style.visibility = 'visible';
+      if (panelEl) panelEl.style.pointerEvents = '';
+
+      const dropZone = el?.closest('[data-drop-ubi]');
+      if (dropZone) {
+        targetLabel = dropZone.getAttribute('data-drop-ubi');
+        targetId = dropZone.getAttribute('data-drop-id') || null;
+      }
+    }
 
     if (targetLabel && targetLabel !== pkg.ubicacion_label) {
       moverPaquete(pkg, targetId, targetLabel);
@@ -141,14 +176,12 @@ export default function VerEstantes() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
-      // Update optimista de UI instantáneo
       const updatedPkgs = paquetes.map(p => 
         p.id === pkg.id ? { ...p, ubicacion_id: newId, ubicacion_label: newLabel } : p
       );
       setPaquetes(updatedPkgs);
       __SHELF_CACHE.paquetes = updatedPkgs;
 
-      // Quitar del inspector actual de forma suave
       setSlotSeleccionado(prev => {
         if (!prev) return null;
         const remaining = prev.pkgs.filter(p => p.id !== pkg.id);
@@ -158,7 +191,6 @@ export default function VerEstantes() {
 
       showToast(`Movido a ${newLabel}`);
 
-      // Persistir en backend silenciosamente
       await editarPaqueteBackend({
         id: pkg.id,
         nombre_cliente: pkg.nombre_cliente,
@@ -185,7 +217,11 @@ export default function VerEstantes() {
   const maxOrden = ubicaciones.reduce((max, u) => Math.max(max, u.orden ?? 0), -1);
   const totalSlots = cols * Math.max(1, Math.ceil((maxOrden + 1) / cols));
 
-  const getShelfStyle = (count, isSelected) => {
+  const getShelfStyle = (count, isSelected, isHovered) => {
+    // Si estás arrastrando y pasas por encima, forzamos este estilo visual
+    if (isHovered) return { bgColor: 'bg-[#14B07E] border-[#14B07E] ring-4 ring-[#14B07E]/30 scale-[1.08] shadow-2xl z-30 transition-all duration-200', titleColor: 'text-white', countColor: 'text-emerald-100' };
+    
+    // Estilos normales
     if (isSelected) return { bgColor: 'bg-zinc-900 border-zinc-900 scale-[1.02] shadow-xl z-20', titleColor: 'text-white', countColor: 'text-zinc-400' };
     if (count === 0) return { bgColor: 'bg-white border-zinc-200', titleColor: 'text-zinc-400', countColor: 'text-zinc-400' };
     if (count <= 4)  return { bgColor: 'bg-[#E8F7F2] border-[#A7E2CE] hover:border-[#14B07E]', titleColor: 'text-zinc-900', countColor: 'text-[#0d7a56]' };
@@ -202,7 +238,6 @@ export default function VerEstantes() {
   return (
     <div className="space-y-8 font-sans pb-20 relative min-h-screen">
       
-      {/* TOAST FLOTANTE */}
       <AnimatePresence>
         {toastMsg && (
           <motion.div 
@@ -243,7 +278,6 @@ export default function VerEstantes() {
         </div>
       </div>
 
-      {/* MAPA VISUAL ESTILO PLANO DE LA CONFIGURACIÓN */}
       <div 
         className="grid gap-1.5 sm:gap-3 pb-4" 
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
@@ -260,6 +294,7 @@ export default function VerEstantes() {
           const count = pkgsInUbi.length;
           
           const isSelected = slotSeleccionado?.label === lbl;
+          const isHovered = hoveredUbi === lbl; // <-- Comprobamos si está sobre esta caja
           
           let isMatch = true;
           const s = search.toLowerCase();
@@ -270,7 +305,7 @@ export default function VerEstantes() {
           }
           if (ocultarVacias && count === 0) isMatch = false;
 
-          const style = getShelfStyle(count, isSelected);
+          const style = getShelfStyle(count, isSelected, isHovered);
           const fadeClass = isMatch ? '' : 'opacity-25 grayscale pointer-events-none';
 
           return (
@@ -285,7 +320,7 @@ export default function VerEstantes() {
               }}
               className={`
                 relative flex flex-col items-center justify-center py-3 sm:py-5 rounded-lg sm:rounded-xl transition-all border outline-none aspect-square sm:aspect-auto
-                ${style.bgColor} ${fadeClass} ${count > 0 ? 'hover:scale-[1.02] hover:shadow-md cursor-pointer' : 'cursor-default'}
+                ${style.bgColor} ${fadeClass} ${count > 0 && !isHovered ? 'hover:scale-[1.02] hover:shadow-md cursor-pointer' : 'cursor-default'}
               `}
             >
               <span className={`text-sm sm:text-2xl font-black tracking-tight ${style.titleColor}`}>{lbl}</span>
@@ -295,7 +330,6 @@ export default function VerEstantes() {
         })}
       </div>
 
-      {/* INSPECTOR DE ESTANTE FLOTANTE (INTELIGENTE) */}
       <AnimatePresence>
         {slotSeleccionado && (
           <motion.div 
@@ -303,12 +337,10 @@ export default function VerEstantes() {
             initial={{ opacity: 0, y: 50, scale: 0.95 }} 
             animate={{ opacity: 1, y: 0, scale: 1 }} 
             exit={{ opacity: 0, y: 50, scale: 0.95 }} 
-            className="fixed bottom-4 left-4 right-4 md:left-auto md:right-8 md:top-32 md:bottom-8 md:w-[400px] z-50 flex flex-col"
+            className="fixed bottom-[90px] left-4 right-4 md:left-auto md:right-8 md:top-32 md:bottom-8 md:w-[400px] z-50 flex flex-col max-h-[55vh] md:max-h-[calc(100vh-10rem)]"
           >
-            {/* Fondo Separado para Fading en Drag */}
             <div className={`absolute inset-0 bg-white/95 backdrop-blur-3xl rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.4)] border border-zinc-200 transition-opacity duration-300 pointer-events-none ${isDragging ? 'opacity-10' : 'opacity-100'}`} />
 
-            {/* Cabecera */}
             <div className={`p-5 border-b border-zinc-200 flex items-center justify-between rounded-t-3xl shrink-0 relative z-10 transition-opacity duration-300 ${isDragging ? 'opacity-0 pointer-events-none' : 'opacity-100 bg-white/50'}`}>
               <div>
                 <h3 className="text-xl font-black text-zinc-950 tracking-tight flex items-center gap-2">
@@ -319,8 +351,7 @@ export default function VerEstantes() {
               <button onClick={() => setSlotSeleccionado(null)} className="w-10 h-10 flex items-center justify-center bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-950 hover:bg-zinc-50 rounded-xl transition-colors shadow-sm active:scale-95"><IconTimes /></button>
             </div>
             
-            {/* Lista de Paquetes Arrastrables */}
-            <div className={`p-4 sm:p-5 flex-1 space-y-3 rounded-b-3xl relative z-10 ${isDragging ? 'overflow-visible' : 'overflow-y-auto'}`}>
+            <div className={`p-4 sm:p-5 flex-1 space-y-3 rounded-b-3xl relative z-10 min-h-0 ${isDragging ? 'overflow-visible' : 'overflow-y-auto'}`}>
               {slotSeleccionado.pkgs.map(p => {
                 const revealed = revealedPkgs[p.id];
                 const isThisDragging = draggedPkgId === p.id;
@@ -334,6 +365,7 @@ export default function VerEstantes() {
                     dragSnapToOrigin
                     dragElastic={0.2}
                     onDragStart={() => { setIsDragging(true); setDraggedPkgId(p.id); }}
+                    onDrag={(e, info) => handleDrag(e, info, p)} // <--- NUEVO EVENTO TRACKEANDO EL DRAG
                     onDragEnd={(e, info) => handleDragEnd(e, info, p)}
                     whileDrag={{ 
                       scale: 1.05, 
@@ -361,7 +393,6 @@ export default function VerEstantes() {
                       </div>
                     </div>
                     
-                    {/* Botones de acción (No interfieren con el drag) */}
                     <div className="absolute bottom-3 right-3 flex gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-white pl-2">
                       <button onClick={(e) => { e.stopPropagation(); toggleRevealOne(p.id); }} onPointerDown={e => e.stopPropagation()} className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 border border-transparent hover:border-zinc-200 rounded-lg transition-colors" title="Mostrar/Ocultar">
                         {revealed || mostrarNombres ? <IconEyeSlash /> : <IconEye />}
