@@ -198,14 +198,27 @@ const CameraScanner = ({ onCapture, onClose }) => {
     <div className="fixed inset-0 z-[200] bg-zinc-950 flex flex-col">
       <div className="relative flex-1 flex items-center justify-center overflow-hidden">
         <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
-        <div className="relative w-72 h-40 border border-white/50 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] flex flex-col items-center justify-center">
-           <div className="w-12 h-0.5 bg-[#14B07E] mb-8" />
-           <div className="w-12 h-0.5 bg-[#14B07E]" />
+        
+        {/* NUEVA UI A PRUEBA DE TONTOS: Forma de documento, sin "láser" de código de barras */}
+        <div className="relative w-[85%] max-w-sm aspect-[4/3] shadow-[0_0_0_9999px_rgba(0,0,0,0.75)] rounded-2xl flex flex-col items-center justify-center pointer-events-none">
+           <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-[#14B07E] rounded-tl-2xl" />
+           <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-[#14B07E] rounded-tr-2xl" />
+           <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-[#14B07E] rounded-bl-2xl" />
+           <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-[#14B07E] rounded-br-2xl" />
         </div>
-        <p className="absolute bottom-10 text-white font-bold text-sm uppercase tracking-widest bg-black/60 px-5 py-2.5 rounded-lg backdrop-blur-md">Encuadra la etiqueta</p>
+
+        <div className="absolute bottom-6 sm:bottom-10 flex flex-col items-center gap-2.5 w-full px-6 text-center pointer-events-none">
+          <p className="text-white font-black text-sm sm:text-base uppercase tracking-wider bg-zinc-950/80 px-6 py-3 rounded-xl backdrop-blur-md shadow-lg border border-zinc-800">
+            Encuadra <span className="text-[#14B07E]">nombre y empresa</span>
+          </p>
+          <p className="text-zinc-300 font-bold text-xs bg-zinc-950/80 px-4 py-2 rounded-lg backdrop-blur-md border border-zinc-800">
+            Ignora el código de barras. La IA lee el texto.
+          </p>
+        </div>
       </div>
+      
       <canvas ref={canvasRef} className="hidden" />
-      <div className="bg-zinc-950 p-8 flex items-center justify-between pb-12 border-t border-zinc-800">
+      <div className="bg-zinc-950 p-6 sm:p-8 flex items-center justify-between pb-8 sm:pb-12 border-t border-zinc-800 relative z-10">
         <button onClick={onClose} className="text-zinc-400 font-bold text-sm hover:text-white transition-colors">CANCELAR</button>
         <button onClick={capture} className="w-16 h-16 bg-white rounded-full border-4 border-zinc-800 active:scale-90 transition-transform flex items-center justify-center">
            <div className="w-12 h-12 rounded-full border border-zinc-950" />

@@ -48,8 +48,12 @@ exports.escanearEtiqueta = async (req, res) => {
     
     if (!imageBase64) return res.status(400).json({ error: 'Falta la imagen de la etiqueta.' });
 
+    const mimeTypeMatch = imageBase64.match(/^data:(image\/\w+);base64,/);
+    const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
+    
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-    const imagePart = { inlineData: { data: base64Data, mimeType: "image/jpeg" } };
+    const imagePart = { inlineData: { data: base64Data, mimeType: mimeType } };
+    
     const promptText = buildPrompt(compania_fija);
 
     const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
@@ -139,6 +143,7 @@ exports.escanearEtiqueta = async (req, res) => {
     if (error?.message && error.message.includes('API key not valid')) return res.status(500).json({ error: 'Problema de conexión con el núcleo. Avisa a soporte.' });
     if (error?.status === 429 || (error?.message && error.message.includes('quota'))) return res.status(429).json({ error: 'Has fundido los plomos. Límite de escaneos de IA alcanzado.' });
     
-    return res.status(500).json({ error: 'La IA está que echa humo ahora mismo. Vuelve a intentarlo.' });
+    // Devolvemos el error real a la consola (útil para ti), pero el mensaje genérico al cliente
+    return res.status(500).json({ error: 'La IA está que echa humo ahora mismo. Vuelve a intentarlo.', detail: error.message });
   }
 };
