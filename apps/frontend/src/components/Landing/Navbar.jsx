@@ -46,7 +46,6 @@ export default function Navbar() {
   const { checking, isLoggedIn, userEmail, avatarUrl, isAdmin, handleLogout } = useNavbarAuth(navigate);
   const { tenant, loading: tenantLoading } = useTenant();
   const slug = tenant?.slug;
-  const [isAuditComplete, setIsAuditComplete] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -63,11 +62,6 @@ export default function Navbar() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  useEffect(() => {
-    const hasSeenAudit = localStorage.getItem('et_audit_complete');
-    setIsAuditComplete(!!hasSeenAudit);
-  }, [location]);
 
   const navLinks = [
     { name: 'Características', path: '/#features' },
@@ -88,14 +82,14 @@ export default function Navbar() {
   };
 
   return (
-    <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-[#09090b]/80 backdrop-blur-xl border-b border-zinc-800/50 py-3' : 'bg-transparent py-5'}`}>
+    <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-[#09090b]/90 backdrop-blur-xl border-b border-zinc-800/50 py-3' : 'bg-transparent py-5'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-10">
             <TypewriterNavLogo />
             <div className="hidden md:flex items-center gap-1">
               {navLinks.map((link) => (
-                <a key={link.name} href={link.path} className="px-4 py-2 text-sm font-bold text-zinc-400 hover:text-white hover:bg-zinc-800/30 rounded-lg transition-all">{link.name}</a>
+                <a key={link.name} href={link.path} className="px-4 py-2 text-sm font-bold text-zinc-400 hover:text-white hover:bg-zinc-800/50 rounded-lg transition-colors">{link.name}</a>
               ))}
             </div>
           </div>
@@ -108,14 +102,14 @@ export default function Navbar() {
                   <div className="w-24 h-10 bg-zinc-800/50 animate-pulse rounded-xl"></div>
                 ) : (
                   <div className="flex items-center gap-3">
-                    <button onClick={goDashboard} className="px-5 py-2 bg-brand-500 hover:bg-brand-400 text-white text-sm font-black rounded-xl shadow-lg shadow-brand-500/20 transition-all active:scale-95">
+                    <button onClick={goDashboard} className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-black rounded-xl transition-colors active:scale-95">
                       Ir al panel
                     </button>
                     
                     <div className="relative" ref={accountMenuRef}>
                       <button 
                         onClick={() => setAccountOpen(!accountOpen)} 
-                        className={`group flex items-center gap-3 px-3 py-1.5 rounded-xl border transition-all shadow-sm ${accountOpen ? 'bg-zinc-900 border-zinc-600 ring-2 ring-brand-500/20' : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'}`}
+                        className={`group flex items-center gap-3 px-3 py-1.5 rounded-xl border transition-colors ${accountOpen ? 'bg-zinc-900 border-zinc-700' : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'}`}
                       >
                         <Avatar email={userEmail} url={avatarUrl} />
                         <div className="text-left hidden lg:block">
@@ -142,13 +136,13 @@ export default function Navbar() {
                             </div>
                             
                             <div className="p-2 space-y-1">
-                              <button onClick={goConfig} className="w-full text-left px-3 py-3 text-sm font-bold text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl transition-all flex items-center gap-3">
+                              <button onClick={goConfig} className="w-full text-left px-3 py-3 text-sm font-bold text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl transition-colors flex items-center gap-3">
                                 <IconSettings /> Configuración
                               </button>
                             </div>
                             
                             <div className="p-2 mt-1 border-t border-zinc-900">
-                              <button onClick={() => { setAccountOpen(false); handleLogout(); }} className="w-full text-left px-3 py-3 text-sm font-bold text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all flex items-center gap-3">
+                              <button onClick={() => { setAccountOpen(false); handleLogout(); }} className="w-full text-left px-3 py-3 text-sm font-bold text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors flex items-center gap-3">
                                 <IconLogout /> Cerrar sesión
                               </button>
                             </div>
@@ -169,7 +163,7 @@ export default function Navbar() {
               ) : (
                 <div className="flex items-center gap-4">
                   <button onClick={openLogin} className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Iniciar Sesión</button>
-                  <button onClick={() => navigate('/registro')} className="px-5 py-2 bg-brand-500 hover:bg-brand-400 text-white text-sm font-black rounded-xl transition-all shadow-lg shadow-brand-500/20 active:scale-95">
+                  <button onClick={() => navigate('/registro')} className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-black rounded-xl transition-colors active:scale-95">
                     Empezar gratis
                   </button>
                 </div>
@@ -190,13 +184,13 @@ export default function Navbar() {
             initial={{ opacity: 0, height: 0 }} 
             animate={{ opacity: 1, height: 'auto' }} 
             exit={{ opacity: 0, height: 0 }} 
-            className="md:hidden bg-zinc-950 border-b border-zinc-800 overflow-hidden"
+            className="md:hidden bg-zinc-950 border-b border-zinc-800 overflow-hidden shadow-2xl"
           >
-            <div className="px-4 pt-4 pb-6">
+            <div className="px-6 pt-2 pb-8">
               {checking || tenantLoading ? (
-                <div className="w-full h-32 bg-zinc-900 animate-pulse rounded-xl"></div>
+                <div className="w-full h-32 bg-zinc-900 animate-pulse rounded-xl mt-4"></div>
               ) : isLoggedIn ? (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2 mt-4">
                   <div className="flex items-center gap-4 px-4 py-3 mb-2 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
                     <Avatar email={userEmail} url={avatarUrl} />
                     <div className="flex flex-col overflow-hidden">
@@ -236,26 +230,23 @@ export default function Navbar() {
                   )}
                 </div>
               ) : (
-                <div className="flex flex-col gap-2">
-                  {navLinks.map((link) => (
-                    <a key={link.name} href={link.path} onClick={() => setMobileOpen(false)} className="block px-4 py-3 text-base font-bold text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl transition-colors">
-                      {link.name}
-                    </a>
-                  ))}
+                <div className="flex flex-col">
+                  <div className="flex flex-col gap-1 py-4">
+                    {navLinks.map((link) => (
+                      <a key={link.name} href={link.path} onClick={() => setMobileOpen(false)} className="block px-2 py-3 text-lg font-bold text-zinc-300 hover:text-white transition-colors">
+                        {link.name}
+                      </a>
+                    ))}
+                  </div>
                   
-                  <div className="h-px bg-zinc-800/50 my-4" />
+                  <div className="h-px bg-zinc-800/50 mb-6 mt-2" />
                   
                   <div className="flex flex-col gap-3">
-                    <button onClick={() => { setMobileOpen(false); openLogin(); }} className="w-full py-4 text-white font-bold bg-zinc-900 hover:bg-zinc-800 rounded-xl flex justify-center items-center transition-colors">
-                      Iniciar Sesión
-                    </button>
-                    {!isAuditComplete && (
-                      <button onClick={() => { setMobileOpen(false); navigate('/?audit=true'); }} className="w-full py-4 text-brand-400 font-bold bg-transparent border border-brand-500/30 hover:border-brand-500/50 rounded-xl flex justify-center items-center gap-2 transition-colors">
-                        Auditar Beneficios
-                      </button>
-                    )}
-                    <button onClick={() => { setMobileOpen(false); navigate('/registro'); }} className="w-full py-4 bg-brand-500 text-white font-black rounded-xl flex justify-center items-center transition-colors active:scale-95">
+                    <button onClick={() => { setMobileOpen(false); navigate('/registro'); }} className="w-full py-4 bg-brand-500 hover:bg-brand-600 text-white text-base font-black rounded-xl flex justify-center items-center transition-colors active:scale-95">
                       Empezar gratis
+                    </button>
+                    <button onClick={() => { setMobileOpen(false); openLogin(); }} className="w-full py-3 mt-2 text-sm text-zinc-400 font-bold hover:text-white transition-colors">
+                      Ya tengo cuenta. Iniciar sesión
                     </button>
                   </div>
                 </div>

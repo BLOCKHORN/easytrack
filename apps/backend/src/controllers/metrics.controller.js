@@ -18,20 +18,30 @@ exports.getPublicMetrics = async (req, res) => {
     const [hourStr, minStr] = formatter.format(now).split(':');
     const hour = parseInt(hourStr, 10);
     const minute = parseInt(minStr, 10);
+    const dayOfWeek = now.getDay();
+
+    let packagesPerMinute = 0;
+    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+      packagesPerMinute = 6.25;
+    } else if (dayOfWeek === 6) {
+      packagesPerMinute = 3.12;
+    }
 
     let dailyOffset = 0;
-    if (hour >= 9 && hour < 20) {
-        dailyOffset = Math.floor(((hour - 9) * 60 + minute) * 7.1);
-    } else if (hour >= 20) {
-        dailyOffset = Math.floor((11 * 60) * 7.1); 
+    if (packagesPerMinute > 0) {
+      if (hour >= 9 && hour < 20) {
+          dailyOffset = Math.floor(((hour - 9) * 60 + minute) * packagesPerMinute);
+      } else if (hour >= 20) {
+          dailyOffset = Math.floor(660 * packagesPerMinute); 
+      }
     }
 
     const launchDate = new Date('2026-04-21T00:00:00Z');
     const daysElapsed = Math.max(0, Math.floor((now - launchDate) / (1000 * 60 * 60 * 24)));
-    const historicalGrowth = daysElapsed * 4254;
+    const historicalGrowth = daysElapsed * 3280; 
 
-    const publicTenants = (tenantsCount || 0) + 72 + Math.floor(daysElapsed / 7);
-    const publicPackages = (deliveredCount || 0) + 152340 + historicalGrowth + dailyOffset;
+    const publicTenants = (tenantsCount || 0) + 79;
+    const publicPackages = (deliveredCount || 0) + 145340 + historicalGrowth + dailyOffset;
 
     return res.json({
       tenants_count: publicTenants,

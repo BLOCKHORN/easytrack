@@ -31,6 +31,7 @@ const importRoutes = require('./routes/import.routes');
 const metricsRouter = require('./routes/metrics.routes');
 const iaRoutes = require('./routes/ia.routes');
 const radarRoutes = require('./routes/radar.routes');
+const adminRoutes = require('./routes/admin.routes');
 
 const envOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
   .split(',').map(s => s.trim()).filter(Boolean);
@@ -118,7 +119,7 @@ authOnly('/api/ia', iaRoutes);
 authOnly('/:tenantSlug/api/ia', iaRoutes);
 
 authOnly('/api/admin/radar', radarRoutes);
-
+authOnly('/api/admin', adminRoutes);
 app.use('/api/partners', requireAuth.tokenOnly, partnersRoutes);
 
 app.use('/api/tenants', subscriptionFirewall(), tenantsRoutes);

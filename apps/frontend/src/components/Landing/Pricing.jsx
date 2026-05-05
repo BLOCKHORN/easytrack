@@ -30,9 +30,9 @@ export default function Pricing() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch mb-20">
-          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="bg-white p-8 md:p-10 rounded-[2rem] border border-zinc-200 flex flex-col justify-between hover:border-zinc-300 transition-colors shadow-sm">
-            <div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch mb-10">
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="bg-white p-8 md:p-10 rounded-[2rem] border border-zinc-200 flex flex-col hover:border-zinc-300 transition-colors shadow-sm">
+            <div className="flex-grow">
               <h3 className="text-xl font-black text-zinc-900 mb-2 tracking-tight">Freemium</h3>
               <p className="text-zinc-500 font-medium mb-8 text-sm">Integra la herramienta en tu operativa diaria sin riesgo.</p>
               <div className="mb-10 h-16 flex items-end gap-1"><span className="text-5xl font-black text-zinc-950 tracking-tighter">0€</span></div>
@@ -49,10 +49,15 @@ export default function Pricing() {
                 </div>
               </div>
             </div>
+            <div className="mt-8 pt-8 border-t border-zinc-100">
+              <button onClick={() => navigate('/registro')} className="w-full px-6 py-4 bg-zinc-100 text-zinc-900 font-black rounded-xl hover:bg-zinc-200 transition-colors">
+                Crear cuenta gratis
+              </button>
+            </div>
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="bg-zinc-950 p-8 md:p-10 rounded-[2rem] border border-zinc-800 flex flex-col justify-between shadow-2xl">
-            <div>
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="bg-zinc-950 p-8 md:p-10 rounded-[2rem] border border-zinc-800 flex flex-col shadow-2xl">
+            <div className="flex-grow">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-xl font-black text-white tracking-tight">PRO</h3>
                 <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-emerald-400">
@@ -102,16 +107,13 @@ export default function Pricing() {
                 </div>
               </div>
             </div>
+            <div className="mt-8 pt-8 border-t border-zinc-800">
+              <button onClick={() => navigate('/registro')} className="w-full px-6 py-4 bg-white text-zinc-950 font-black rounded-xl hover:bg-zinc-200 transition-colors shadow-lg shadow-white/10">
+                Probar PRO gratis
+              </button>
+            </div>
           </motion.div>
         </div>
-
-        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="max-w-3xl mx-auto text-center bg-zinc-50 border border-zinc-200 rounded-[2rem] p-10 md:p-12 shadow-sm">
-          <h3 className="text-2xl md:text-3xl font-black text-zinc-950 tracking-tight mb-4">Empieza con 14 días sin límites.</h3>
-          <p className="text-zinc-500 font-medium mb-8 text-lg leading-relaxed">Crea tu cuenta gratis y prueba la herramienta a máximo rendimiento durante dos semanas. Pasado ese tiempo, decides si mantienes el volumen con Pro o te quedas en el plan Freemium con 250 paquetes mensuales.</p>
-          <button onClick={() => navigate('/registro')} className="w-full md:w-auto px-10 py-4 bg-zinc-950 text-white font-black rounded-xl hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-950/20 active:scale-95 text-lg">
-            Crear cuenta gratis
-          </button>
-        </motion.div>
       </div>
     </section>
   );

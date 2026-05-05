@@ -37,7 +37,6 @@ function ScanningVisual() {
         transition={{ duration: 0.4 }}
         className="relative z-10 w-28 h-28 bg-white border border-zinc-200 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 overflow-hidden will-change-transform"
       >
-        {/* Representación minimalista de un código de barras */}
         <div className="flex items-end gap-[3px] h-10 w-16 opacity-80">
           <div className="w-[3px] h-full bg-zinc-900 rounded-sm" />
           <div className="w-[2px] h-3/4 bg-zinc-300 rounded-sm" />
@@ -47,7 +46,6 @@ function ScanningVisual() {
           <div className="w-[2px] h-1/2 bg-zinc-300 rounded-sm" />
           <div className="w-[4px] h-full bg-zinc-900 rounded-sm" />
         </div>
-        {/* Línea láser sólida sin sombra neón */}
         <motion.div 
           animate={{ y: [-15, 15, -15] }} 
           transition={{ duration: 2, repeat: Infinity, ease: "linear" }} 
@@ -63,7 +61,6 @@ function StockVisual() {
     <div className="relative w-full h-40 mb-10 flex items-center justify-center bg-zinc-50/50 rounded-[1.5rem] border border-zinc-100 overflow-hidden">
       <div className="relative z-10 grid grid-cols-5 gap-[5px] w-3/4">
         {[...Array(15)].map((_, i) => {
-          // Lógica estricta de contraste: Blanco, Negro o Acento. Sin degradados ni pasteles.
           const status = i % 6 === 0 ? 'accent' : (i % 3 === 0 ? 'dark' : 'light');
           const bgColor = status === 'accent' ? 'bg-brand-400' : (status === 'dark' ? 'bg-zinc-800' : 'bg-white');
           const borderColor = status === 'light' ? 'border-zinc-200' : 'border-transparent';
@@ -91,17 +88,14 @@ export default function Benefits() {
   };
 
   return (
-    <section id="features" className="relative pt-12 md:pt-16 pb-32 bg-slate-50 px-4 sm:px-6 lg:px-8 overflow-hidden">
-      {/* Líneas de acento verticales muy sutiles para look Templifica */}
+    <section id="features" className="relative pt-20 md:pt-32 pb-32 bg-slate-50 px-4 sm:px-6 lg:px-8 overflow-hidden">
       <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.03]">
         <div className="absolute left-1/4 top-0 bottom-0 w-[1px] bg-black" />
         <div className="absolute right-1/4 top-0 bottom-0 w-[1px] bg-black" />
       </div>
 
-      <div className="max-w-7xl mx-auto mt-10 relative z-10">
+      <div className="max-w-7xl mx-auto relative z-10">
         <div className="text-center max-w-4xl mx-auto mb-20 relative z-10">
-
-          {/* Añadido pt-2 y pb-2 con leading-[1.1] para evitar recortes en la fuente gruesa */}
           <motion.h2 
             initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
             className="text-5xl md:text-7xl font-[900] text-zinc-950 mb-6 tracking-[-0.04em] leading-[1.1] py-2"
@@ -123,7 +117,6 @@ export default function Benefits() {
           transition={{ staggerChildren: 0.1 }}
           className="grid grid-cols-1 md:grid-cols-3 gap-8"
         >
-          {/* Tarjetas limpias: sombras sutiles y bordes nítidos */}
           <motion.div variants={item} className="bg-white rounded-[2rem] p-8 lg:p-10 border border-zinc-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col h-full group hover:border-zinc-300 hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)] transition-all">
             <ShelvingVisual />
             <h3 className="text-2xl font-[900] text-zinc-950 mb-3 tracking-tight">Ubicaciones Reales</h3>
@@ -136,7 +129,7 @@ export default function Benefits() {
             <ScanningVisual />
             <h3 className="text-2xl font-[900] text-zinc-950 mb-3 tracking-tight">Búsqueda Ultrasónica</h3>
             <p className="text-zinc-500 leading-relaxed font-medium text-sm md:text-base">
-              Teclea el nombre del cliente o escanea la etiqueta. La pantalla te dice el estante exacto donde mirar en 3s.
+              Teclea el nombre del cliente. La pantalla te dice el estante exacto donde mirar en al instante.
             </p>
           </motion.div>
 

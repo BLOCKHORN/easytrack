@@ -1,5 +1,3 @@
-'use strict';
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, useSpring, useTransform, AnimatePresence } from "framer-motion";
@@ -26,18 +24,22 @@ const CLIENT_INITIALS = [
   { in: "PL", name: "Punto Pack López" }
 ];
 
-const AnimatedNumber = ({ value, initial }) => {
-  const spring = useSpring(initial, { mass: 0.8, stiffness: 40, damping: 15 });
+const AnimatedNumber = ({ value }) => {
+  const spring = useSpring(0, { mass: 0.8, stiffness: 40, damping: 15 });
   const display = useTransform(spring, (current) => new Intl.NumberFormat('es-ES').format(Math.floor(current)));
-  useEffect(() => { spring.set(value); }, [value, spring]);
+  
+  useEffect(() => { 
+      spring.set(value); 
+  }, [value, spring]);
+  
   return <motion.span>{display}</motion.span>;
 };
 
 export default function Hero() {
   const navigate = useNavigate();
   const [index, setIndex] = useState(0);
-  const [rawTenants, setRawTenants] = useState(70);
-  const [rawPkgs, setRawPkgs] = useState(150000);
+  const [rawTenants, setRawTenants] = useState(0);
+  const [rawPkgs, setRawPkgs] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
@@ -47,33 +49,27 @@ export default function Hero() {
     return () => clearInterval(timer);
   }, []);
 
+  const fetchMetrics = async () => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiUrl.replace(/\/$/, '')}/api/metrics/public`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.tenants_count) setRawTenants(data.tenants_count);
+        if (data.packages_delivered_total) setRawPkgs(data.packages_delivered_total);
+      }
+    } catch (e) {}
+  };
+
   useEffect(() => {
-    const fetchMetrics = async () => {
-      try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-        const res = await fetch(`${apiUrl.replace(/\/$/, '')}/api/metrics/public`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.tenants_count) setRawTenants(data.tenants_count);
-          if (data.packages_delivered_total) setRawPkgs(data.packages_delivered_total);
-        }
-      } catch (e) {}
-    };
     fetchMetrics();
     supabase.auth.getSession().then(({ data }) => { if (data?.session) setIsLoggedIn(true); });
   }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Madrid', hour: 'numeric', hour12: false });
-      const hour = parseInt(formatter.format(new Date()), 10);
-      const day = new Date().getDay();
-      if (hour >= 9 && hour < 20 && day !== 0) {
-        const multiplier = day === 6 ? 0.3 : 1;
-        const added = Math.floor((Math.random() * 3 + 1) * multiplier);
-        if (added > 0) setRawPkgs(prev => prev + added);
-      }
-    }, 7000);
+      fetchMetrics();
+    }, 15000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -97,7 +93,6 @@ export default function Hero() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           
           <div className="flex flex-col items-center md:items-start text-center md:text-left">
-            {/* Texto Rotativo */}
             <div className="flex flex-col md:flex-row items-center gap-2 mb-4 text-lg md:text-xl font-medium text-zinc-500 tracking-tight">
               <span>No necesitas un</span>
               <div className="relative h-7 overflow-hidden min-w-[200px] text-zinc-300 inline-block text-center md:text-left font-black">
@@ -140,31 +135,26 @@ export default function Hero() {
               Digitalizamos la lógica física de tu local para que dejes de buscar paquetes y empieces a facturar más.
             </motion.p>
 
-            {/* Botones */}
             <div className="flex flex-col sm:flex-row items-center gap-4 w-full mb-12">
               <motion.button 
                 whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                 transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                onClick={() => navigate("/?audit=true")}
-                className="group w-full sm:w-auto h-12 md:h-14 px-7 flex items-center justify-center gap-3 bg-white text-zinc-950 font-[900] rounded-xl text-sm uppercase tracking-widest shadow-2xl will-change-transform"
+                onClick={() => navigate(isLoggedIn ? "/dashboard" : "/registro")}
+                className="group w-full sm:w-auto h-12 md:h-14 px-8 flex items-center justify-center bg-white text-zinc-950 font-[900] rounded-xl text-sm uppercase tracking-widest shadow-2xl will-change-transform"
               >
-                <div className="w-6 h-6 rounded-full bg-brand-400 text-zinc-950 flex items-center justify-center group-hover:rotate-12 transition-transform">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-                </div>
-                Diagnóstico
+                {isLoggedIn ? "Mi panel" : "Empezar gratis"}
               </motion.button>
 
               <motion.button 
                 whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                 transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                onClick={() => navigate(isLoggedIn ? "/dashboard" : "/registro")}
-                className="group w-full sm:w-auto h-12 md:h-14 px-7 flex items-center justify-center gap-3 bg-zinc-900 text-white font-[900] rounded-xl text-sm uppercase tracking-widest border border-white/10 hover:bg-zinc-800 transition-colors will-change-transform"
+                onClick={() => navigate("/?audit=true")}
+                className="group w-full sm:w-auto h-12 md:h-14 px-8 flex items-center justify-center bg-zinc-900 text-white font-[900] rounded-xl text-sm uppercase tracking-widest border border-white/10 hover:bg-zinc-800 transition-colors will-change-transform"
               >
-                {isLoggedIn ? "Mi panel" : "Empezar"}
+                Auditar beneficios
               </motion.button>
             </div>
 
-            {/* Social Proof Realista (Negocios de España) */}
             <button 
               onClick={scrollToTestimonials} 
               className="flex flex-col sm:flex-row items-center gap-4 group hover:bg-white/[0.03] p-3 -ml-3 rounded-2xl transition-all"
@@ -190,7 +180,6 @@ export default function Hero() {
             </button>
           </div>
 
-          {/* Lado Derecho: Métricas */}
           <div className="relative flex flex-col gap-8 lg:items-end justify-center">
             <div className="lg:flex items-center gap-3 px-3 py-1.5 rounded-full border border-white/5 bg-white/[0.02] backdrop-blur-sm hidden">
                <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse shadow-[0_0_8px_rgba(20,184,166,1)]" />
@@ -200,7 +189,7 @@ export default function Hero() {
             <div className="flex flex-col lg:items-end group">
               <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.4em] mb-1 group-hover:text-brand-400 transition-colors">Puntos Pickup</span>
               <div className="text-6xl md:text-8xl font-[900] text-white tracking-tighter tabular-nums leading-none">
-                +<AnimatedNumber value={rawTenants} initial={70} />
+                +<AnimatedNumber value={rawTenants} />
               </div>
               <div className="w-full lg:w-40 h-[1px] bg-gradient-to-r lg:bg-gradient-to-l from-brand-500/50 to-transparent mt-2" />
             </div>
@@ -208,7 +197,7 @@ export default function Hero() {
             <div className="flex flex-col lg:items-end group">
               <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.4em] mb-1 group-hover:text-brand-400 transition-colors">Paquetes Entregados</span>
               <div className="text-6xl md:text-8xl font-[900] text-white tracking-tighter tabular-nums leading-none">
-                +<AnimatedNumber value={rawPkgs} initial={150000} />
+                +<AnimatedNumber value={rawPkgs} />
               </div>
               <div className="w-full lg:w-56 h-[1px] bg-gradient-to-r lg:bg-gradient-to-l from-brand-500/50 to-transparent mt-2" />
             </div>
@@ -217,23 +206,23 @@ export default function Hero() {
         </div>
       </div>
 
-<div className="absolute bottom-0 left-0 w-full pointer-events-none z-20 leading-none">
-  <svg 
-    viewBox="0 0 1440 100" 
-    preserveAspectRatio="none" 
-    className="w-full h-12 md:h-24 block translate-y-[1px]" // h-12 en móvil, h-24 en desktop
-  >
-    <path 
-      fill="#f8fafc"
-      d="M0 30 
-         Q 360 -10, 720 30 
-         T 1440 30 
-         V 100 
-         H 0 
-         Z" 
-    />
-  </svg>
-</div>
+      <div className="absolute bottom-0 left-0 w-full pointer-events-none z-20 leading-none">
+        <svg 
+          viewBox="0 0 1440 100" 
+          preserveAspectRatio="none" 
+          className="w-full h-12 md:h-28 block translate-y-[1px]" 
+        >
+          <path 
+            fill="#f8fafc"
+            d="M0 30 
+               Q 360 -10, 720 30 
+               T 1440 30 
+               V 100 
+               H 0 
+               Z" 
+          />
+        </svg>
+      </div>
     </section>
   );
 }

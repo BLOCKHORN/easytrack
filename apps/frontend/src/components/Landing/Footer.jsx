@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
-import { FaTwitter, FaLinkedin, FaGithub, FaArrowUp } from 'react-icons/fa';
+import { FaInstagram, FaArrowUp } from 'react-icons/fa';
 
-// --- LOGO ESTÁTICO Y LIMPIO ---
 const StaticLogo = () => (
   <div className="flex items-center text-2xl font-black tracking-tighter text-white select-none">
     easytrack<span className="text-brand-500">.</span>
@@ -33,7 +32,7 @@ export default function Footer() {
 
   return (
     <footer className="relative bg-zinc-950 border-t border-zinc-900 pt-24 pb-12 overflow-hidden font-sans">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[300px] bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.05)_0%,transparent_60%)] pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[300px] bg-[radial-gradient(ellipse_at_top,rgba(20,184,166,0.05)_0%,transparent_60%)] pointer-events-none" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-12 lg:gap-8 mb-20">
@@ -47,7 +46,6 @@ export default function Footer() {
               La infraestructura logística definitiva para transformar el caos de tu punto de recogida en ingresos escalables y controlados.
             </p>
             
-            {/* STATUS & BETA INFO (Sin píldoras, estilo técnico) */}
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <span className="relative flex h-1.5 w-1.5">
@@ -111,22 +109,15 @@ export default function Footer() {
             
             <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg opacity-80">
               <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Desarrollado por</span>
-              <div className="flex items-center gap-1.5 cursor-default">
-                <img src="/blockhorn.png" alt="Blockhorn" className="h-4 w-4 rounded-sm" loading="lazy" />
-                <span className="text-xs font-black text-white tracking-wide">Blockhorn</span>
-              </div>
+              <a className="flex items-center outline-none">
+                <img src="/blockhorn.png" alt="Blockhorn" className="h-6 w-auto" loading="lazy" />
+              </a>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <a href="https://twitter.com" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-800 hover:text-white transition-all">
-              <FaTwitter size={16} />
-            </a>
-            <a href="https://linkedin.com" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-800 hover:text-white transition-all">
-              <FaLinkedin size={16} />
-            </a>
-            <a href="https://github.com" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-800 hover:text-white transition-all">
-              <FaGithub size={16} />
+            <a href="https://www.instagram.com/easytrack.pro/" target="_blank" rel="noreferrer" aria-label="Instagram" className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-800 hover:text-white transition-all">
+              <FaInstagram size={16} />
             </a>
             <button
               type="button"
