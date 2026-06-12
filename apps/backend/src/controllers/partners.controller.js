@@ -215,7 +215,7 @@ exports.getPartnerDashboard = async (req, res) => {
       .maybeSingle();
 
     if (partnerErr || !partner) {
-      return res.status(403).json({ ok: false, isPartner: false, error: 'No eres comercial.' });
+      return res.status(200).json({ ok: true, isPartner: false });
     }
 
     const [tenantsRes, payoutsRes] = await Promise.all([

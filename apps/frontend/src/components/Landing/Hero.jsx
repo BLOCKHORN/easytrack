@@ -51,8 +51,7 @@ export default function Hero() {
 
   const fetchMetrics = async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-      const res = await fetch(`${apiUrl.replace(/\/$/, '')}/api/metrics/public`);
+      const res = await fetch(`/api/metrics/public`);
       if (res.ok) {
         const data = await res.json();
         if (data.tenants_count) setRawTenants(data.tenants_count);

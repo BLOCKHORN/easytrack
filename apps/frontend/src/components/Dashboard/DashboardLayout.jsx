@@ -3,8 +3,11 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../utils/supabaseClient';
 import ReviewBanner from './ReviewBanner';
+import OnboardingTour from '../UI/OnboardingTour';
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
+const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const PROD_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+const API_BASE = isLocal ? '' : PROD_URL;
 
 const TypewriterLogo = ({ size = "text-2xl", cursorHeight = "h-6" }) => {
   const text = "easytrack";
@@ -41,6 +44,7 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPartner, setIsPartner] = useState(false);
+  const [showTour, setShowTour] = useState(false);
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
@@ -48,6 +52,30 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     let isMounted = true;
+    const checkOnboarding = async () => {
+      // Si ya terminó el tour o estamos en una ruta que no es inicio/ajustes, no hacemos nada de momento
+      if (localStorage.getItem('onboarding_done')) return;
+      
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        // Comprobamos si tiene ubicaciones configuradas
+        const res = await fetch(`${API_BASE}/api/ubicaciones`, {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const ucount = Array.isArray(data.ubicaciones) ? data.ubicaciones.length : 0;
+          // Si no hay ubicaciones, activamos el tour guiado
+          if (ucount === 0 && isMounted) {
+            setShowTour(true);
+          }
+        }
+      } catch (err) {}
+    };
+    checkOnboarding();
+    
     const checkPartnerStatus = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -105,12 +133,63 @@ export default function DashboardLayout() {
     { label: 'Configuración', path: 'configuracion', icon: <IconSettings /> },
   ];
 
+  const tourSteps = [
+    {
+      target: '.onboarding-banner',
+      title: '¡Bienvenido a Easytrack!',
+      content: 'Para que el sistema funcione, primero debemos mapear tu local. Es un paso de un solo minuto que te ahorrará horas después.',
+    },
+    {
+      target: '.onboarding-config-btn',
+      title: 'Configuración inicial',
+      content: 'Haz clic aquí para ir al panel de configuración y diseñar tu almacén.',
+      triggerNextOnClick: true
+    },
+    {
+      target: '.onboarding-identity',
+      title: 'Tu Negocio',
+      content: 'Verifica que el nombre de tu establecimiento sea correcto. Aparecerá en las notificaciones a tus clientes.',
+    },
+    {
+      target: '.onboarding-carriers',
+      title: 'Agencias de Transporte',
+      content: 'Selecciona las empresas de paquetería con las que trabajas para que la IA las detecte automáticamente.',
+    },
+    {
+      target: '.onboarding-ubicaciones',
+      title: 'Diseño de Almacén',
+      content: '¡La clave de todo! Puedes crear cajas una a una haciendo clic en los huecos (+) y arrastrarlas para organizarlas.',
+    },
+    {
+      target: '.onboarding-save-btn',
+      title: 'Guardar y Listos',
+      content: 'Cuando termines tu diseño, guarda los cambios. ¡Ya podrás empezar a registrar paquetes!',      
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-[#fafafa] flex flex-col md:flex-row font-sans">
+      <OnboardingTour 
+        active={showTour} 
+        steps={tourSteps} 
+        onComplete={() => {
+          setShowTour(false);
+          localStorage.setItem('onboarding_done', 'true');
+        }} 
+      />
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes subtleGlow {
           0%, 100% { box-shadow: 0 0 15px rgba(20, 184, 166, 0.4), inset 0 0 0px rgba(255,255,255,0.2); }
           50% { box-shadow: 0 0 25px rgba(20, 184, 166, 0.7), inset 0 0 4px rgba(255,255,255,0.5); }
+        }
+        @keyframes onboardingPulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.7); }
+          50% { transform: scale(1.02); box-shadow: 0 0 20px 10px rgba(20, 184, 166, 0); }
+        }
+        .onboarding-pulse {
+          animation: onboardingPulse 2s infinite;
+          position: relative;
+          z-index: 10000 !important;
         }
         .pro-fab { animation: subtleGlow 3s ease-in-out infinite; }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }

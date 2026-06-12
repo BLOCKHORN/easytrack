@@ -59,6 +59,7 @@ function originChecker(origin, cb) {
     const ok =
       ALLOWED_ORIGINS.includes(origin) ||
       host === 'localhost' || host === '127.0.0.1' ||
+      host.endsWith('.ngrok-free.dev') ||
       host.endsWith('.devtunnels.ms') ||
       host.endsWith('.vercel.app') ||
       host.endsWith('.onrender.com');
@@ -170,8 +171,8 @@ cron.schedule('0 4 * * *', async () => {
   }
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, '0.0.0.0', () => {
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
   const required = [
     'SUPABASE_URL',
     'SUPABASE_SERVICE_ROLE_KEY',

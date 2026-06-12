@@ -21,7 +21,9 @@ const getAuthHeaders = async () => {
   };
 };
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
+const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const PROD_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+const API_BASE = isLocal ? '' : PROD_URL;
 
 export default function AdminPartners() {
   const [partners, setPartners] = useState([]);

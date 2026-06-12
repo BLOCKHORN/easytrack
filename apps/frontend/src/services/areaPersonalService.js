@@ -1,6 +1,8 @@
 'use strict';
 
-const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || 'http://localhost:3001';
+const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const PROD_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+const API_URL = isLocal ? '' : PROD_URL;
 
 export function buildAreaApiBase(pathname) {
   const segs = pathname.split('/').filter(Boolean);

@@ -2,30 +2,32 @@ const IconStore = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="no
 
 export default function IdentityCard({ nombre, setNombre }) {
   return (
-    <div className="bg-white rounded-3xl border border-zinc-200 shadow-sm overflow-hidden">
-      <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-4">
-        <div className="w-10 h-10 bg-white border border-zinc-200 rounded-xl flex items-center justify-center text-zinc-900 shadow-sm">
-          <IconStore />
+    <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden">
+      <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div className="flex items-center gap-5">
+          <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
+            <IconStore />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-zinc-950 tracking-tight">Identidad del Negocio</h3>
+            <p className="text-zinc-500 font-medium text-sm mt-1 max-w-md">Nombre visible en el dashboard e informes para tus clientes.</p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-lg font-bold text-zinc-950">Identidad del Negocio</h3>
-          <p className="text-zinc-500 text-sm">Nombre visible en el dashboard e informes.</p>
-        </div>
-      </div>
+      </header>
       
-      <div className="p-8">
-        <div className="max-w-md space-y-2">
-          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Nombre de la Empresa</label>
+      <div className="p-6 md:p-8">
+        <div className="max-w-md space-y-3">
+          <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block">Nombre de la Empresa</label>
           <input 
             type="text" 
             value={nombre} 
             onChange={(e) => setNombre(e.target.value)}
             placeholder="Ej: Papeleria El Buen Papel S.A."
-            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-bold text-zinc-900 transition-all"
+            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:bg-white focus:border-[#14B07E] outline-none font-bold text-zinc-900 transition-all shadow-sm"
           />
-          <p className="text-xs text-zinc-400 mt-2">Este nombre se usará para todas las comunicaciones automáticas con clientes.</p>
+          <p className="text-xs text-zinc-400 font-medium">Este nombre se usará para todas las comunicaciones automáticas con clientes.</p>
         </div>
       </div>
-    </div>
+    </section>
   );
 }

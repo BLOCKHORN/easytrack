@@ -116,7 +116,9 @@ export default function AdminRadar() {
       setStatusMsg(`ESCANEANDO CÓDIGO POSTAL ${cp}...`);
 
       const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
+      const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+      const PROD_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+      const API_URL = isLocal ? "" : PROD_URL;
 
       const res = await fetch(`${API_URL}/api/admin/radar/scan`, {
         method: 'POST',

@@ -1,7 +1,9 @@
 // src/services/ubicacionesService.js
 import { debugLog, isDebug } from '../utils/logger';
 
-const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const PROD_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+const API = isLocal ? '' : PROD_URL;
 
 function ensureOk(res, text) {
   if (res.ok) return;
@@ -53,13 +55,17 @@ function normalizePayloadAndToken(a, b, c, d) {
 }
 
 export async function cargarUbicaciones(token, tenantId) {
-  const url = new URL(`${API}/api/ubicaciones`);
+  const baseUrl = API || window.location.origin;
+  const url = new URL(`${API}/api/ubicaciones`, baseUrl);
   if (tenantId) url.searchParams.set('tenant_id', tenantId);
   if (isDebug) url.searchParams.set('debug', '1');
 
-  debugLog('[ubicacionesService.cargarUbicaciones] GET', url.toString());
+  // Use the pathname + search for relative URLs so Vite proxy works correctly
+  const finalUrl = API ? url.toString() : `${url.pathname}${url.search}`;
+  
+  debugLog('[ubicacionesService.cargarUbicaciones] GET', finalUrl);
 
-  const r = await fetch(url.toString(), {
+  const r = await fetch(finalUrl, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 

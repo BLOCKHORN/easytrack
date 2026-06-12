@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
 const TenantContext = createContext(null);
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
 
 export function TenantProvider({ children }) {
   const [tenant, setTenant] = useState(null);
@@ -16,6 +15,10 @@ export function TenantProvider({ children }) {
     }
 
     try {
+      const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+      const PROD_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+      const API_BASE = isLocal ? "" : PROD_URL;
+
       const r = await fetch(`${API_BASE}/api/tenants/me`, {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });

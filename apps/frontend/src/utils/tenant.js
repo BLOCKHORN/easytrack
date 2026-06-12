@@ -2,7 +2,9 @@
 
 import { supabase } from './supabaseClient';
 
-const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const PROD_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const API = isLocal ? '' : PROD_URL;
 
 export function getTenantSlugFromPath() {
   try {

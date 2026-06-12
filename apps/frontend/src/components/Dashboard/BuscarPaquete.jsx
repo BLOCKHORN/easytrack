@@ -8,7 +8,9 @@ import {
 } from "../../services/paquetesService";
 import { getTenantIdOrThrow } from "../../utils/tenant";
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
+const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const PROD_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+const API_BASE = isLocal ? '' : PROD_URL;
 
 let __SEARCH_CACHE = {
   loaded: false,
@@ -903,6 +905,53 @@ export default function BuscarPaquete() {
                 <button onClick={guardarCambios} disabled={loadingEdit} className="w-full sm:w-auto px-6 py-3.5 md:py-4 rounded-xl font-black text-base md:text-lg bg-[#14B07E] hover:bg-[#129A6E] disabled:bg-zinc-200 disabled:text-zinc-400 text-white transition-colors active:scale-95">
                   {loadingEdit ? 'Guardando...' : 'Guardar'}
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {confirmState.open && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" onClick={() => setConfirmState({ open: false, payload: null })} />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col overflow-hidden border border-zinc-200">
+              <div className="p-8 text-center">
+                <div className="w-20 h-20 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-100 shadow-inner">
+                  <IconTrash />
+                </div>
+                <h3 className="text-2xl font-black text-zinc-950 mb-3 tracking-tight">¿Eliminar paquete?</h3>
+                <p className="text-zinc-500 font-bold text-base leading-relaxed">
+                  Esta acción no se puede deshacer. El paquete de <br />
+                  <span className="text-zinc-950 font-black">{confirmState.payload?.nombre_cliente}</span> desaparecerá del sistema para siempre.
+                </p>
+              </div>
+              <div className="p-6 bg-zinc-50 border-t border-zinc-100 flex gap-3">
+                <button onClick={() => setConfirmState({ open: false, payload: null })} className="flex-1 px-6 py-4 rounded-xl font-bold text-zinc-600 bg-white border border-zinc-200 hover:bg-zinc-50 transition-colors">Cancelar</button>
+                <button onClick={confirmarEliminar} className="flex-1 px-6 py-4 rounded-xl font-black text-white bg-red-600 hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20 active:scale-95">Eliminar</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {confirmBulk && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" onClick={() => setConfirmBulk(false)} />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col overflow-hidden border border-zinc-200">
+              <div className="p-8 text-center">
+                <div className="w-20 h-20 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-100 shadow-inner">
+                  <IconTrash />
+                </div>
+                <h3 className="text-2xl font-black text-zinc-950 mb-3 tracking-tight">¿Eliminar {selectedIds.size} paquetes?</h3>
+                <p className="text-zinc-500 font-bold text-base leading-relaxed">
+                  Estás a punto de borrar un lote de paquetes. Esta acción es irreversible y afectará a todos los elementos seleccionados.
+                </p>
+              </div>
+              <div className="p-6 bg-zinc-50 border-t border-zinc-100 flex gap-3">
+                <button onClick={() => setConfirmBulk(false)} className="flex-1 px-6 py-4 rounded-xl font-bold text-zinc-600 bg-white border border-zinc-200 hover:bg-zinc-50 transition-colors">Cancelar</button>
+                <button onClick={eliminarSeleccionados} className="flex-1 px-6 py-4 rounded-xl font-black text-white bg-red-600 hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20 active:scale-95">Eliminar lote</button>
               </div>
             </motion.div>
           </div>

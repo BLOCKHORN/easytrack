@@ -1,6 +1,4 @@
-'use strict';
-
-import { useMemo } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 
 const IconTruck = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>;
 const IconTrash = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>;
@@ -9,6 +7,157 @@ const IconPlus = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="non
 function getInitials(name = "") {
   const parts = String(name).trim().split(/\s+/).slice(0, 2);
   return parts.map((p) => p[0]?.toUpperCase() || "").join("");
+}
+
+const FALLBACK_COMPANIAS = [
+  { nombre: 'Amazon Logistics', domain: 'amazon.com' },
+  { nombre: 'ASM', domain: 'gls-spain.es' },
+  { nombre: 'Boyacá', domain: 'boyaca.es' },
+  { nombre: 'Celeritas', domain: 'celeritas.es' },
+  { nombre: 'Chronopost', domain: 'chronopost.fr' },
+  { nombre: 'Correos', domain: 'correos.es' },
+  { nombre: 'Correos Express', domain: 'correosexpress.com' },
+  { nombre: 'CTT Express', domain: 'cttexpress.com' },
+  { nombre: 'Deliveroo', domain: 'deliveroo.es' },
+  { nombre: 'Deliveroo Logistics', domain: 'deliveroologistics.es' },
+  { nombre: 'DHL', domain: 'dhl.com' },
+  { nombre: 'DPD', domain: 'dpd.com' },
+  { nombre: 'EcoScooting', domain: 'ecoscooting.com' },
+  { nombre: 'Envialia', domain: 'envialia.com' },
+  { nombre: 'FedEx', domain: 'fedex.com' },
+  { nombre: 'Genei', domain: 'genei.es' },
+  { nombre: 'GLS', domain: 'gls-spain.es' },
+  { nombre: 'Halcourier', domain: 'gls-spain.es' },
+  { nombre: 'InPost', domain: 'inpost.es' },
+  { nombre: 'Mondial Relay', domain: 'mondialrelay.es' },
+  { nombre: 'MRW', domain: 'mrw.es' },
+  { nombre: 'Nacex', domain: 'nacex.es' },
+  { nombre: 'Paack', domain: 'paack.co' },
+  { nombre: 'Packlink', domain: 'packlink.es' },
+  { nombre: 'Paq24', domain: 'correosexpress.com' },
+  { nombre: 'Paq25', domain: 'paq25.com' },
+  { nombre: 'Punto Pack', domain: 'puntopack.es' },
+  { nombre: 'Redyser', domain: 'redyser.com' },
+  { nombre: 'Relais Colis', domain: 'relaiscolis.com' },
+  { nombre: 'Sending', domain: 'sending.es' },
+  { nombre: 'Servientrega', domain: 'servientrega.com' },
+  { nombre: 'Servienvia', domain: 'servienvia.com' },
+  { nombre: 'SEUR', domain: 'seur.com' },
+  { nombre: 'Shipius', domain: 'shipius.com' },
+  { nombre: 'Shipus', domain: 'shipus.com' },
+  { nombre: 'Stuart', domain: 'stuart.com' },
+  { nombre: 'Tipsa', domain: 'tipsa-entregas.com' },
+  { nombre: 'TNT', domain: 'tnt.com' },
+  { nombre: 'Tourline Express', domain: 'cttexpress.com' },
+  { nombre: 'Uber Direct', domain: 'uber.com' },
+  { nombre: 'UPS', domain: 'ups.com' },
+  { nombre: 'Vinted Go', domain: 'vinted.com' },
+  { nombre: 'Zeleris', domain: 'zeleris.com' }
+];
+
+function getCarrierLogo(name) {
+  if (!name) return null;
+  const normalizedName = String(name).trim().toLowerCase();
+  const found = FALLBACK_COMPANIAS.find(o => String(o.nombre).trim().toLowerCase() === normalizedName);
+  if (!found || !found.domain) return null;
+  return `/carriers/${found.domain}.png`;
+}
+
+function ImageFallback({ src, fallbackText, containerClassName, imgClassName, fallbackClassName }) {
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    setError(false);
+  }, [src]);
+
+  if (error || !src) {
+    return (
+      <div className={`${containerClassName} ${fallbackClassName} flex items-center justify-center`}>
+        {fallbackText}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${containerClassName} flex items-center justify-center`}>
+      <img
+        key={src}
+        src={src}
+        alt=""
+        className={imgClassName}
+        onError={() => setError(true)}
+      />
+    </div>
+  );
+}
+
+function CustomCarrierSelect({ value, options, onChange, usados }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedLogoUrl = getCarrierLogo(value);
+
+  return (
+    <div className="relative w-full" ref={containerRef}>
+      <div 
+        className="w-full px-4 h-11 bg-zinc-50 border border-zinc-200 rounded-lg flex items-center justify-between cursor-pointer focus:border-[#14B07E] hover:bg-zinc-100 transition-colors"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <div className="flex items-center gap-3">
+          <ImageFallback 
+            src={selectedLogoUrl}
+            fallbackText={getInitials(value)}
+            containerClassName="w-5 h-5 shrink-0"
+            imgClassName="max-w-full max-h-full object-contain"
+            fallbackClassName="bg-zinc-200 rounded-full text-[8px] font-bold text-zinc-500"
+          />
+          <span className="font-bold text-zinc-900">{value || "Seleccionar…"}</span>
+        </div>
+        <span className="text-zinc-400 text-[10px]">▼</span>
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-[100] mt-2 w-full max-h-60 overflow-y-auto bg-white border border-zinc-200 rounded-xl shadow-2xl py-2">
+          {options.map((emp) => {
+             const disabled = usados.has(emp.nombre) && emp.nombre !== value;
+             const logoUrl = getCarrierLogo(emp.nombre);
+             return (
+                <div 
+                  key={emp.id ?? emp.nombre}
+                  className={`px-4 py-2.5 flex items-center gap-3 transition-colors ${disabled ? 'opacity-50 cursor-not-allowed bg-zinc-50' : 'cursor-pointer hover:bg-zinc-50'}`}
+                  onClick={() => {
+                     if (!disabled) {
+                       onChange(emp.nombre);
+                       setIsOpen(false);
+                     }
+                  }}
+                >
+                  <ImageFallback 
+                    src={logoUrl}
+                    fallbackText={getInitials(emp.nombre)}
+                    containerClassName="w-6 h-6 shrink-0"
+                    imgClassName="max-w-full max-h-full object-contain"
+                    fallbackClassName="bg-zinc-100 rounded-full text-[10px] font-bold text-zinc-400"
+                  />
+                  <span className="font-bold text-sm text-zinc-900">{emp.nombre}</span>
+                  {disabled && <span className="text-xs font-bold text-zinc-400 ml-auto">(En uso)</span>}
+                </div>
+             )
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Switch({ checked, onChange }) {
@@ -23,20 +172,11 @@ function Switch({ checked, onChange }) {
   );
 }
 
-const FALLBACK_COMPANIAS = [
-  { nombre: 'Amazon Logistics' }, { nombre: 'Boyacá' }, { nombre: 'Celeritas' }, 
-  { nombre: 'Correos' }, { nombre: 'Correos Express' }, { nombre: 'DHL' }, 
-  { nombre: 'DPD' }, { nombre: 'EcoScooting' }, { nombre: 'GLS' }, { nombre: 'InPost' }, 
-  { nombre: 'MRW' }, { nombre: 'Nacex' }, { nombre: 'Paack' }, { nombre: 'SEUR' }, 
-  { nombre: 'UPS' }, { nombre: 'Vinted Go' }, { nombre: 'Zeleris' }
-];
-
 export default function CarriersCard({
   empresas = [],
   empresasDisponibles = FALLBACK_COMPANIAS,
   setEmpresas
 }) {
-  
   const doAdd = () => {
     const paleta = ["#14b8a6", "#6366f1", "#f59e0b", "#ec4899", "#8b5cf6", "#0ea5e9", "#10b981", "#f43f5e"];
     const nuevoColor = paleta[empresas.length % paleta.length];
@@ -56,8 +196,8 @@ export default function CarriersCard({
   const usados = useMemo(() => new Set(empresas.map((e) => e?.nombre).filter(Boolean)), [empresas]);
 
   return (
-    <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden" aria-labelledby="carriers-title">
-      <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+    <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm" aria-labelledby="carriers-title">
+      <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6 rounded-t-[2rem]">
         <div className="flex items-center gap-5">
           <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
             <IconTruck />
@@ -75,7 +215,7 @@ export default function CarriersCard({
         )}
       </header>
 
-      <div className="p-6 md:p-8 bg-zinc-50/30">
+      <div className="p-6 md:p-8 bg-zinc-50/30 rounded-b-[2rem]">
         {empresas.length === 0 && (
           <div className="text-center py-12 px-6 bg-white border border-zinc-200 border-dashed rounded-2xl">
             <div className="w-16 h-16 bg-zinc-50 border border-zinc-100 text-zinc-400 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -92,32 +232,30 @@ export default function CarriersCard({
           {empresas.map((e, i) => {
             const color = e?.color || "#14B07E";
             const initials = getInitials(e?.nombre) || "—";
+            const logoUrl = getCarrierLogo(e?.nombre);
 
             return (
               <article key={i} className="flex flex-col lg:flex-row lg:items-center gap-4 p-5 bg-white border border-zinc-200 rounded-xl shadow-sm hover:border-zinc-300 transition-colors">
                 
                 <div className="flex w-full lg:w-auto items-center gap-4 flex-1">
-                  <div className="hidden sm:flex w-12 h-12 rounded-xl border border-zinc-200 bg-zinc-50 items-center justify-center font-black text-zinc-900 shrink-0 relative">
-                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: color }} />
-                    {initials}
+                  <div className="hidden sm:flex w-12 h-12 rounded-xl border border-zinc-200 bg-zinc-50 items-center justify-center font-black text-zinc-900 shrink-0 relative overflow-hidden">
+                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full border-2 border-white shadow-sm z-10" style={{ backgroundColor: color }} />
+                    <ImageFallback 
+                      src={logoUrl}
+                      fallbackText={initials}
+                      containerClassName="w-8 h-8"
+                      imgClassName="max-w-full max-h-full object-contain"
+                      fallbackClassName=""
+                    />
                   </div>
                   <div className="flex-1">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1.5 block">Compañía Logística</label>
-                    <select
-                      value={e.nombre || ""}
-                      onChange={(ev) => doUpdate(i, "nombre", ev.target.value)}
-                      className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:bg-white focus:border-[#14B07E] outline-none font-bold text-zinc-900 cursor-pointer transition-colors"
-                    >
-                      <option value="" disabled>Seleccionar…</option>
-                      {empresasDisponibles.map((emp) => {
-                        const disabled = usados.has(emp.nombre) && emp.nombre !== e.nombre;
-                        return (
-                          <option key={emp.id ?? emp.nombre} value={emp.nombre} disabled={disabled}>
-                            {emp.nombre} {disabled ? " (ya en uso)" : ""}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <CustomCarrierSelect
+                      value={e.nombre}
+                      options={empresasDisponibles}
+                      usados={usados}
+                      onChange={(val) => doUpdate(i, "nombre", val)}
+                    />
                   </div>
                 </div>
 

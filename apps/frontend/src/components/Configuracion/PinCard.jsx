@@ -59,34 +59,26 @@ export default function PinCard({ tenantId, onToast }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-      
-      <div className="border-b border-zinc-100 px-6 py-5 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-50/50">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-white border border-zinc-200 rounded-xl flex items-center justify-center text-zinc-700 shadow-sm shrink-0">
+    <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden">
+      <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div className="flex items-center gap-5">
+          <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
             <IconLock />
           </div>
           <div>
-            <h2 className="text-base font-black text-zinc-900 tracking-tight">PIN Área Financiera</h2>
-            <div className="flex items-center gap-2 mt-0.5">
-              <p className="text-[13px] font-bold text-zinc-500">Protege la entrada a tu analítica.</p>
-              {!loading && updatedAt && enabled && (
-                <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest hidden sm:block before:content-['•'] before:mx-2">
-                  Act. {new Date(updatedAt).toLocaleDateString()}
-                </span>
-              )}
-            </div>
+            <h3 className="text-xl font-black text-zinc-950 tracking-tight">PIN Área Financiera</h3>
+            <p className="text-zinc-500 font-medium text-sm mt-1 max-w-md">Protege la entrada a tu analítica de ingresos y comisiones.</p>
           </div>
         </div>
 
         {!loading && (
           <div className="shrink-0 flex items-center">
-            <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${enabled ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-zinc-100 text-zinc-400 border-zinc-200'}`}>
+            <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm ${enabled ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-zinc-100 text-zinc-400 border-zinc-200'}`}>
               {enabled ? 'Activo' : 'Desactivado'}
             </span>
           </div>
         )}
-      </div>
+      </header>
 
       <div className="p-6 md:p-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 max-w-4xl">
@@ -144,6 +136,6 @@ export default function PinCard({ tenantId, onToast }) {
         </div>
       </div>
 
-    </div>
+    </section>
   );
 }

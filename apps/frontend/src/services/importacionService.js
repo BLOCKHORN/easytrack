@@ -1,5 +1,7 @@
 // src/services/importacionService.js
-const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const PROD_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+const API = isLocal ? '' : PROD_URL;
 
 export async function importPreview({ token, tenantId, content, source = 'txt' }) {
   const r = await fetch(`${API}/api/import/preview`, {

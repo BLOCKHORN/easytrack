@@ -38,7 +38,9 @@ export default function AreaPersonal() {
   const navigate = useNavigate();
   const apiBase = useMemo(() => buildAreaApiBase(location.pathname), [location.pathname]);
   
-  const API_ROOT = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
+  const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+  const PROD_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+  const API_ROOT = isLocal ? '' : PROD_URL;
   const configApiBase = tenantSlug ? `${API_ROOT}/${tenantSlug}/api/dashboard` : `${API_ROOT}/api/dashboard`;
 
   const [entitlements, setEntitlements] = useState(null);

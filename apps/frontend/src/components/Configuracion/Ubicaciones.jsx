@@ -18,8 +18,8 @@ export default function Ubicaciones({
   usageByCodigo = {},
   onToast
 }) {
-  const [cols, setCols] = useState(5);
-  const [rows, setRows] = useState(5);
+  const [cols, setCols] = useState(initialMeta?.cols || 2);
+  const [rows, setRows] = useState(initialMeta?.rows || 2);
   const [slots, setSlots] = useState([]);
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [editingLabel, setEditingLabel] = useState("");
@@ -37,13 +37,15 @@ export default function Ubicaciones({
     if (initialized.current) return;
     initialized.current = true;
 
-    const c = clamp(parseInt(initialMeta?.cols, 10) || 5, 1, 12);
+    const c = clamp(parseInt(initialMeta?.cols, 10) || 2, 1, 12);
     let maxIdx = -1;
     initial.forEach(u => { if (typeof u.orden === 'number' && u.orden > maxIdx) maxIdx = u.orden; });
 
-    const calculatedRows = Math.max(5, Math.ceil((maxIdx + 1) / c));
+    // Use initialMeta.rows if provided, otherwise calculate based on boxes. Default to 2.
+    const calculatedRows = Math.max(2, Math.ceil((maxIdx + 1) / c));
+    const providedRows = parseInt(initialMeta?.rows, 10);
+    const finalRows = Number.isFinite(providedRows) ? Math.max(calculatedRows, providedRows) : calculatedRows;
     const finalCols = c;
-    const finalRows = (initial.length === 0) ? 5 : calculatedRows;
 
     const arr = Array(finalCols * finalRows).fill(null);
     initial.forEach(u => {
@@ -56,14 +58,24 @@ export default function Ubicaciones({
   }, [initial, initialMeta]);
 
   const commitChange = (nextSlots, nextCols, nextRows) => {
-    setSlots(nextSlots);
     const c = nextCols !== undefined ? nextCols : cols;
     const r = nextRows !== undefined ? nextRows : rows;
+    
+    let finalSlots = [...nextSlots];
+    const targetLength = c * r;
+    
+    if (finalSlots.length < targetLength) {
+      finalSlots = [...finalSlots, ...Array(targetLength - finalSlots.length).fill(null)];
+    } else if (finalSlots.length > targetLength) {
+      finalSlots = finalSlots.slice(0, targetLength);
+    }
+
+    setSlots(finalSlots);
     if (nextCols !== undefined) setCols(c);
     if (nextRows !== undefined) setRows(r);
     
     if (onChange) {
-      const ubicaciones = nextSlots.map((s, i) => s ? { ...s, orden: i } : null).filter(Boolean);
+      const ubicaciones = finalSlots.map((s, i) => s ? { ...s, orden: i } : null).filter(Boolean);
       onChange({
         ubicaciones,
         meta: { cols: c, rows: r },
@@ -178,18 +190,18 @@ export default function Ubicaciones({
   const selectedSlotHasPkgs = selectedIdx !== null && slots[selectedIdx] && (usageByCodigo[slots[selectedIdx].label] || 0) > 0;
 
   return (
-    <div className="bg-white rounded-3xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
-      <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-zinc-900 text-white rounded-xl flex items-center justify-center shrink-0 shadow-sm">
+    <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
+      <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div className="flex items-center gap-5">
+          <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
             <IconLocation />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-zinc-950 tracking-tight">Diseño de Almacén</h3>
-            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Crea con un clic · Mueve arrastrando</p>
+            <h3 className="text-xl font-black text-zinc-950 tracking-tight">Diseño de Almacén</h3>
+            <p className="text-zinc-500 font-medium text-sm mt-1 max-w-md">Mapea la estructura física de tu local para organizar los paquetes.</p>
           </div>
         </div>
-      </div>
+      </header>
 
       <div className="p-6 md:p-8 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-zinc-50 border border-zinc-200 p-6 rounded-2xl">
@@ -267,55 +279,90 @@ export default function Ubicaciones({
           </div>
         </div>
 
-        <div className="bg-zinc-100 rounded-3xl p-4 sm:p-6">
-          <div 
-            ref={gridRef}
-            className="grid gap-2 sm:gap-3 mx-auto relative" 
-            style={{ 
-              gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-              maxWidth: `${cols * 90}px`
-            }}
-          >
-            {slots.map((s, i) => {
-              const isSelected = selectedIdx === i;
-              const hasPkgs = s && (usageByCodigo[s.label] || 0) > 0;
+        <div className="bg-zinc-100 rounded-3xl p-4 sm:p-6 flex flex-col items-center">
+          <div className="flex w-full justify-center overflow-x-auto pb-4">
+            <div className="flex gap-4 items-stretch min-w-max">
+              <div 
+                ref={gridRef}
+                className="grid gap-2 sm:gap-3 relative" 
+                style={{ 
+                  gridTemplateColumns: `repeat(${cols}, minmax(40px, 90px))`,
+                  width: `${cols * 90}px`,
+                  maxWidth: '100%'
+                }}
+              >
+                {slots.map((s, i) => {
+                  const isSelected = selectedIdx === i;
+                  const hasPkgs = s && (usageByCodigo[s.label] || 0) > 0;
+                  
+                  // Check if this is the first empty slot and user only has 1 active slot
+                  const isHintEmptySlot = !s && slots.filter(Boolean).length === 1 && i === slots.findIndex(slot => !slot);
 
-              return (
-                <div key={i} className="relative aspect-square">
-                  {s ? (
-                    <motion.button
-                      key={`box-${s.codigo}`}
-                      layoutId={`box-${s.codigo}`}
-                      layout
-                      drag
-                      dragSnapToOrigin
-                      dragElastic={0.1}
-                      whileDrag={{ scale: 1.1, zIndex: 50 }}
-                      onDragEnd={(e, info) => handleDragEnd(e, info, i)}
-                      onClick={() => handleSlotClick(i)}
-                      className={`absolute inset-0 rounded-xl flex flex-col items-center justify-center font-bold transition-colors border-2 select-none cursor-grab active:cursor-grabbing shadow-sm ${
-                        isSelected ? 'bg-zinc-900 border-zinc-900 text-white z-40 shadow-lg' : 'bg-white border-zinc-200 text-zinc-900 hover:border-zinc-400'
-                      }`}
-                      style={{ zIndex: isSelected ? 40 : 10 }}
-                    >
-                      <span className="text-xs sm:text-lg font-black">{s.label}</span>
-                      {hasPkgs && !isSelected && (
-                        <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#14B07E] rounded-full border border-white" />
+                  return (
+                    <div key={i} className="relative aspect-square">
+                      {s ? (
+                        <motion.button
+                          key={`box-${s.codigo}`}
+                          layoutId={`box-${s.codigo}`}
+                          layout
+                          drag
+                          dragSnapToOrigin
+                          dragElastic={0.1}
+                          whileDrag={{ scale: 1.1, zIndex: 50 }}
+                          onDragEnd={(e, info) => handleDragEnd(e, info, i)}
+                          onClick={() => handleSlotClick(i)}
+                          className={`absolute inset-0 rounded-xl flex flex-col items-center justify-center font-bold transition-colors border-2 select-none cursor-grab active:cursor-grabbing shadow-sm ${
+                            isSelected ? 'bg-zinc-900 border-zinc-900 text-white z-40 shadow-lg' : 'bg-white border-zinc-200 text-zinc-900 hover:border-zinc-400'
+                          }`}
+                          style={{ zIndex: isSelected ? 40 : 10 }}
+                        >
+                          <span className="text-xs sm:text-lg font-black">{s.label}</span>
+                          {hasPkgs && !isSelected && (
+                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#14B07E] rounded-full border border-white" />
+                          )}
+                        </motion.button>
+                      ) : (
+                        <button
+                          onClick={() => handleSlotClick(i)}
+                          className={`absolute inset-0 rounded-xl flex flex-col items-center justify-center font-bold transition-all border-2 select-none bg-transparent border-dashed ${
+                            isHintEmptySlot 
+                              ? 'border-brand-300 text-brand-400 hover:bg-brand-50 animate-pulse ring-4 ring-brand-100' 
+                              : 'border-zinc-300 text-zinc-300 hover:border-zinc-400 hover:bg-zinc-50'
+                          }`}
+                          style={{ zIndex: 5 }}
+                        >
+                          <span className="text-xs sm:text-lg font-black">+</span>
+                        </button>
                       )}
-                    </motion.button>
-                  ) : (
-                    <button
-                      onClick={() => handleSlotClick(i)}
-                      className="absolute inset-0 rounded-xl flex flex-col items-center justify-center font-bold transition-all border-2 select-none bg-transparent border-dashed border-zinc-300 text-zinc-300 hover:border-zinc-400 hover:bg-zinc-50"
-                      style={{ zIndex: 5 }}
-                    >
-                      <span className="text-xs sm:text-lg font-black">+</span>
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <button 
+                onClick={() => {
+                  commitChange(slots, cols + 1, rows);
+                }}
+                className="w-12 bg-white border-2 border-dashed border-zinc-300 rounded-xl text-zinc-400 hover:border-zinc-400 hover:text-zinc-500 transition-all flex flex-col items-center justify-center gap-2"
+                title="Añadir Columna"
+              >
+                <IconPlus />
+              </button>
+            </div>
           </div>
+
+          <button 
+            onClick={() => {
+              commitChange(slots, cols, rows + 1);
+            }}
+            className="mt-2 w-full max-w-[200px] py-3 bg-white border-2 border-dashed border-zinc-300 rounded-xl text-zinc-400 font-black text-[10px] uppercase tracking-widest hover:border-zinc-400 hover:text-zinc-500 transition-all flex items-center justify-center gap-2 shadow-sm"
+          >
+            <IconPlus /> Añadir Fila
+          </button>
+
+          <p className="mt-6 text-center text-xs font-medium text-zinc-500 max-w-md">
+            Empieza con una caja y expande tu almacén añadiendo filas o columnas según lo necesites. Haz clic en un hueco vacío (<span className="font-bold">+</span>) para activarlo.
+          </p>
         </div>
 
         <div className="flex justify-between items-center px-2 pt-4 border-t border-zinc-100 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
@@ -365,6 +412,6 @@ export default function Ubicaciones({
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </section>
   );
 }

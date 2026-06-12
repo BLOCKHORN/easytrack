@@ -213,9 +213,9 @@ export default function VerEstantes() {
     }
   };
 
-  const cols = clamp(parseInt(metaUbi?.cols ?? 5, 10) || 5, 1, 12);
+  const cols = clamp(parseInt(metaUbi?.cols ?? 2, 10) || 2, 1, 12);
   const maxOrden = ubicaciones.reduce((max, u) => Math.max(max, u.orden ?? 0), -1);
-  const totalSlots = cols * Math.max(1, Math.ceil((maxOrden + 1) / cols));
+  const totalSlots = cols * Math.max(2, Math.ceil((maxOrden + 1) / cols));
 
   const getShelfStyle = (count, isSelected, isHovered) => {
     // Si estás arrastrando y pasas por encima, forzamos este estilo visual
@@ -278,56 +278,68 @@ export default function VerEstantes() {
         </div>
       </div>
 
-      <div 
-        className="grid gap-1.5 sm:gap-3 pb-4" 
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-      >
-        {Array.from({ length: totalSlots }).map((_, i) => {
-          const u = ubicaciones.find(x => x.orden === i);
-          
-          if (!u) {
-            return <div key={`empty-${i}`} className="opacity-0 pointer-events-none aspect-square sm:aspect-auto sm:min-h-[4rem]" />;
-          }
+      <div className="flex w-full justify-center overflow-x-auto pb-4">
+        <div className="flex gap-4 items-stretch min-w-max px-2">
+          <div 
+            className="grid gap-2 sm:gap-3 relative" 
+            style={{ 
+              gridTemplateColumns: `repeat(${cols}, minmax(50px, 90px))`,
+              width: `${cols * 90}px`,
+              maxWidth: '100%'
+            }}
+          >
+            {Array.from({ length: totalSlots }).map((_, i) => {
+              const u = ubicaciones.find(x => x.orden === i);
+              
+              if (!u) {
+                return (
+                  <div key={`empty-${i}`} className="relative aspect-square">
+                    <div className="absolute inset-0 border-2 border-dashed border-zinc-200 rounded-xl bg-zinc-50/50 flex items-center justify-center pointer-events-none">
+                      <span className="text-zinc-300 font-black text-xl opacity-30">+</span>
+                    </div>
+                  </div>
+                );
+              }
 
-          const lbl = String(u.label || '').toUpperCase();
-          const pkgsInUbi = paquetes.filter(p => String(p.ubicacion_label || '').toUpperCase() === lbl);
-          const count = pkgsInUbi.length;
-          
-          const isSelected = slotSeleccionado?.label === lbl;
-          const isHovered = hoveredUbi === lbl; // <-- Comprobamos si está sobre esta caja
-          
-          let isMatch = true;
-          const s = search.toLowerCase();
-          if (s) {
-            const matchUbi = lbl.toLowerCase().includes(s);
-            const matchPkgs = pkgsInUbi.some(p => (p.nombre_cliente || '').toLowerCase().includes(s) || (p.empresa_transporte || '').toLowerCase().includes(s));
-            isMatch = matchUbi || matchPkgs;
-          }
-          if (ocultarVacias && count === 0) isMatch = false;
+              const lbl = String(u.label || '').toUpperCase();
+              const pkgsInUbi = paquetes.filter(p => String(p.ubicacion_label || '').toUpperCase() === lbl);
+              const count = pkgsInUbi.length;
+              
+              const isSelected = slotSeleccionado?.label === lbl;
+              const isHovered = hoveredUbi === lbl;
+              
+              let isMatch = true;
+              const s = search.toLowerCase();
+              if (s) {
+                const matchUbi = lbl.toLowerCase().includes(s);
+                const matchPkgs = pkgsInUbi.some(p => (p.nombre_cliente || '').toLowerCase().includes(s) || (p.empresa_transporte || '').toLowerCase().includes(s));
+                isMatch = matchUbi || matchPkgs;
+              }
+              if (ocultarVacias && count === 0) isMatch = false;
 
-          const style = getShelfStyle(count, isSelected, isHovered);
-          const fadeClass = isMatch ? '' : 'opacity-25 grayscale pointer-events-none';
+              const style = getShelfStyle(count, isSelected, isHovered);
+              const fadeClass = isMatch ? '' : 'opacity-25 grayscale pointer-events-none';
 
-          return (
-            <button
-              key={u.id || `lbl-${u.label}`}
-              type="button"
-              data-drop-ubi={lbl}
-              data-drop-id={u.id || ""}
-              onClick={() => {
-                if (isSelected) setSlotSeleccionado(null);
-                else if (count > 0) setSlotSeleccionado({ ...u, label: lbl, pkgs: pkgsInUbi, count });
-              }}
-              className={`
-                relative flex flex-col items-center justify-center py-3 sm:py-5 rounded-lg sm:rounded-xl transition-all border outline-none aspect-square sm:aspect-auto
-                ${style.bgColor} ${fadeClass} ${count > 0 && !isHovered ? 'hover:scale-[1.02] hover:shadow-md cursor-pointer' : 'cursor-default'}
-              `}
-            >
-              <span className={`text-sm sm:text-2xl font-black tracking-tight ${style.titleColor}`}>{lbl}</span>
-              <span className={`text-[8px] sm:text-[10px] font-bold mt-0.5 uppercase tracking-wider ${style.countColor}`}>{count} paq.</span>
-            </button>
-          );
-        })}
+              return (
+                <div key={u.id || `lbl-${u.label}`} className="relative aspect-square">
+                  <button
+                    type="button"
+                    data-drop-ubi={lbl}
+                    data-drop-id={u.id || ""}
+                    onClick={() => {
+                      if (isSelected) setSlotSeleccionado(null);
+                      else if (count > 0) setSlotSeleccionado({ ...u, label: lbl, pkgs: pkgsInUbi, count });
+                    }}
+                    className={`absolute inset-0 flex flex-col items-center justify-center rounded-xl transition-all border outline-none ${style.bgColor} ${fadeClass} ${count > 0 && !isHovered ? 'hover:scale-[1.05] hover:shadow-md cursor-pointer' : 'cursor-default'}`}
+                  >
+                    <span className={`text-sm sm:text-xl font-black tracking-tight ${style.titleColor}`}>{lbl}</span>
+                    <span className={`text-[8px] sm:text-[9px] font-bold mt-0.5 uppercase tracking-wider ${style.countColor}`}>{count} paq.</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <AnimatePresence>

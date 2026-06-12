@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 
-const isLocal = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
 const PROD_URL = (import.meta.env?.VITE_API_URL || '').trim().replace(/\/$/, '');
 
 export const API_BASE = isLocal ? '' : PROD_URL;

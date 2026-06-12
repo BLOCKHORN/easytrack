@@ -17,9 +17,11 @@ import ImportWizard from './ImportWizard';
 import { guardarCarriers } from '../../services/configuracionService';
 import { cargarUbicaciones, guardarUbicaciones } from '../../services/ubicacionesService';
 
-const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
+const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const PROD_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const API_BASE = isLocal ? '' : PROD_URL;
 
-const IconSettings = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
+const IconSettings = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 
 const sameJSON = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const rowsFromCount = (n) => Array.from({ length: Math.min(parseInt(n || 0, 10) || 0, 5000) }, (_, i) => ({ label: `B${i + 1}`, codigo: `B${i + 1}`, orden: i }));
@@ -69,19 +71,23 @@ export default function ConfigPage() {
       const { data: { session } } = await supabase.auth.getSession();
       const resp = await cargarUbicaciones(session?.access_token, tId);
       const arr = Array.isArray(resp?.ubicaciones) ? resp.ubicaciones : [];
-      setUbiRows(arr.length ? sanitizeUbicaciones(arr) : rowsFromCount(25));
       
-      const numCols = parseInt(resp?.meta?.cols || 5, 10);
+      // Default to 2x2 grid with 1 active slot if empty
+      const defaultRows = [{ label: 'B1', codigo: 'B1', orden: 0 }];
+      setUbiRows(arr.length ? sanitizeUbicaciones(arr) : defaultRows);
+      
+      const numCols = parseInt(resp?.meta?.cols || 2, 10);
       let numRows = parseInt(resp?.meta?.rows, 10);
       if (Number.isNaN(numRows) || numRows < 1) {
         let maxIdx = -1;
         arr.forEach(u => { if (u.orden > maxIdx) maxIdx = u.orden; });
-        numRows = Math.max(5, Math.ceil((maxIdx + 1) / numCols));
+        numRows = Math.max(2, Math.ceil((maxIdx + 1) / numCols));
       }
 
       setUbiMeta({ cols: numCols, rows: numRows });
     } catch {
-      setUbiRows(rowsFromCount(25));
+      setUbiRows([{ label: 'B1', codigo: 'B1', orden: 0 }]);
+      setUbiMeta({ cols: 2, rows: 2 });
     }
   };
 
@@ -221,7 +227,7 @@ useEffect(() => {
           <button 
             onClick={handleGuardar}
             disabled={guardando || (!dirty && !accountDraft)}
-            className="px-8 py-3 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all shadow-sm"
+            className="onboarding-save-btn px-8 py-3 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all shadow-sm"
           >
             {guardando ? 'Guardando...' : 'Guardar'}
           </button>
@@ -229,23 +235,29 @@ useEffect(() => {
       </header>
 
       <div className="space-y-12">
-        <IdentityCard nombre={nombre} setNombre={setNombre} usuario={usuario} />
+        <div className="onboarding-identity">
+          <IdentityCard nombre={nombre} setNombre={setNombre} usuario={usuario} />
+        </div>
         
-        <CarriersCard 
-          empresas={empresas} 
-          empresasDisponibles={empresasDisponibles} 
-          setEmpresas={setEmpresas}
-        />
+        <div className="onboarding-carriers">
+          <CarriersCard 
+            empresas={empresas} 
+            empresasDisponibles={empresasDisponibles} 
+            setEmpresas={setEmpresas}
+          />
+        </div>
 
-        <Ubicaciones 
-          key={`ubi-canvas-${resetKey}`}
-          initial={ubiRows} 
-          initialMeta={ubiMeta} 
-          tenantId={tenant?.id}
-          usageByCodigo={usageByCodigo}
-          onToast={mostrarToast}
-          onChange={handleUbicacionesChange}
-        />
+        <div className="onboarding-ubicaciones">
+          <Ubicaciones 
+            key={`ubi-canvas-${resetKey}`}
+            initial={ubiRows} 
+            initialMeta={ubiMeta} 
+            tenantId={tenant?.id}
+            usageByCodigo={usageByCodigo}
+            onToast={mostrarToast}
+            onChange={handleUbicacionesChange}
+          />
+        </div>
 
         <PinCard tenantId={tenant?.id} onToast={mostrarToast} />
         <AccountSettings usuario={usuario} onDraftChange={setAccountDraft} />

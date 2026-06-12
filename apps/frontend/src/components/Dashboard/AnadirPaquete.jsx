@@ -325,7 +325,9 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         const tid = await getTenantIdOrThrow();
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
-        const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
+        const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+        const PROD_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+        const API_URL = isLocal ? "" : PROD_URL;
 
         try {
           const storedPenalties = JSON.parse(localStorage.getItem(`ap_penalties_${tid}`)) || {};
@@ -406,7 +408,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
     setActivatingTrial(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
+      const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
       const res = await fetch(`${API_URL}/api/tenants/me/ai-trial`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.access_token}` }
@@ -572,7 +574,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
     
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
+      const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
       
       const isMulti = activeTab === 'multi';
       const companiaFija = (isMulti && batchSameCompany && batchCompany) ? batchCompany : null;
@@ -1050,51 +1052,60 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
           </div>
 
           {/* MAPA VISUAL ESTILO PLANO CON MAPA DE CALOR ELEGANTE (TEXTO SIEMPRE NEGRO/GRIS OSCURO) */}
-          <div 
-            className="grid gap-1.5 sm:gap-3 pb-4" 
-            style={{ gridTemplateColumns: `repeat(${metaUbi?.cols || 5}, minmax(0, 1fr))` }}
-          >
-            {Array.from({ length: (metaUbi?.cols || 5) * Math.max(1, Math.ceil((ubicaciones.reduce((max, u) => Math.max(max, u.orden ?? 0), -1) + 1) / (metaUbi?.cols || 5))) }).map((_, i) => {
-              const u = ubicaciones.find(x => x.orden === i);
-              
-              if (!u) {
-                return <div key={`empty-${i}`} className="opacity-0 pointer-events-none aspect-square sm:aspect-auto sm:min-h-[4rem]" />;
-              }
+          <div className="flex w-full justify-center overflow-x-auto pb-4">
+            <div className="flex gap-4 items-stretch min-w-max px-2">
+              <div 
+                className="grid gap-2 sm:gap-3 relative" 
+                style={{ 
+                  gridTemplateColumns: `repeat(${cols}, minmax(50px, 90px))`,
+                  width: `${cols * 90}px`,
+                  maxWidth: '100%'
+                }}
+              >
+                {Array.from({ length: cols * Math.max(2, Math.ceil((ubicaciones.reduce((max, u) => Math.max(max, u.orden ?? 0), -1) + 1) / cols)) }).map((_, i) => {
+                  const u = ubicaciones.find(x => x.orden === i);
+                  
+                  if (!u) {
+                    return (
+                      <div key={`empty-${i}`} className="relative aspect-square">
+                        <div className="absolute inset-0 border-2 border-dashed border-zinc-200 rounded-xl bg-zinc-50/50 flex items-center justify-center pointer-events-none">
+                          <span className="text-zinc-300 font-black text-xl opacity-30">+</span>
+                        </div>
+                      </div>
+                    );
+                  }
 
-              const count = occupancy.get(u.id) || occupancy.get(u.label) || 0;
-              const isSelected = slotSel?.id === u.id || slotSel?.label === u.label;
-              const isSuggested = suggestedLabel && u.label === suggestedLabel && !seleccionManual;
-              
-              // MAPA DE CALOR B2B (Muted backgrounds, crisp black text)
-              let finalClasses = "bg-white border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:bg-zinc-50"; 
-              if (count > 0 && count <= 4) finalClasses = "bg-[#E8F7F2] border-[#A7E2CE] text-zinc-900 hover:bg-[#D4EFE6]";
-              else if (count >= 5 && count <= 9) finalClasses = "bg-[#FFFBEB] border-[#FDE047] text-zinc-900 hover:bg-[#FEF3C7]";
-              else if (count >= 10) finalClasses = "bg-[#FEF2F2] border-[#FECACA] text-zinc-900 hover:bg-[#FEE2E2]";
+                  const count = occupancy.get(u.id) || occupancy.get(u.label) || 0;
+                  const isSelected = slotSel?.id === u.id || slotSel?.label === u.label;
+                  const isSuggested = suggestedLabel && u.label === suggestedLabel && !seleccionManual;
+                  
+                  let finalClasses = "bg-white border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:bg-zinc-50"; 
+                  if (count > 0 && count <= 4) finalClasses = "bg-[#E8F7F2] border-[#A7E2CE] text-zinc-900 hover:bg-[#D4EFE6]";
+                  else if (count >= 5 && count <= 9) finalClasses = "bg-[#FFFBEB] border-[#FDE047] text-zinc-900 hover:bg-[#FEF3C7]";
+                  else if (count >= 10) finalClasses = "bg-[#FEF2F2] border-[#FECACA] text-zinc-900 hover:bg-[#FEE2E2]";
 
-              // ESTADOS VISUALES
-              if (isSelected) {
-                finalClasses = 'bg-[#14B07E] border-[#14B07E] text-white shadow-md transform scale-[1.02] z-20';
-              } else if (isSuggested) {
-                // Marco limpio que indica sugerencia sin robar protagonismo al seleccionado
-                finalClasses = 'bg-white border-[#14B07E] border-2 border-dashed text-zinc-900 z-10 hover:bg-zinc-50'; 
-              }
+                  if (isSelected) {
+                    finalClasses = 'bg-[#14B07E] border-[#14B07E] text-white shadow-md transform scale-[1.05] z-20';
+                  } else if (isSuggested) {
+                    finalClasses = 'bg-white border-[#14B07E] border-2 border-dashed text-zinc-900 z-10 hover:bg-zinc-50'; 
+                  }
 
-              return (
-                <button
-                  key={u.id || `lbl-${u.label}`}
-                  type="button"
-                  data-ubi-label={u.label}
-                  onClick={() => { setSlotSel(u); setSeleccionManual(true); }}
-                  className={`
-                    relative flex flex-col items-center justify-center py-3 sm:py-5 rounded-lg sm:rounded-xl transition-all border outline-none aspect-square sm:aspect-auto
-                    ${finalClasses}
-                  `}
-                >
-                  <span className="text-sm sm:text-2xl font-black tracking-tight">{u.label}</span>
-                  <span className="text-[8px] sm:text-[10px] font-bold mt-0.5 opacity-70 uppercase tracking-wider">{count} paq.</span>
-                </button>
-              );
-            })}
+                  return (
+                    <div key={u.id || `lbl-${u.label}`} className="relative aspect-square">
+                      <button
+                        type="button"
+                        data-ubi-label={u.label}
+                        onClick={() => { setSlotSel(u); setSeleccionManual(true); }}
+                        className={`absolute inset-0 flex flex-col items-center justify-center rounded-xl transition-all border outline-none ${finalClasses}`}
+                      >
+                        <span className="text-sm sm:text-xl font-black tracking-tight">{u.label}</span>
+                        <span className="text-[8px] sm:text-[9px] font-bold mt-0.5 opacity-70 uppercase tracking-wider">{count} paq.</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 

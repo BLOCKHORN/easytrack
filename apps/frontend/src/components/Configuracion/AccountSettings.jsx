@@ -254,25 +254,27 @@ export default function AccountSettings({ usuario = null, onDraftChange }) {
         onCancel={() => setModalConfig({ ...modalConfig, isOpen: false })} 
       />
 
-      <div className="space-y-6 max-w-4xl mx-auto pb-12">
+      <div className="space-y-12 max-w-4xl mx-auto pb-12">
         
-        <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-          <div className="border-b border-zinc-100 px-6 py-5 flex items-center justify-between bg-zinc-50/50">
-            <div>
-              <h2 className="text-base font-black text-zinc-900 tracking-tight">Identidad y Credenciales</h2>
-              <p className="text-[13px] font-bold text-zinc-500 mt-0.5">Gestiona tu método de acceso al sistema.</p>
+        <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden">
+          <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
+                <IconKey />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-zinc-950 tracking-tight">Acceso y Credenciales</h3>
+                <p className="text-zinc-500 font-medium text-sm mt-1 max-w-md">Gestiona tu correo de acceso y la seguridad de tu contraseña.</p>
+              </div>
             </div>
-            <div className="w-10 h-10 bg-white border border-zinc-200 rounded-xl flex items-center justify-center text-zinc-700 shadow-sm shrink-0">
-              <IconKey />
-            </div>
-          </div>
+          </header>
 
           <div className="p-6 md:p-8 space-y-8">
             <div className="max-w-xl">
               <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2 block">Correo de Acceso (Login)</label>
               <input 
                 type="email" value={emailDraft} onChange={(e)=>setEmailDraft(e.target.value)} disabled={provider !== "email"}
-                className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none font-bold text-sm text-zinc-900 transition-all disabled:opacity-60"
+                className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:bg-white focus:border-brand-500 outline-none font-bold text-sm text-zinc-900 transition-all disabled:opacity-60"
               />
               {emailMsg && <p className="text-xs font-bold text-red-500 mt-2">{emailMsg}</p>}
               {provider !== "email" && (
@@ -287,13 +289,13 @@ export default function AccountSettings({ usuario = null, onDraftChange }) {
                 <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-3 block">Seguridad de la Contraseña</label>
                 <div className="flex flex-col md:flex-row gap-4 mb-4">
                   <div className="flex-1 relative">
-                    <input type={showPwd1 ? "text" : "password"} value={pwd1} onChange={e=>setPwd1(e.target.value)} placeholder="Nueva contraseña" className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none font-bold text-sm text-zinc-900 pr-12 transition-all" />
+                    <input type={showPwd1 ? "text" : "password"} value={pwd1} onChange={e=>setPwd1(e.target.value)} placeholder="Nueva contraseña" className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:bg-white focus:border-brand-500 outline-none font-bold text-sm text-zinc-900 pr-12 transition-all" />
                     <button onClick={() => setShowPwd1(!showPwd1)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 transition-colors">
                       {showPwd1 ? <IconEyeOff /> : <IconEye />}
                     </button>
                   </div>
                   <div className="flex-1 relative">
-                    <input type={showPwd2 ? "text" : "password"} value={pwd2} onChange={e=>setPwd2(e.target.value)} placeholder="Repetir contraseña" className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none font-bold text-sm text-zinc-900 pr-12 transition-all" />
+                    <input type={showPwd2 ? "text" : "password"} value={pwd2} onChange={e=>setPwd2(e.target.value)} placeholder="Repetir contraseña" className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:bg-white focus:border-brand-500 outline-none font-bold text-sm text-zinc-900 pr-12 transition-all" />
                     <button onClick={() => setShowPwd2(!showPwd2)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 transition-colors">
                       {showPwd2 ? <IconEyeOff /> : <IconEye />}
                     </button>
@@ -318,27 +320,27 @@ export default function AccountSettings({ usuario = null, onDraftChange }) {
               </div>
             )}
           </div>
-        </div>
+        </section>
 
-        <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-          <div className="border-b border-zinc-100 px-6 py-5 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-50/50">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-zinc-950 text-white rounded-xl flex items-center justify-center shadow-md shrink-0">
+        <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden">
+          <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
                 <IconShield />
               </div>
               <div>
-                <h2 className="text-base font-black text-zinc-900 tracking-tight">Auditoría de Sesiones</h2>
-                <p className="text-[13px] font-bold text-zinc-500 mt-0.5">Renombra o revoca el acceso de los terminales activos.</p>
+                <h3 className="text-xl font-black text-zinc-950 tracking-tight">Auditoría de Sesiones</h3>
+                <p className="text-zinc-500 font-medium text-sm mt-1 max-w-md">Dispositivos con acceso activo a tu cuenta actualmente.</p>
               </div>
             </div>
             <button 
               onClick={requestSignOutOthers} 
               disabled={signingOutOthers}
-              className="shrink-0 px-4 py-2.5 bg-zinc-950 text-white disabled:bg-zinc-200 disabled:text-zinc-500 hover:bg-zinc-800 font-black text-[10px] uppercase tracking-widest rounded-lg transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+              className="shrink-0 px-6 py-3 bg-zinc-950 text-white disabled:bg-zinc-200 disabled:text-zinc-500 hover:bg-zinc-800 font-black text-[11px] uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
             >
-              {signingOutOthers ? <IconSpinner /> : 'Revocar Otros Accesos'}
+              {signingOutOthers ? <IconSpinner /> : 'Cerrar otras sesiones'}
             </button>
-          </div>
+          </header>
 
           <div className="divide-y divide-zinc-100">
             {sessions.length === 0 ? (
@@ -350,9 +352,9 @@ export default function AccountSettings({ usuario = null, onDraftChange }) {
                 const isMobile = /Mobile|Android|iPhone|iPad/i.test(s.user_agent);
 
                 return (
-                  <div key={s.session_id} className={`flex flex-col sm:flex-row sm:items-center justify-between p-6 transition-colors ${isCurrent ? 'bg-zinc-50/80 border-l-[3px] border-l-brand-500' : 'hover:bg-zinc-50/50 border-l-[3px] border-l-transparent'}`}>
+                  <div key={s.session_id} className={`flex flex-col sm:flex-row sm:items-center justify-between p-6 transition-colors ${isCurrent ? 'bg-zinc-50/50' : 'hover:bg-zinc-50/30'}`}>
                     <div className="flex items-center gap-4 mb-4 sm:mb-0">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isCurrent ? 'bg-brand-100 text-brand-600' : 'bg-zinc-100 text-zinc-500'}`}>
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${isCurrent ? 'bg-white border-zinc-200 text-zinc-950 shadow-sm' : 'bg-zinc-50 border-zinc-100 text-zinc-400'}`}>
                         {isMobile ? <IconPhone /> : <IconLaptop />}
                       </div>
                       <div className="flex flex-col">
@@ -363,45 +365,45 @@ export default function AccountSettings({ usuario = null, onDraftChange }) {
                               value={editName} 
                               onChange={e => setEditName(e.target.value)} 
                               onKeyDown={e => e.key === 'Enter' && handleSaveName(s.session_id)}
-                              className="px-2.5 py-1 text-sm font-bold bg-white border border-brand-300 rounded-md outline-none focus:ring-2 focus:ring-brand-500/20 w-full max-w-[220px]"
+                              className="px-3 py-1.5 text-sm font-bold bg-white border border-zinc-300 rounded-lg outline-none focus:border-zinc-900 w-full max-w-[220px]"
                               autoFocus
                               placeholder="Ej: PC Recepción..."
                             />
-                            <button onClick={() => handleSaveName(s.session_id)} className="w-6 h-6 flex items-center justify-center bg-brand-500 text-white rounded-md hover:bg-brand-600 transition-colors"><IconCheck /></button>
-                            <button onClick={() => setEditingSession(null)} className="w-6 h-6 flex items-center justify-center bg-zinc-200 text-zinc-600 rounded-md hover:bg-zinc-300 transition-colors"><IconX /></button>
+                            <button onClick={() => handleSaveName(s.session_id)} className="w-8 h-8 flex items-center justify-center bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition-colors shadow-sm"><IconCheck /></button>
+                            <button onClick={() => setEditingSession(null)} className="w-8 h-8 flex items-center justify-center bg-white border border-zinc-200 text-zinc-500 rounded-lg hover:bg-zinc-50 transition-colors shadow-sm"><IconX /></button>
                           </div>
                         ) : (
                           <div className="flex items-center gap-2 mb-0.5">
                             <span className="text-sm font-black text-zinc-900">{s.custom_name || defaultName}</span>
                             <button 
                               onClick={() => { setEditingSession(s.session_id); setEditName(s.custom_name || defaultName); }} 
-                              className="text-zinc-400 hover:text-brand-500 transition-colors"
+                              className="text-zinc-400 hover:text-zinc-900 transition-colors"
                               title="Renombrar terminal"
                             >
                               <IconEdit />
                             </button>
                             {isCurrent && (
-                              <span className="flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-600 text-[9px] font-black uppercase tracking-widest">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                Sesión Actual
+                              <span className="flex items-center gap-1.5 ml-2 px-2.5 py-0.5 rounded-full bg-zinc-100 text-zinc-600 text-[9px] font-black uppercase tracking-widest border border-zinc-200">
+                                <span className="w-1 h-1 rounded-full bg-zinc-400" />
+                                Esta sesión
                               </span>
                             )}
                           </div>
                         )}
-                        <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-500">
-                          <span>IP: {s.ip_address}</span>
-                          <span className="text-zinc-300">•</span>
-                          <span>{new Date(s.created_at).toLocaleDateString()}</span>
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-400">
+                          <span className="font-mono">IP: {s.ip_address}</span>
+                          <span className="text-zinc-200">•</span>
+                          <span>Iniciada el {new Date(s.created_at).toLocaleDateString()}</span>
                         </div>
                       </div>
                     </div>
                     
                     <button 
                       onClick={() => requestKillSession(s.session_id)} 
-                      className="group flex items-center justify-center sm:w-10 sm:h-10 py-2 sm:py-0 text-zinc-400 hover:text-white hover:bg-red-600 sm:rounded-xl rounded-lg border border-zinc-200 hover:border-red-600 sm:border-transparent transition-all shrink-0"
+                      className="group flex items-center justify-center sm:w-11 sm:h-11 py-2.5 sm:py-0 text-zinc-400 hover:text-red-600 sm:rounded-xl rounded-lg border border-zinc-200 hover:border-red-100 hover:bg-red-50 transition-all shrink-0 shadow-sm"
                       title={isCurrent ? "Cerrar tu sesión actual" : "Revocar este dispositivo"}
                     >
-                      <span className="sm:hidden text-xs font-bold mr-2 text-zinc-600 group-hover:text-white">Cerrar Sesión</span>
+                      <span className="sm:hidden text-xs font-black mr-2 uppercase tracking-widest">Cerrar Sesión</span>
                       <IconTrash />
                     </button>
                   </div>
@@ -409,7 +411,7 @@ export default function AccountSettings({ usuario = null, onDraftChange }) {
               })
             )}
           </div>
-        </div>
+        </section>
 
       </div>
     </>

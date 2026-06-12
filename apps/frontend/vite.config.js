@@ -4,13 +4,14 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  // En dev puedes dejarlo a 3001; en prod Vercel ignora esto.
-  const BACKEND = (env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+  // En dev puedes dejarlo a 3000; en prod Vercel ignora esto.
+  const BACKEND = (env.VITE_API_URL || 'http://localhost:3000').replace(/\/$/, '');
 
   return {
     plugins: [react()],
     server: {
       port: 5173,
+      allowedHosts: ['mayday-oversweet-defense.ngrok-free.dev'],
       proxy: {
         // Rutas relativas -> backend (evita CORS en local)
         '/api': { target: BACKEND, changeOrigin: true },
@@ -23,7 +24,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     preview: {
-      port: 5173,
+      port: 3000,
       proxy: {
         '/api': { target: BACKEND, changeOrigin: true },
         '^/[\\w-]+/api': { target: BACKEND, changeOrigin: true },

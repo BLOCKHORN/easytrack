@@ -85,7 +85,10 @@ export default function Dashboard(props) {
   }, [paquetes]);
 
   const apiBase = useMemo(() => {
-    const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
+    const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+    const PROD_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+    const API_URL = isLocal ? "" : PROD_URL;
+
     const segs = location.pathname.split("/").filter(Boolean);
     if (segs.length >= 2 && (segs[1] === "dashboard" || segs[1] === "area-personal")) {
       return `${API_URL}/${segs[0]}/api/dashboard`;
@@ -93,7 +96,11 @@ export default function Dashboard(props) {
     return `${API_URL}/api/dashboard`;
   }, [location.pathname]);
   
-  const apiRoot = useMemo(() => (import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3001"), []);
+  const apiRoot = useMemo(() => {
+    const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+    const PROD_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+    return isLocal ? "" : PROD_URL;
+  }, []);
 
   const [mostrarModal, setMostrarModal] = useState(false);
   
@@ -238,186 +245,240 @@ export default function Dashboard(props) {
   if (cargandoNegocio) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="w-8 h-8 border-2 border-zinc-200 border-t-brand-500 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-zinc-100 border-t-brand-500 rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 font-sans pb-20">
+    <div className="space-y-10 font-sans pb-24">
       
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-             <h1 className="text-3xl font-extrabold text-zinc-950 tracking-tight">{negocio?.nombre || negocio?.nombre_empresa || "Local"}</h1>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 pb-4">
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
+          <div className="flex items-center gap-4 mb-2">
+             <h1 className="text-4xl font-black text-zinc-950 tracking-tight">{negocio?.nombre || negocio?.nombre_empresa || "Local"}</h1>
              <PlanBadge />
           </div>
-          <p className="text-sm font-medium text-zinc-500">Mando central operativo y control de stock.</p>
-        </div>
-        <button onClick={() => setMostrarModal(true)} className="flex items-center justify-center gap-2 bg-zinc-950 hover:bg-zinc-800 text-white px-8 py-3.5 rounded-xl font-black uppercase tracking-widest text-[11px] shadow-lg transition-all active:scale-95 w-full md:w-auto">
-          <IconPlus /> Registrar Entrada
-        </button>
+          <p className="text-zinc-500 font-bold flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+            Mando central operativo y control de stock
+          </p>
+        </motion.div>
+        
+        <motion.button 
+          initial={{ opacity: 0, scale: 0.9 }} 
+          animate={{ opacity: 1, scale: 1 }}
+          onClick={() => setMostrarModal(true)} 
+          className="group relative flex items-center justify-center gap-3 bg-zinc-950 hover:bg-zinc-900 text-white px-10 py-4 rounded-2xl font-black uppercase tracking-[0.1em] text-[12px] shadow-2xl transition-all active:scale-95 w-full md:w-auto overflow-hidden"
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-brand-500/0 via-brand-500/20 to-brand-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+          <IconPlus /> 
+          <span>Registrar Entrada</span>
+        </motion.button>
       </div>
 
       {entitlements?.plan_id === 'free' && entitlements?.trial && (
         entitlements.trial.is_unlimited_phase ? (
-          <div className="bg-gradient-to-r from-brand-600 to-brand-500 text-white px-5 py-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs shadow-[0_8px_30px_rgb(20,184,166,0.2)] border border-brand-400">
-            <div className="flex items-center gap-4 w-full sm:w-auto">
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-br from-brand-600 to-brand-500 text-white p-6 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xl border border-brand-400/30 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="flex items-center gap-5 relative z-10">
+              <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0 border border-white/30">
                 <IconRocket />
               </div>
               <div>
-                <strong className="block text-sm font-black uppercase tracking-widest mb-0.5 text-white">Paquetes Ilimitados</strong>
-                <span className="font-medium text-brand-50">Disfruta sin restricciones en tus primeros 14 días. (Te quedan {entitlements.trial.days_remaining} días).</span>
+                <strong className="block text-lg font-black uppercase tracking-wider mb-0.5">Paquetes Ilimitados Activos</strong>
+                <span className="font-bold text-brand-50/90">Te quedan <span className="text-white underline decoration-2 underline-offset-4">{entitlements.trial.days_remaining} días</span> de prueba premium.</span>
               </div>
             </div>
-            <button onClick={() => go('/dashboard/facturacion')} className="bg-white text-brand-600 hover:bg-zinc-50 px-5 py-2.5 rounded-xl font-black uppercase tracking-widest transition-colors shrink-0 shadow-sm">
-              Ver planes premium
+            <button onClick={() => go('/dashboard/facturacion')} className="bg-white text-brand-600 hover:bg-brand-50 px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95 relative z-10">
+              Mejorar plan ahora
             </button>
-          </div>
+          </motion.div>
         ) : (
-          <div className="bg-zinc-950 text-zinc-300 px-5 py-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs font-mono shadow-md border border-zinc-800">
-            <div className="flex items-center gap-4 w-full sm:w-1/2">
-              <span className="text-brand-400 font-black uppercase tracking-widest shrink-0">Free Tier</span>
-              <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
-                <div 
+          <div className="bg-zinc-950 text-zinc-300 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-6 text-xs font-mono shadow-xl border border-zinc-800">
+            <div className="flex items-center gap-6 w-full md:w-3/4">
+              <span className="text-brand-400 font-black uppercase tracking-[0.2em] shrink-0">Free Tier</span>
+              <div className="flex-1 bg-zinc-800 rounded-full h-2 overflow-hidden border border-zinc-700">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(100, (entitlements.trial.used / entitlements.trial.quota) * 100)}%` }}
                   className={`h-full rounded-full transition-all ${entitlements.trial.remaining < 20 ? 'bg-red-500' : 'bg-brand-500'}`} 
-                  style={{ width: `${Math.min(100, (entitlements.trial.used / entitlements.trial.quota) * 100)}%` }} 
                 />
               </div>
-              <span className="shrink-0"><strong>{entitlements.trial.used}</strong> / {entitlements.trial.quota}</span>
+              <span className="shrink-0 font-black text-white">{entitlements.trial.used} <span className="text-zinc-600">/</span> {entitlements.trial.quota}</span>
             </div>
-            <button onClick={() => go('/dashboard/facturacion')} className="text-brand-400 hover:text-white font-black uppercase tracking-widest transition-colors shrink-0">
-              Desbloquear sin límites
+            <button onClick={() => go('/dashboard/facturacion')} className="text-brand-400 hover:text-white font-black uppercase tracking-widest transition-colors shrink-0 flex items-center gap-2">
+              <IconSparkles className="w-3 h-3" />
+              Desbloquear límites
             </button>
           </div>
         )
       )}
 
       {configPendiente && (
-        <div className="bg-red-50 border border-red-200 p-5 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="text-red-500"><IconAlert /></div>
-            <div className="text-sm text-red-800 font-medium">
-              <strong className="block text-red-950 font-bold">Configuración de local pendiente</strong>
-              Define los huecos de tu almacén antes de gestionar paquetes.
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+          className="onboarding-banner bg-white border-2 border-dashed border-red-200 p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm"
+        >
+          <div className="flex items-center gap-6">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center shrink-0">
+              <IconAlert />
+            </div>
+            <div>
+              <strong className="block text-red-950 font-black text-lg">Configuración pendiente</strong>
+              <p className="text-red-800/80 font-bold">Debes mapear tu almacén antes de empezar a registrar paquetes.</p>
             </div>
           </div>
-          <button onClick={() => go("/dashboard/configuracion")} className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm">
+          <button onClick={() => go("/dashboard/configuracion")} className="onboarding-config-btn px-8 py-3.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg transition-all active:scale-95">
             Configurar Almacén
           </button>
-        </div>
+        </motion.div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-        <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-zinc-500 font-black text-[10px] tracking-[0.2em] uppercase">Paquetes Físicos</span>
-            <span className="text-zinc-400"><IconStorage /></span>
-          </div>
-          <div className="text-4xl font-black text-zinc-950 tracking-tight font-mono">{resumen.almacenActual}</div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-zinc-500 font-black text-[10px] tracking-[0.2em] uppercase">Huecos en Uso</span>
-            <span className="text-zinc-400"><IconGrid /></span>
-          </div>
-          <div className="text-4xl font-black text-zinc-950 tracking-tight font-mono">{resumen.huecosOcupados}</div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-zinc-500 font-black text-[10px] tracking-[0.2em] uppercase">Entradas (Hoy)</span>
-            <span className="text-brand-400"><IconBoxIn /></span>
-          </div>
-          <div className="text-4xl font-black text-brand-500 tracking-tight font-mono">+{resumen.recibidosHoy}</div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-zinc-500 font-black text-[10px] tracking-[0.2em] uppercase">Salidas (Hoy)</span>
-            <span className="text-zinc-400"><IconBoxOut /></span>
-          </div>
-          <div className="text-4xl font-black text-zinc-900 tracking-tight font-mono">-{resumen.entregadosHoy}</div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
+        {[
+          { label: 'Paquetes Físicos', val: resumen.almacenActual, icon: <IconStorage />, color: 'text-zinc-950' },
+          { label: 'Huecos en Uso', val: resumen.huecosOcupados, icon: <IconGrid />, color: 'text-zinc-950' },
+          { label: 'Entradas (Hoy)', val: `+${resumen.recibidosHoy}`, icon: <IconBoxIn />, color: 'text-brand-500' },
+          { label: 'Salidas (Hoy)', val: `-${resumen.entregadosHoy}`, icon: <IconBoxOut />, color: 'text-zinc-900' }
+        ].map((kpi, idx) => (
+          <motion.div 
+            key={idx}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.1 }}
+            className="bg-white p-6 rounded-3xl border border-zinc-200/60 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group"
+          >
+            <div className="flex justify-between items-start mb-4">
+              <span className="text-zinc-400 font-black text-[10px] tracking-[0.25em] uppercase">{kpi.label}</span>
+              <span className="text-zinc-200 group-hover:text-zinc-400 transition-colors">{kpi.icon}</span>
+            </div>
+            <div className={`text-5xl font-black tracking-tighter font-mono ${kpi.color}`}>{kpi.val}</div>
+          </motion.div>
+        ))}
       </div>
 
-      <div className="bg-white border border-zinc-200/80 shadow-sm rounded-3xl p-6 h-80 flex flex-col">
-        <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-6">Volumen Operativo (Últimos 14 Días)</h3>
-        <div className="flex-1 -ml-6">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+        className="bg-white border border-zinc-200/60 shadow-sm rounded-[2.5rem] p-8 h-[400px] flex flex-col relative overflow-hidden"
+      >
+        <div className="flex items-center justify-between mb-8">
+          <h3 className="text-[11px] font-black text-zinc-400 uppercase tracking-[0.3em]">Flujo Operativo Mensual</h3>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-brand-500" />
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Entradas</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-emerald-400" />
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Salidas</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 -ml-8">
           {chartData.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-xs font-bold text-zinc-400 uppercase tracking-widest text-center px-4">
+            <div className="h-full flex items-center justify-center text-xs font-black text-zinc-300 uppercase tracking-[0.2em] text-center px-4">
               Recopilando datos históricos...
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f4f4f5" />
+              <LineChart data={chartData} margin={{ top: 5, right: 30, left: 10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorIn" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#14b8a6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="8 8" vertical={false} stroke="#f1f1f4" />
                 <XAxis 
                   dataKey="periodo" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fontSize: 9, fill: '#a1a1aa', fontWeight: 700 }}
+                  tick={{ fontSize: 10, fill: '#d4d4d8', fontWeight: 800 }}
                   tickFormatter={(val) => {
                     const d = new Date(val);
                     return isNaN(d) ? '' : `${d.getDate()} ${d.toLocaleString('es-ES', { month: 'short' }).toUpperCase()}`;
                   }}
-                  dy={10}
+                  dy={15}
                 />
                 <YAxis 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 600 }}
+                  tick={{ fontSize: 11, fill: '#d4d4d8', fontWeight: 700 }}
                   allowDecimals={false}
+                  dx={-10}
                 />
-                <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#e4e4e7', strokeWidth: 2, strokeDasharray: '5 5' }} />
-                <Line isAnimationActive={false} name="Entradas" type="monotone" dataKey="in" stroke="#14b8a6" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
-                <Line isAnimationActive={false} name="Salidas" type="monotone" dataKey="out" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+                <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#f4f4f5', strokeWidth: 40 }} />
+                <Line 
+                  name="Entradas" type="monotone" dataKey="in" 
+                  stroke="#14b8a6" strokeWidth={5} 
+                  dot={{ r: 0 }} activeDot={{ r: 8, strokeWidth: 0, fill: '#14b8a6' }} 
+                  animationDuration={1500}
+                />
+                <Line 
+                  name="Salidas" type="monotone" dataKey="out" 
+                  stroke="#34d399" strokeWidth={5} 
+                  dot={{ r: 0 }} activeDot={{ r: 8, strokeWidth: 0, fill: '#34d399' }} 
+                  animationDuration={2000}
+                />
               </LineChart>
             </ResponsiveContainer>
           )}
         </div>
-      </div>
+      </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        <div className="lg:col-span-2 bg-white border border-zinc-200/80 shadow-sm rounded-3xl overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-zinc-100 bg-zinc-50/30 flex justify-between items-center">
-            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-widest flex items-center gap-2">
-              Auditoría de Stock
-              {listaHuerfanos.length > 0 && (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded uppercase tracking-widest border border-red-100 ml-2">
-                  <IconAlert /> {listaHuerfanos.length} Atascados
-                </span>
-              )}
-            </h3>
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+          className="lg:col-span-2 bg-white border border-zinc-200/60 shadow-sm rounded-[2.5rem] overflow-hidden flex flex-col"
+        >
+          <div className="p-8 border-b border-zinc-100 bg-zinc-50/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+            <div>
+              <h3 className="text-lg font-black text-zinc-950 uppercase tracking-wider flex items-center gap-3">
+                Auditoría de Stock
+                {listaHuerfanos.length > 0 && (
+                  <span className="flex items-center gap-2 text-[10px] font-black text-red-600 bg-red-50 px-3 py-1.5 rounded-full uppercase tracking-widest border border-red-100">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    {listaHuerfanos.length} Atascados
+                  </span>
+                )}
+              </h3>
+            </div>
             
-            <select 
-              value={diasHuerfano} 
-              onChange={e => setDiasHuerfano(Number(e.target.value))} 
-              className="bg-white border border-zinc-200 text-xs font-bold text-zinc-600 px-3 py-1.5 rounded-lg outline-none cursor-pointer focus:ring-1 focus:ring-brand-500"
-            >
-              <option value={1}>Atascados +1 Día</option>
-              <option value={3}>Atascados +3 Días</option>
-              <option value={7}>Atascados +7 Días</option>
-            </select>
+            <div className="relative">
+              <select 
+                value={diasHuerfano} 
+                onChange={e => setDiasHuerfano(Number(e.target.value))} 
+                className="appearance-none bg-white border border-zinc-200 text-[11px] font-black text-zinc-600 px-6 py-3 rounded-2xl outline-none cursor-pointer hover:border-zinc-300 transition-all pr-12 shadow-sm"
+              >
+                <option value={1}>Atascados +1 Día</option>
+                <option value={3}>Atascados +3 Días</option>
+                <option value={7}>Atascados +7 Días</option>
+              </select>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+              </div>
+            </div>
           </div>
           
-          <div className="flex-1 overflow-x-auto max-h-[400px] overflow-y-auto">
+          <div className="flex-1 overflow-x-auto max-h-[460px] overflow-y-auto custom-scrollbar">
             <table className="w-full text-left whitespace-nowrap text-sm">
-              <thead className="sticky top-0 z-10 bg-zinc-50">
-                <tr className="text-[9px] uppercase tracking-widest font-black text-zinc-400 border-b border-zinc-100">
-                  <th className="py-3 px-6">Cliente</th>
-                  <th className="py-3 px-6">Agencia</th>
-                  <th className="py-3 px-6 text-center">Hueco</th>
-                  <th className="py-3 px-6 text-center">Días</th>
-                  <th className="py-3 px-6 text-right">Contacto</th>
+              <thead className="sticky top-0 z-10 bg-zinc-50/80 backdrop-blur-md">
+                <tr className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-400 border-b border-zinc-100">
+                  <th className="py-5 px-8">Cliente</th>
+                  <th className="py-5 px-8">Agencia</th>
+                  <th className="py-5 px-8 text-center">Hueco</th>
+                  <th className="py-5 px-8 text-center">Días</th>
+                  <th className="py-5 px-8 text-right">Contacto</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50">
                 {listaHuerfanos.length === 0 ? (
-                  <tr><td colSpan="5" className="py-12 text-center text-zinc-400 text-[10px] font-black uppercase tracking-[0.2em]">No hay paquetes atascados en este periodo.</td></tr>
+                  <tr><td colSpan="5" className="py-20 text-center text-zinc-300 text-xs font-black uppercase tracking-[0.3em]">Todo bajo control por aquí.</td></tr>
                 ) : (
                   listaHuerfanos.map((p) => {
                     const dias = calcularDias(p.fecha_llegada);
@@ -425,29 +486,39 @@ export default function Dashboard(props) {
                     const msjWa = encodeURIComponent(`Hola ${p.nombre_cliente}, tienes un paquete de ${p.empresa_transporte || 'una agencia'} esperando en nuestro local desde hace ${dias} días. Por favor, pasa a recogerlo pronto para evitar devoluciones. ¡Gracias!`);
 
                     return (
-                      <tr key={p.id} className="hover:bg-red-50/10 transition-colors">
-                        <td className="py-3 px-6 font-bold text-zinc-900">{p.nombre_cliente || 'Desconocido'}</td>
-                        <td className="py-3 px-6 text-zinc-600 font-medium">{p.empresa_transporte || 'Otros'}</td>
-                        <td className="py-3 px-6 text-center">
-                          <span className="bg-zinc-100 text-zinc-800 font-black font-mono text-[10px] px-2 py-1 rounded border border-zinc-200">
+                      <tr key={p.id} className="group hover:bg-zinc-50 transition-all">
+                        <td className="py-5 px-8">
+                          <div className="font-black text-zinc-950 text-base">{p.nombre_cliente || 'Desconocido'}</div>
+                          <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">Pendiente de recogida</div>
+                        </td>
+                        <td className="py-5 px-8">
+                          <span className="inline-flex items-center px-3 py-1 bg-zinc-100 text-zinc-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-zinc-200/50">
+                            {p.empresa_transporte || 'Otros'}
+                          </span>
+                        </td>
+                        <td className="py-5 px-8 text-center">
+                          <span className="bg-zinc-950 text-white font-black font-mono text-xs px-3 py-1.5 rounded-xl shadow-lg inline-block min-w-[40px]">
                             {p.ubicacion_label || '?'}
                           </span>
                         </td>
-                        <td className="py-3 px-6 text-center text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center justify-center gap-1.5 mt-1.5">
-                          <IconCalendar /> {dias} días
+                        <td className="py-5 px-8 text-center">
+                          <div className={`text-xs font-black flex items-center justify-center gap-2 ${dias >= 7 ? 'text-red-500' : 'text-zinc-500'}`}>
+                            <IconCalendar />
+                            <span>{dias}D</span>
+                          </div>
                         </td>
-                        <td className="py-3 px-6 text-right">
+                        <td className="py-5 px-8 text-right">
                           {telefonoLimpio ? (
                             <a 
                               href={`https://wa.me/34${telefonoLimpio}?text=${msjWa}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 border border-[#25D366]/20 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors"
+                              className="inline-flex items-center gap-2.5 px-5 py-2.5 bg-brand-500 text-white hover:bg-brand-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
                             >
                               <IconPhone /> Avisar
                             </a>
                           ) : (
-                            <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">Sin Tel.</span>
+                            <span className="text-[10px] font-black text-zinc-300 uppercase tracking-[0.2em]">Sin Tel.</span>
                           )}
                         </td>
                       </tr>
@@ -457,57 +528,95 @@ export default function Dashboard(props) {
               </tbody>
             </table>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="space-y-6">
-          <div className="bg-white border border-zinc-200/80 shadow-sm rounded-3xl p-6">
-            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-widest mb-2">Apalancamiento de Espacio</h3>
-            <p className="text-[10px] text-zinc-500 font-medium mb-6 leading-relaxed">
-              Analiza qué porcentaje de tu almacén ocupa cada empresa vs el ticket que te pagan.
-            </p>
+        <div className="space-y-8">
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.6 }}
+            className="bg-white border border-zinc-200/60 shadow-sm rounded-[2.5rem] p-8"
+          >
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-zinc-50 rounded-2xl flex items-center justify-center text-zinc-950 border border-zinc-100 shadow-sm">
+                <IconGrid />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-zinc-950 uppercase tracking-tight">Ocupación IA</h3>
+                <p className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">Densidad de Almacén</p>
+              </div>
+            </div>
             
-            <div className="space-y-5">
+            <div className="space-y-8">
               {resumen.ocupacion.length === 0 ? (
-                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 text-center py-4">Estanterías vacías</div>
+                <div className="text-[11px] font-black uppercase tracking-[0.3em] text-zinc-300 text-center py-10">Estanterías vacías</div>
               ) : (
                 resumen.ocupacion.slice(0, 5).map((ag, i) => {
                   const esParasito = ag.pct > 30 && Number(ag.precio) < 0.35;
 
                   return (
-                    <div key={i}>
-                      <div className="flex justify-between items-end mb-1.5">
-                        <span className={`text-xs font-bold ${esParasito ? 'text-red-600' : 'text-zinc-700'}`}>
-                          {ag.name} <span className="text-zinc-400 font-normal">({ag.count} paq)</span>
-                        </span>
+                    <div key={i} className="group">
+                      <div className="flex justify-between items-end mb-3">
+                        <div>
+                          <span className={`text-sm font-black ${esParasito ? 'text-red-600' : 'text-zinc-950'}`}>
+                            {ag.name}
+                          </span>
+                          <span className="text-[10px] text-zinc-400 font-black ml-2 uppercase tracking-widest">{ag.count} paq.</span>
+                        </div>
                         <div className="text-right">
-                          <span className={`text-[10px] font-mono font-bold ${esParasito ? 'text-red-500' : 'text-zinc-500'}`}>{ag.pct.toFixed(0)}% Ocupado</span>
-                          <span className="text-[10px] font-mono font-black text-amber-500 ml-2 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">Ticket: {formatEUR(ag.precio)}</span>
+                          <span className={`text-[11px] font-mono font-black ${esParasito ? 'text-red-500' : 'text-zinc-400'}`}>{ag.pct.toFixed(0)}%</span>
                         </div>
                       </div>
-                      <div className="w-full bg-zinc-100 rounded-full h-2 overflow-hidden">
-                        <div className={`h-full rounded-full ${esParasito ? 'bg-red-500' : 'bg-zinc-800'}`} style={{ width: `${ag.pct}%` }} />
+                      <div className="w-full bg-zinc-100 rounded-full h-3 overflow-hidden border border-zinc-50">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${ag.pct}%` }}
+                          transition={{ duration: 1, delay: i * 0.1 }}
+                          className={`h-full rounded-full ${esParasito ? 'bg-gradient-to-r from-red-600 to-red-400' : 'bg-gradient-to-r from-zinc-900 to-zinc-700'}`} 
+                        />
+                      </div>
+                      <div className="mt-2 flex justify-between items-center">
+                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Ticket Medio</span>
+                         <span className="text-[11px] font-black text-brand-600 bg-brand-50 px-2 py-0.5 rounded-lg border border-brand-100">{formatEUR(ag.precio)}</span>
                       </div>
                     </div>
                   );
                 })
               )}
             </div>
-          </div>
+          </motion.div>
+          
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.7 }}
+            className="bg-zinc-950 text-white rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group"
+          >
+            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-500">
+               <IconRocket />
+            </div>
+            <h4 className="text-xl font-black mb-4 relative z-10">¿Quieres más control?</h4>
+            <p className="text-zinc-400 font-bold text-sm mb-8 leading-relaxed relative z-10">
+              Desbloquea el análisis avanzado de rentabilidad por metro cuadrado y optimiza tus ingresos.
+            </p>
+            <button onClick={() => go('/dashboard/facturacion')} className="w-full py-4 bg-white text-zinc-950 rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-xl hover:bg-zinc-100 transition-all active:scale-95 relative z-10">
+              Explorar Funciones Pro
+            </button>
+          </motion.div>
         </div>
       </div>
 
       <AnimatePresence>
         {mostrarModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" onClick={() => setMostrarModal(false)} />
-            <motion.div initial={{ scale: 0.96, opacity: 0, y: 10 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.96, opacity: 0, y: 10 }} transition={{ type: 'spring', stiffness: 300, damping: 25 }} className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
-              <div className="p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-                <h3 className="text-xl font-black text-zinc-950">Registro Rápido</h3>
-                <button onClick={() => setMostrarModal(false)} className="w-8 h-8 flex items-center justify-center bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-950 hover:border-zinc-400 rounded-full transition-all shadow-sm">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="absolute inset-0 bg-zinc-950/80 backdrop-blur-md" onClick={() => setMostrarModal(false)} />
+            <motion.div initial={{ scale: 0.9, opacity: 0, y: 30 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 30 }} transition={{ type: 'spring', stiffness: 300, damping: 30 }} className="relative bg-white rounded-[3rem] shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden border border-zinc-200">
+              <div className="p-8 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50 backdrop-blur-sm">
+                <div>
+                  <h3 className="text-2xl font-black text-zinc-950 tracking-tight">Registro Rápido</h3>
+                  <p className="text-[10px] text-zinc-400 font-black uppercase tracking-widest mt-1">Entrada manual de paquetería</p>
+                </div>
+                <button onClick={() => setMostrarModal(false)} className="w-12 h-12 flex items-center justify-center bg-white border border-zinc-200 text-zinc-400 hover:text-zinc-950 hover:border-zinc-400 rounded-2xl transition-all shadow-sm group">
                   <IconClose />
                 </button>
               </div>
-              <div className="p-6 overflow-y-auto max-h-[80vh]">
+              <div className="p-8 overflow-y-auto max-h-[85vh] custom-scrollbar">
                 <AnadirPaquete modoRapido paquetes={paquetes} actualizarPaquetes={actualizarPaquetes} />
               </div>
             </motion.div>
