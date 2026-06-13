@@ -190,21 +190,21 @@ export default function Ubicaciones({
   const selectedSlotHasPkgs = selectedIdx !== null && slots[selectedIdx] && (usageByCodigo[slots[selectedIdx].label] || 0) > 0;
 
   return (
-    <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
+    <section className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
       <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div className="flex items-center gap-5">
-          <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
+          <div className="w-12 h-12 md:w-14 md:h-14 bg-zinc-950 rounded-xl md:rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
             <IconLocation />
           </div>
           <div>
-            <h3 className="text-xl font-black text-zinc-950 tracking-tight">Diseño de Almacén</h3>
-            <p className="text-zinc-500 font-medium text-sm mt-1 max-w-md">Mapea la estructura física de tu local para organizar los paquetes.</p>
+            <h3 className="text-lg md:text-xl font-black text-zinc-950 tracking-tight">Diseño de Almacén</h3>
+            <p className="text-zinc-500 font-medium text-xs md:text-sm mt-1 max-w-md">Mapea la estructura física de tu local para organizar los paquetes.</p>
           </div>
         </div>
       </header>
 
-      <div className="p-6 md:p-8 space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-zinc-50 border border-zinc-200 p-6 rounded-2xl">
+      <div className="p-4 md:p-8 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-zinc-50 border-y md:border border-zinc-200 p-4 md:p-6 rounded-none md:rounded-2xl -mx-4 md:mx-0">
           <div className="lg:col-span-4 flex gap-4">
             <div className="flex-1">
               <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 block">Columnas</label>
@@ -279,89 +279,79 @@ export default function Ubicaciones({
           </div>
         </div>
 
-        <div className="bg-zinc-100 rounded-3xl p-4 sm:p-6 flex flex-col items-center">
-          <div className="flex w-full justify-center overflow-x-auto pb-4">
-            <div className="flex gap-4 items-stretch min-w-max">
-              <div 
-                ref={gridRef}
-                className="grid gap-2 sm:gap-3 relative" 
-                style={{ 
-                  gridTemplateColumns: `repeat(${cols}, minmax(40px, 90px))`,
-                  width: `${cols * 90}px`,
-                  maxWidth: '100%'
-                }}
-              >
-                {slots.map((s, i) => {
-                  const isSelected = selectedIdx === i;
-                  const hasPkgs = s && (usageByCodigo[s.label] || 0) > 0;
-                  
-                  // Check if this is the first empty slot and user only has 1 active slot
-                  const isHintEmptySlot = !s && slots.filter(Boolean).length === 1 && i === slots.findIndex(slot => !slot);
+        <div className="bg-zinc-100 rounded-3xl p-3 sm:p-6 flex flex-col items-center overflow-hidden">
+          <div className="w-full max-w-full overflow-hidden">
+            <div 
+              ref={gridRef}
+              className="grid gap-2 sm:gap-3 relative w-full" 
+              style={{ 
+                gridTemplateColumns: `repeat(${cols}, 1fr)`,
+              }}
+            >
+              {slots.map((s, i) => {
+                const isSelected = selectedIdx === i;
+                const hasPkgs = s && (usageByCodigo[s.label] || 0) > 0;
+                const isHintEmptySlot = !s && slots.filter(Boolean).length === 1 && i === slots.findIndex(slot => !slot);
 
-                  return (
-                    <div key={i} className="relative aspect-square">
-                      {s ? (
-                        <motion.button
-                          key={`box-${s.codigo}`}
-                          layoutId={`box-${s.codigo}`}
-                          layout
-                          drag
-                          dragSnapToOrigin
-                          dragElastic={0.1}
-                          whileDrag={{ scale: 1.1, zIndex: 50 }}
-                          onDragEnd={(e, info) => handleDragEnd(e, info, i)}
-                          onClick={() => handleSlotClick(i)}
-                          className={`absolute inset-0 rounded-xl flex flex-col items-center justify-center font-bold transition-colors border-2 select-none cursor-grab active:cursor-grabbing shadow-sm ${
-                            isSelected ? 'bg-zinc-900 border-zinc-900 text-white z-40 shadow-lg' : 'bg-white border-zinc-200 text-zinc-900 hover:border-zinc-400'
-                          }`}
-                          style={{ zIndex: isSelected ? 40 : 10 }}
-                        >
-                          <span className="text-xs sm:text-lg font-black">{s.label}</span>
-                          {hasPkgs && !isSelected && (
-                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#14B07E] rounded-full border border-white" />
-                          )}
-                        </motion.button>
-                      ) : (
-                        <button
-                          onClick={() => handleSlotClick(i)}
-                          className={`absolute inset-0 rounded-xl flex flex-col items-center justify-center font-bold transition-all border-2 select-none bg-transparent border-dashed ${
-                            isHintEmptySlot 
-                              ? 'border-brand-300 text-brand-400 hover:bg-brand-50 animate-pulse ring-4 ring-brand-100' 
-                              : 'border-zinc-300 text-zinc-300 hover:border-zinc-400 hover:bg-zinc-50'
-                          }`}
-                          style={{ zIndex: 5 }}
-                        >
-                          <span className="text-xs sm:text-lg font-black">+</span>
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              <button 
-                onClick={() => {
-                  commitChange(slots, cols + 1, rows);
-                }}
-                className="w-12 bg-white border-2 border-dashed border-zinc-300 rounded-xl text-zinc-400 hover:border-zinc-400 hover:text-zinc-500 transition-all flex flex-col items-center justify-center gap-2"
-                title="Añadir Columna"
-              >
-                <IconPlus />
-              </button>
+                return (
+                  <div key={i} className="relative aspect-square w-full">
+                    {s ? (
+                      <motion.button
+                        key={`box-${s.codigo}`}
+                        layoutId={`box-${s.codigo}`}
+                        layout
+                        drag
+                        dragSnapToOrigin
+                        dragElastic={0.1}
+                        whileDrag={{ scale: 1.1, zIndex: 50 }}
+                        onDragEnd={(e, info) => handleDragEnd(e, info, i)}
+                        onClick={() => handleSlotClick(i)}
+                        className={`absolute inset-0 rounded-xl flex flex-col items-center justify-center font-bold transition-colors border-2 select-none cursor-grab active:cursor-grabbing shadow-sm ${
+                          isSelected ? 'bg-zinc-900 border-zinc-900 text-white z-40 shadow-lg' : 'bg-white border-zinc-200 text-zinc-900 hover:border-zinc-400'
+                        }`}
+                        style={{ zIndex: isSelected ? 40 : 10 }}
+                      >
+                        <span className="text-[10px] sm:text-base font-black truncate px-1 w-full text-center">{s.label}</span>
+                        {hasPkgs && !isSelected && (
+                          <span className="absolute top-1 right-1 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-[#14B07E] rounded-full border border-white" />
+                        )}
+                      </motion.button>
+                    ) : (
+                      <button
+                        onClick={() => handleSlotClick(i)}
+                        className={`absolute inset-0 rounded-xl flex flex-col items-center justify-center font-bold transition-all border-2 select-none bg-transparent border-dashed ${
+                          isHintEmptySlot 
+                            ? 'border-brand-300 text-brand-400 hover:bg-brand-50 animate-pulse ring-2 sm:ring-4 ring-brand-100' 
+                            : 'border-zinc-300 text-zinc-300 hover:border-zinc-400 hover:bg-zinc-50'
+                        }`}
+                        style={{ zIndex: 5 }}
+                      >
+                        <span className="text-xs sm:text-lg font-black">+</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          <button 
-            onClick={() => {
-              commitChange(slots, cols, rows + 1);
-            }}
-            className="mt-2 w-full max-w-[200px] py-3 bg-white border-2 border-dashed border-zinc-300 rounded-xl text-zinc-400 font-black text-[10px] uppercase tracking-widest hover:border-zinc-400 hover:text-zinc-500 transition-all flex items-center justify-center gap-2 shadow-sm"
-          >
-            <IconPlus /> Añadir Fila
-          </button>
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 w-full max-w-sm">
+            <button 
+              onClick={() => commitChange(slots, cols + 1, rows)}
+              className="flex-1 py-3 bg-white border-2 border-dashed border-zinc-300 rounded-xl text-zinc-500 font-black text-[10px] uppercase tracking-widest hover:border-zinc-400 hover:text-zinc-600 transition-all flex items-center justify-center gap-2 shadow-sm"
+            >
+              <IconPlus /> Columna
+            </button>
+            <button 
+              onClick={() => commitChange(slots, cols, rows + 1)}
+              className="flex-1 py-3 bg-white border-2 border-dashed border-zinc-300 rounded-xl text-zinc-500 font-black text-[10px] uppercase tracking-widest hover:border-zinc-400 hover:text-zinc-600 transition-all flex items-center justify-center gap-2 shadow-sm"
+            >
+              <IconPlus /> Fila
+            </button>
+          </div>
 
-          <p className="mt-6 text-center text-xs font-medium text-zinc-500 max-w-md">
-            Empieza con una caja y expande tu almacén añadiendo filas o columnas según lo necesites. Haz clic en un hueco vacío (<span className="font-bold">+</span>) para activarlo.
+          <p className="mt-6 text-center text-[10px] sm:text-xs font-medium text-zinc-500 max-w-md px-4">
+            Mueve las cajas arrastrándolas o añade nuevas con el botón <span className="font-bold">+</span>.
           </p>
         </div>
 

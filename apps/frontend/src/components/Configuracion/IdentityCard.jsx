@@ -1,21 +1,21 @@
 const IconStore = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
 
-export default function IdentityCard({ nombre, setNombre }) {
+export default function IdentityCard({ nombre, setNombre, usuario }) {
   return (
-    <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden">
+    <section className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
       <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div className="flex items-center gap-5">
-          <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
+          <div className="w-12 h-12 md:w-14 md:h-14 bg-zinc-950 rounded-xl md:rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
             <IconStore />
           </div>
           <div>
-            <h3 className="text-xl font-black text-zinc-950 tracking-tight">Identidad del Negocio</h3>
-            <p className="text-zinc-500 font-medium text-sm mt-1 max-w-md">Nombre visible en el dashboard e informes para tus clientes.</p>
+            <h3 className="text-lg md:text-xl font-black text-zinc-950 tracking-tight">Tu Negocio</h3>
+            <p className="text-zinc-500 font-medium text-xs md:text-sm mt-1 max-w-md">Personaliza cómo ven tus clientes el nombre del establecimiento.</p>
           </div>
         </div>
       </header>
-      
-      <div className="p-6 md:p-8">
+
+      <div className="p-6 md:p-8 space-y-6">
         <div className="max-w-md space-y-3">
           <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block">Nombre de la Empresa</label>
           <input 

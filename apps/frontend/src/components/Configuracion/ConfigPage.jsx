@@ -211,35 +211,38 @@ useEffect(() => {
   if (cargando) return <Skeleton />;
 
   return (
-    <main className="max-w-4xl mx-auto pb-28 pt-8 px-4 font-sans">
+    <main className="max-w-4xl mx-auto pb-28 pt-0 md:pt-8 px-0 md:px-4 font-sans relative">
       {toast && <Toast message={toast.mensaje} type={toast.tipo} onClose={() => setToast(null)} />}
 
-      <header className="sticky top-0 z-40 bg-[#fafafa]/90 backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-6 py-6 border-b border-zinc-200 mb-10">
-        <div>
-          <h1 className="text-3xl font-black text-zinc-950 tracking-tight flex items-center gap-3"><IconSettings /> Ajustes</h1>
-        </div>
+      <header className="sticky top-0 md:top-0 z-40 bg-white/95 backdrop-blur-xl flex items-center justify-between h-[64px] md:h-auto border-b border-zinc-200 mb-0 px-4 md:px-0 -mx-4 md:mx-0 shadow-sm shadow-zinc-100/50">
         <div className="flex items-center gap-3">
+          <div className="hidden md:flex w-12 h-12 bg-zinc-900 rounded-xl items-center justify-center text-white shadow-lg shrink-0">
+            <IconSettings />
+          </div>
+          <h1 className="text-lg md:text-3xl font-black text-zinc-950 tracking-tight ml-1 md:ml-0">Ajustes</h1>
+        </div>
+        <div className="flex items-center gap-2">
           {dirty && (
-            <button onClick={revertirCambios} className="px-6 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold text-sm uppercase tracking-widest rounded-xl transition-all">
+            <button onClick={revertirCambios} className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold text-[10px] md:text-sm uppercase tracking-widest rounded-xl transition-all">
               Deshacer
             </button>
           )}
           <button 
             onClick={handleGuardar}
             disabled={guardando || (!dirty && !accountDraft)}
-            className="onboarding-save-btn px-8 py-3 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all shadow-sm"
+            className="onboarding-save-btn px-5 py-2 bg-brand-500 hover:bg-brand-400 disabled:bg-zinc-200 text-white font-black text-[10px] md:text-sm uppercase tracking-widest rounded-xl transition-all shadow-sm"
           >
-            {guardando ? 'Guardando...' : 'Guardar'}
+            {guardando ? '...' : 'Guardar'}
           </button>
         </div>
       </header>
 
-      <div className="space-y-12">
-        <div className="onboarding-identity">
+      <div className="space-y-0 md:space-y-12 divide-y md:divide-y-0 divide-zinc-100 -mx-4 md:mx-0 border-b md:border-b-0 border-zinc-100">
+        <div className="onboarding-identity bg-white md:bg-transparent px-4 md:px-0">
           <IdentityCard nombre={nombre} setNombre={setNombre} usuario={usuario} />
         </div>
         
-        <div className="onboarding-carriers">
+        <div className="onboarding-carriers bg-white md:bg-transparent px-4 md:px-0">
           <CarriersCard 
             empresas={empresas} 
             empresasDisponibles={empresasDisponibles} 
@@ -247,7 +250,7 @@ useEffect(() => {
           />
         </div>
 
-        <div className="onboarding-ubicaciones">
+        <div className="onboarding-ubicaciones bg-white md:bg-transparent px-4 md:px-0">
           <Ubicaciones 
             key={`ubi-canvas-${resetKey}`}
             initial={ubiRows} 
@@ -259,9 +262,15 @@ useEffect(() => {
           />
         </div>
 
-        <PinCard tenantId={tenant?.id} onToast={mostrarToast} />
-        <AccountSettings usuario={usuario} onDraftChange={setAccountDraft} />
-        <ImportWizard onToast={mostrarToast} onDone={() => loadUsageData(tenant.id)} />
+        <div className="px-4 md:px-0 bg-white md:bg-transparent">
+          <PinCard tenantId={tenant?.id} onToast={mostrarToast} />
+        </div>
+        <div className="px-4 md:px-0 bg-white md:bg-transparent">
+          <AccountSettings usuario={usuario} onDraftChange={setAccountDraft} />
+        </div>
+        <div className="px-4 md:px-0 bg-white md:bg-transparent">
+          <ImportWizard onToast={mostrarToast} onDone={() => loadUsageData(tenant.id)} />
+        </div>
       </div>
     </main>
   );

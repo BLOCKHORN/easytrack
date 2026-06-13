@@ -254,17 +254,17 @@ export default function AccountSettings({ usuario = null, onDraftChange }) {
         onCancel={() => setModalConfig({ ...modalConfig, isOpen: false })} 
       />
 
-      <div className="space-y-12 max-w-4xl mx-auto pb-12">
+      <div className="space-y-0 md:space-y-12 max-w-4xl mx-auto pb-12 divide-y md:divide-y-0 divide-zinc-100 border-b md:border-b-0 border-zinc-100">
         
-        <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden">
+        <section className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm overflow-hidden">
           <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div className="flex items-center gap-5">
-              <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
+              <div className="w-12 h-12 md:w-14 md:h-14 bg-zinc-950 rounded-xl md:rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
                 <IconKey />
               </div>
               <div>
-                <h3 className="text-xl font-black text-zinc-950 tracking-tight">Acceso y Credenciales</h3>
-                <p className="text-zinc-500 font-medium text-sm mt-1 max-w-md">Gestiona tu correo de acceso y la seguridad de tu contraseña.</p>
+                <h3 className="text-lg md:text-xl font-black text-zinc-950 tracking-tight">Acceso y Credenciales</h3>
+                <p className="text-zinc-500 font-medium text-xs md:text-sm mt-1 max-w-md">Gestiona tu correo de acceso y la seguridad de tu contraseña.</p>
               </div>
             </div>
           </header>
@@ -322,15 +322,15 @@ export default function AccountSettings({ usuario = null, onDraftChange }) {
           </div>
         </section>
 
-        <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden">
+        <section className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm overflow-hidden">
           <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div className="flex items-center gap-5">
-              <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
+              <div className="w-12 h-12 md:w-14 md:h-14 bg-zinc-950 rounded-xl md:rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
                 <IconShield />
               </div>
               <div>
-                <h3 className="text-xl font-black text-zinc-950 tracking-tight">Auditoría de Sesiones</h3>
-                <p className="text-zinc-500 font-medium text-sm mt-1 max-w-md">Dispositivos con acceso activo a tu cuenta actualmente.</p>
+                <h3 className="text-lg md:text-xl font-black text-zinc-950 tracking-tight">Auditoría de Sesiones</h3>
+                <p className="text-zinc-500 font-medium text-xs md:text-sm mt-1 max-w-md">Dispositivos con acceso activo a tu cuenta actualmente.</p>
               </div>
             </div>
             <button 

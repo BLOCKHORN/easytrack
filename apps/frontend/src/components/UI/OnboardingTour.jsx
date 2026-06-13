@@ -19,10 +19,28 @@ const OnboardingTour = ({ active = false, steps = [], onComplete }) => {
   };
 
   useEffect(() => {
-    if (!active || !step) return;
+    if (!active) return;
 
     const updateCoords = () => {
-      const el = document.querySelector(step.target);
+      // 1. Intentar encontrar el elemento del paso actual
+      let el = document.querySelector(steps[currentStep]?.target);
+
+      // 2. Lógica Inteligente: Si no está el actual, buscamos si estamos en una pantalla de pasos futuros
+      if (!el) {
+        for (let i = 0; i < steps.length; i++) {
+          const found = document.querySelector(steps[i].target);
+          if (found) {
+            // Solo saltamos si es un paso distinto al actual
+            if (i !== currentStep) {
+              setCurrentStep(i);
+              return; // Salimos para que el siguiente ciclo de interval/effect use el nuevo índice
+            }
+            el = found;
+            break;
+          }
+        }
+      }
+
       if (el) {
         document.querySelectorAll('.onboarding-focus').forEach(node => node.classList.remove('onboarding-focus'));
         el.classList.add('onboarding-focus');
@@ -53,7 +71,7 @@ const OnboardingTour = ({ active = false, steps = [], onComplete }) => {
           lastScrolledStep.current = currentStep;
         }
 
-        if (step.triggerNextOnClick) {
+        if (steps[currentStep]?.triggerNextOnClick) {
           const handleClick = () => {
             el.removeEventListener('click', handleClick);
             handleNext();
@@ -61,7 +79,6 @@ const OnboardingTour = ({ active = false, steps = [], onComplete }) => {
           el.addEventListener('click', handleClick, { once: true });
         }
       } else {
-        // Si no encontramos el elemento, limpiamos coordenadas para ocultar el popup
         setCoords(null);
       }
     };

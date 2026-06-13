@@ -196,26 +196,26 @@ export default function CarriersCard({
   const usados = useMemo(() => new Set(empresas.map((e) => e?.nombre).filter(Boolean)), [empresas]);
 
   return (
-    <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm" aria-labelledby="carriers-title">
-      <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6 rounded-t-[2rem]">
+    <section className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm" aria-labelledby="carriers-title">
+      <header className="p-6 md:p-8 border-b border-zinc-100 bg-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div className="flex items-center gap-5">
-          <div className="w-14 h-14 bg-zinc-950 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
+          <div className="w-12 h-12 md:w-14 md:h-14 bg-zinc-950 rounded-xl md:rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0">
             <IconTruck />
           </div>
           <div>
-            <h3 id="carriers-title" className="text-xl font-black text-zinc-950 tracking-tight">Empresas de transporte</h3>
-            <p className="text-zinc-500 font-medium text-sm mt-1 max-w-md">Define con qué compañías trabajas y el ingreso acordado por paquete.</p>
+            <h3 id="carriers-title" className="text-lg md:text-xl font-black text-zinc-950 tracking-tight">Agencias de Transporte</h3>
+            <p className="text-zinc-500 font-medium text-xs md:text-sm mt-1 max-w-md">Gestiona las empresas de paquetería y tus márgenes por entrega.</p>
           </div>
         </div>
 
         {empresas.length > 0 && (
-          <button className="px-6 py-3 bg-[#14B07E] hover:bg-[#129A6E] text-white font-bold text-sm rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 shrink-0 active:scale-95" onClick={doAdd}>
+          <button className="px-6 py-3 bg-brand-500 hover:bg-brand-400 text-white font-bold text-xs md:text-sm rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 shrink-0 active:scale-95" onClick={doAdd}>
             <IconPlus /> Añadir empresa
           </button>
         )}
       </header>
 
-      <div className="p-6 md:p-8 bg-zinc-50/30 rounded-b-[2rem]">
+      <div className="p-4 md:p-8">
         {empresas.length === 0 && (
           <div className="text-center py-12 px-6 bg-white border border-zinc-200 border-dashed rounded-2xl">
             <div className="w-16 h-16 bg-zinc-50 border border-zinc-100 text-zinc-400 rounded-full flex items-center justify-center mx-auto mb-4">

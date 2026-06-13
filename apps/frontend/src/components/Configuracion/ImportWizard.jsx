@@ -123,13 +123,13 @@ export default function ImportWizard({ onDone, onToast }) {
   );
 
   return (
-    <section className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden font-sans">
+    <section className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm overflow-hidden font-sans">
       <header className="p-6 md:p-8 border-b border-zinc-100 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h3 className="text-lg font-black text-zinc-950 flex items-center gap-2">
             <span className="text-brand-500"><IconSparkles /></span> Añadir Múltiples Paquetes
           </h3>
-          <p className="text-zinc-500 font-medium text-sm mt-1">Pega tu listado y el sistema extraerá los datos automáticamente.</p>
+          <p className="text-zinc-500 font-medium text-xs md:text-sm mt-1">Pega tu listado y el sistema extraerá los datos automáticamente.</p>
         </div>
         <StepIndicator />
       </header>

@@ -241,7 +241,7 @@ export default function DashboardLayout() {
         </div>
       </aside>
 
-      <header className="md:hidden sticky top-0 z-40 bg-zinc-950 flex items-center justify-between p-4 px-5 shadow-lg border-b border-zinc-800/50">
+      <header className="md:hidden sticky top-0 z-50 bg-zinc-950 flex items-center justify-between h-[72px] px-5 shadow-lg border-b border-zinc-800/50">
         <div className="cursor-pointer" onClick={() => navigate('.')}>
           <TypewriterLogo size="text-xl" cursorHeight="h-5" />
         </div>
@@ -301,9 +301,8 @@ export default function DashboardLayout() {
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          className="flex-1 p-5 md:p-8 max-w-[1440px] w-full mx-auto"
+          className="flex-1 px-4 pt-4 md:p-8 max-w-[1440px] w-full mx-auto"
         >
-          <ReviewBanner />
           <Outlet />
         </motion.div>
       </main>
