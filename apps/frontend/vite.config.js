@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       port: 5173,
-      allowedHosts: ['mayday-oversweet-defense.ngrok-free.dev'],
+      allowedHosts: true,
       proxy: {
         // Rutas relativas -> backend (evita CORS en local)
         '/api': { target: BACKEND, changeOrigin: true },

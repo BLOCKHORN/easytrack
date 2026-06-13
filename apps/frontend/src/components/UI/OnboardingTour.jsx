@@ -60,6 +60,9 @@ const OnboardingTour = ({ active = false, steps = [], onComplete }) => {
           };
           el.addEventListener('click', handleClick, { once: true });
         }
+      } else {
+        // Si no encontramos el elemento, limpiamos coordenadas para ocultar el popup
+        setCoords(null);
       }
     };
 
