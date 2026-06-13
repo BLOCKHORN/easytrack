@@ -53,8 +53,10 @@ async function resolveTenantId(req) {
 exports.obtenerTenantMe = async (req, res) => {
   try {
     const slugQ = req.query?.slug || null;
+    console.log('obtenerTenantMe: User', req.user?.email, 'SlugQ', slugQ);
 
     if (req.tenant?.id) {
+      console.log('obtenerTenantMe: Tenant ya en req', req.tenant.slug);
       const { data: t, error: terr } = await supabaseAdmin
         .from('tenants')
         .select(TENANT_FIELDS)
@@ -69,7 +71,10 @@ exports.obtenerTenantMe = async (req, res) => {
     }
 
     const email = String(req.user?.email || '').toLowerCase().trim();
-    if (!email) return res.status(401).json({ ok: false, error: 'UNAUTHENTICATED' });
+    if (!email) {
+      console.log('obtenerTenantMe: No hay email en req.user');
+      return res.status(401).json({ ok: false, error: 'UNAUTHENTICATED' });
+    }
 
     if (slugQ) {
       const { data: t, error } = await supabaseAdmin
@@ -86,12 +91,17 @@ exports.obtenerTenantMe = async (req, res) => {
     }
 
     const tenant = await ensureTenantByEmail(email);
-    if (!tenant) return res.status(500).json({ ok: false, error: 'TENANT_PROVISION_FAILED' });
+    if (!tenant) {
+      console.log('obtenerTenantMe: No se pudo asegurar tenant para', email);
+      return res.status(500).json({ ok: false, error: 'TENANT_PROVISION_FAILED' });
+    }
 
+    console.log('obtenerTenantMe: Tenant encontrado/creado', tenant.slug);
     const subscription = await fetchSubscriptionForTenant(tenant.id);
     const entitlements = computeEntitlements({ tenant, subscription });
     return res.json({ ok: true, tenant, subscription, entitlements });
   } catch (err) {
+    console.error('Error en obtenerTenantMe:', err);
     return res.status(500).json({ ok: false, error: 'TENANT_ME_FAILED' });
   }
 };

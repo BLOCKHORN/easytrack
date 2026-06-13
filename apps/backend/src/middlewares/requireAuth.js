@@ -63,16 +63,23 @@ async function resolveTenantForUser(userId, slug, email) {
 async function strictUser(req, res, next) {
   try {
     const user = await resolveUser(req);
-    if (!user) return res.status(401).json({ error: 'Token inválido o no proporcionado.' });
+    if (!user) {
+      console.log('Auth Fallida: No hay usuario o token inválido');
+      return res.status(401).json({ error: 'Token inválido o no proporcionado.' });
+    }
 
     const slug = req.params?.tenantSlug || req.params?.slug;
     const tenant = await resolveTenantForUser(user.id, slug, user.email);
     
-    if (!tenant) return res.status(403).json({ error: 'Acceso denegado a este negocio.' });
+    if (!tenant) {
+      console.log('Auth Fallida: Usuario', user.email, 'no tiene acceso al negocio', slug);
+      return res.status(403).json({ error: 'Acceso denegado a este negocio.' });
+    }
 
     attach(req, { user, tenant });
     next();
   } catch (err) {
+    console.error('Error en strictUser:', err);
     res.status(500).json({ error: 'Error interno de autenticación.' });
   }
 }
