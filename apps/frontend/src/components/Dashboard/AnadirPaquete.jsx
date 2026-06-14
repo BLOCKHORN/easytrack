@@ -5,6 +5,8 @@ import { supabase } from '../../utils/supabaseClient';
 import { getTenantIdOrThrow } from '../../utils/tenant';
 import { crearPaqueteBackend, obtenerPaquetesBackend } from '../../services/paquetesService';
 import { cargarUbicaciones } from '../../services/ubicacionesService';
+import AnadirPaqueteSkeleton from './AnadirPaqueteSkeleton';
+import { getCarrierLogo, getInitials, ImageFallback } from '../UI/CarrierLogo';
 
 window.__AP_PAGE_CACHE = window.__AP_PAGE_CACHE || {
   loaded: false,
@@ -281,7 +283,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const [showCamera, setShowCamera] = useState(false);
 
   const [paquetesLocales, setPaquetesLocales] = useState(window.__AP_PAGE_CACHE.paquetesPendientes);
-  const paquetes = propsPaquetes || paquetesLocales;
+  const paquetes = (propsPaquetes && propsPaquetes.length > 0) ? propsPaquetes : paquetesLocales;
 
   const [slotSel, setSlotSel] = useState(null);
   const [seleccionManual, setSeleccionManual] = useState(false);
@@ -294,7 +296,10 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   const flyLayerRef = useRef(null);
 
   const cols = clamp(parseInt(metaUbi?.cols ?? 5, 10) || 5, 1, 12);
-  
+  const minRowsNeeded = Math.ceil((rawUbicaciones.reduce((max, u) => Math.max(max, u.orden ?? 0), -1) + 1) / cols);
+  const rows = clamp(parseInt(metaUbi?.rows ?? minRowsNeeded, 10) || 5, 2, 50);
+  const totalSlots = cols * Math.max(rows, minRowsNeeded);
+
   const ubicaciones = useMemo(() => {
     return [...rawUbicaciones].sort((a,b) => (a.orden ?? 0) - (b.orden ?? 0)).map((u, i) => ({
       ...u,
@@ -338,7 +343,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
           fetch(`${API_URL}/api/limits/me`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({})),
           fetch(`${API_URL}/api/ubicaciones/carriers`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({ empresas: [] })),
           cargarUbicaciones(token, tid).catch(() => ({})),
-          !propsPaquetes ? obtenerPaquetesBackend(token, { estado: 'pendiente', all: 1 }).catch(() => []) : Promise.resolve(null)
+          (!propsPaquetes || propsPaquetes.length === 0) ? obtenerPaquetesBackend(token, { estado: 'pendiente', all: 1 }).catch(() => []) : Promise.resolve(null)
         ]);
 
         if (cancel) return;
@@ -368,8 +373,11 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         setRawUbicaciones(newRawUbis);
         setMetaUbi(newMeta);
 
-        if (!propsPaquetes && pkgsData) {
-          setPaquetesLocales(Array.isArray(pkgsData) ? pkgsData : []);
+        if (pkgsData) {
+          console.log('%c[DEBUG] PKGS DATA FROM API:', 'color: white; background: blue; padding: 4px;', pkgsData);
+          const list = Array.isArray(pkgsData) ? pkgsData : [];
+          setPaquetesLocales(list);
+          window.__AP_PAGE_CACHE.paquetesPendientes = list;
         }
 
         if (isInitializing) {
@@ -860,12 +868,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
   };
 
   if (isInitializing) {
-    return (
-      <div className={`bg-white flex flex-col items-center justify-center ${modoRapido ? 'h-[400px]' : 'min-h-[60vh] rounded-[2rem] border border-zinc-200/80 mx-auto max-w-5xl'}`}>
-        <div className="w-10 h-10 border-4 border-zinc-200 border-t-[#14B07E] rounded-full animate-spin mb-4" />
-        <p className="text-zinc-400 font-bold text-sm uppercase tracking-widest">Sincronizando local...</p>
-      </div>
-    );
+    return <AnadirPaqueteSkeleton modoRapido={modoRapido} />;
   }
 
   return (
@@ -944,9 +947,20 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
 
             <div className="space-y-1.5">
               <label className="text-[10px] sm:text-xs font-black text-zinc-500 uppercase tracking-widest">Compañía</label>
-              <select value={compania} onChange={e => setCompania(e.target.value)} className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl outline-none font-black text-base sm:text-lg text-zinc-950 transition-colors focus:bg-white focus:border-[#14B07E] cursor-pointer">
-                {companias.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                  <ImageFallback 
+                    src={getCarrierLogo(compania)}
+                    fallbackText={getInitials(compania)}
+                    containerClassName="w-6 h-6 shrink-0"
+                    imgClassName="max-w-full max-h-full object-contain"
+                    fallbackClassName="bg-zinc-200 rounded-lg text-[10px] font-black text-zinc-500"
+                  />
+                </div>
+                <select value={compania} onChange={e => setCompania(e.target.value)} className="w-full pl-12 pr-4 py-2.5 sm:py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl outline-none font-black text-base sm:text-lg text-zinc-950 transition-colors focus:bg-white focus:border-[#14B07E] cursor-pointer">
+                  {companias.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
@@ -984,9 +998,20 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
              </div>
              
              {batchSameCompany && (
-                <select value={batchCompany} onChange={e => setBatchCompany(e.target.value)} className="w-full px-3 sm:px-4 py-2.5 sm:py-3.5 bg-white border border-zinc-300 rounded-xl font-black text-base sm:text-lg text-zinc-950 outline-none focus:border-[#14B07E]">
-                  {companias.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                    <ImageFallback 
+                      src={getCarrierLogo(batchCompany)}
+                      fallbackText={getInitials(batchCompany)}
+                      containerClassName="w-6 h-6 shrink-0"
+                      imgClassName="max-w-full max-h-full object-contain"
+                      fallbackClassName="bg-zinc-200 rounded-lg text-[10px] font-black text-zinc-500"
+                    />
+                  </div>
+                  <select value={batchCompany} onChange={e => setBatchCompany(e.target.value)} className="w-full pl-12 pr-4 py-2.5 sm:py-3.5 bg-white border border-zinc-300 rounded-xl font-black text-base sm:text-lg text-zinc-950 outline-none focus:border-[#14B07E]">
+                    {companias.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
              )}
 
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 pt-1">
@@ -1052,17 +1077,15 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
           </div>
 
           {/* MAPA VISUAL ESTILO PLANO CON MAPA DE CALOR ELEGANTE (TEXTO SIEMPRE NEGRO/GRIS OSCURO) */}
-          <div className="flex w-full justify-center overflow-x-auto pb-4">
-            <div className="flex gap-4 items-stretch min-w-max px-2">
-              <div 
-                className="grid gap-2 sm:gap-3 relative" 
-                style={{ 
-                  gridTemplateColumns: `repeat(${cols}, minmax(50px, 90px))`,
-                  width: `${cols * 90}px`,
-                  maxWidth: '100%'
+          <div className="flex w-full justify-center pb-4 overflow-hidden">
+            <div className="w-full max-w-full">
+              <div
+                className="grid gap-2 sm:gap-3 relative w-full"
+                style={{
+                  gridTemplateColumns: `repeat(${cols}, 1fr)`
                 }}
               >
-                {Array.from({ length: cols * Math.max(2, Math.ceil((ubicaciones.reduce((max, u) => Math.max(max, u.orden ?? 0), -1) + 1) / cols)) }).map((_, i) => {
+                {Array.from({ length: totalSlots }).map((_, i) => {
                   const u = ubicaciones.find(x => x.orden === i);
                   
                   if (!u) {
@@ -1198,7 +1221,13 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
             className="fixed bottom-24 md:bottom-8 left-1/2 bg-zinc-900 text-white px-6 py-4 rounded-xl shadow-xl font-bold text-sm flex items-center gap-3 z-[9999] border border-zinc-800 whitespace-nowrap"
           >
             <IconCheck /> 
-            Guardado en <span className="bg-zinc-800 px-2 py-0.5 rounded-md border border-zinc-700">{ultimoGuardado?.label}</span>
+            <div>
+              {activeTab === 'single' ? (
+                <span>Paquete de <strong className="text-emerald-400">{cliente}</strong> guardado en <strong className="text-emerald-400">{ultimoGuardado?.label}</strong></span>
+              ) : (
+                <span><strong className="text-emerald-400">{multiCount} paquetes</strong> guardados en <strong className="text-emerald-400">{ultimoGuardado?.label}</strong></span>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

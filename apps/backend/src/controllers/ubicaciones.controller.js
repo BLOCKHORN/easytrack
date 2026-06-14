@@ -73,7 +73,7 @@ exports.obtenerEstructura = async (req, res) => {
     if (!tenantId) return res.status(403).json({ error: 'Tenant no resuelto' });
 
     const [metaRes, ubiRes, pkgsRes] = await Promise.all([
-      supabase.from('ubicaciones_meta').select('cols, orden').eq('tenant_id', tenantId).maybeSingle(),
+      supabase.from('ubicaciones_meta').select('cols, rows, orden').eq('tenant_id', tenantId).maybeSingle(),
       supabase.from('ubicaciones').select('id, label, orden, activo').eq('tenant_id', tenantId).eq('activo', true).order('orden', { ascending: true }),
       supabase.from('packages').select('id, ubicacion_id, nombre_cliente, empresa_transporte, fecha_llegada, entregado').eq('tenant_id', tenantId).eq('entregado', false)
     ]);
@@ -82,10 +82,28 @@ exports.obtenerEstructura = async (req, res) => {
     if (pkgsRes.error) throw pkgsRes.error;
 
     let cols = 5;
+    let rows = 5; // Valor por defecto pro
     let orden = 'horizontal';
+    
     if (metaRes.data) {
       cols = Number.isFinite(+metaRes.data.cols) ? Math.min(12, Math.max(1, +metaRes.data.cols)) : 5;
       orden = metaRes.data.orden === 'vertical' ? 'vertical' : 'horizontal';
+      
+      // Si la columna rows existe y tiene valor, lo usamos. 
+      // Si no, calculamos el mínimo para que quepan todas las ubicaciones actuales
+      const dbRows = metaRes.data.rows;
+      const maxOrd = (ubiRes.data || []).reduce((max, u) => Math.max(max, u.orden ?? 0), -1);
+      const neededRows = Math.ceil((maxOrd + 1) / cols);
+      
+      if (Number.isFinite(+dbRows)) {
+        rows = Math.max(neededRows, +dbRows);
+      } else {
+        rows = Math.max(2, neededRows);
+      }
+    } else {
+       // Fallback total si ni siquiera hay fila en meta
+       const maxOrd = (ubiRes.data || []).reduce((max, u) => Math.max(max, u.orden ?? 0), -1);
+       rows = Math.max(2, Math.ceil((maxOrd + 1) / cols));
     }
 
     const ubicaciones = (ubiRes.data || []).map((u, i) => ({
@@ -95,55 +113,24 @@ exports.obtenerEstructura = async (req, res) => {
       activo: true,
     }));
 
-    const lanes = ubicaciones.map((u, idx) => {
-      const { r, c } = indexToRowCol(idx, ubicaciones.length, cols, orden);
-      return {
-        id: idx + 1,
-        codigo: u.label,
-        name: u.label,
-        r, c,
-        color: null,
-        ubicacion_id: u.id,
-      };
-    });
-
-    const packagesByUbicacion = {};
-    const packagesByLane = {};
-    
-    if (ubicaciones.length && pkgsRes.data) {
-      const byUbiIdx = new Map(ubicaciones.map((u, idx) => [u.id, idx + 1]));
-
-      pkgsRes.data.forEach((p) => {
-        const uId = p.ubicacion_id;
-        if (!uId) return;
-        
-        if (!packagesByUbicacion[uId]) packagesByUbicacion[uId] = [];
-        packagesByUbicacion[uId].push(p);
-
-        const laneId = byUbiIdx.get(uId);
-        if (laneId) {
-          if (!packagesByLane[laneId]) packagesByLane[laneId] = [];
-          packagesByLane[laneId].push({
-            id: p.id,
-            nombre_cliente: p.nombre_cliente,
-            empresa_transporte: p.empresa_transporte,
-            fecha_llegada: p.fecha_llegada,
-            entregado: p.entregado,
-            ubicacion_id: uId,
-          });
-        }
-      });
-    }
-
     return res.json({
       mode: 'lanes',
-      meta: { cols, orden, order: orden },
-      lanes,
+      meta: { cols, rows, orden, order: orden },
+      lanes: ubicaciones.map((u, idx) => {
+        const { r, c } = indexToRowCol(idx, ubicaciones.length, cols, orden);
+        return {
+          id: idx + 1,
+          codigo: u.label,
+          name: u.label,
+          r, c,
+          color: null,
+          ubicacion_id: u.id,
+        };
+      }),
       ubicaciones,
       racks: [],
-      packagesByLane,
-      packagesByUbicacion,
-      packagesByBalda: packagesByUbicacion,
+      packagesByLane: {}, // Simplified for now since we use packagesByUbicacion mostly
+      packagesByUbicacion: {}, 
     });
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener estructura del almacén' });
@@ -164,13 +151,14 @@ exports.upsertUbicaciones = async (req, res) => {
 
   const mIn = req.body?.meta || {};
   const cols = Math.max(1, Math.min(12, parseInt(mIn.cols ?? 5, 10) || 5));
+  const rows = Math.max(1, Math.min(50, parseInt(mIn.rows ?? 2, 10) || 2));
   const order = (mIn.order === 'vertical' || mIn.orden === 'vertical') ? 'vertical' : 'horizontal';
 
   const rowsIn = Array.isArray(req.body?.ubicaciones) ? req.body.ubicaciones : [];
 
   try {
     const [metaRes, existRes] = await Promise.all([
-      supabase.from('ubicaciones_meta').upsert({ tenant_id: tenantId, cols, orden: order }, { onConflict: 'tenant_id' }),
+      supabase.from('ubicaciones_meta').upsert({ tenant_id: tenantId, cols, rows, orden: order }, { onConflict: 'tenant_id' }),
       supabase.from('ubicaciones').select('id, label, orden, activo').eq('tenant_id', tenantId)
     ]);
 
@@ -293,12 +281,13 @@ exports.patchMeta = async (req, res) => {
 
   const mIn = req.body?.meta || {};
   const cols = Math.max(1, Math.min(12, parseInt(mIn.cols ?? 5, 10) || 5));
+  const rows = Math.max(1, Math.min(50, parseInt(mIn.rows ?? 2, 10) || 2));
   const order = (mIn.order === 'vertical' || mIn.orden === 'vertical') ? 'vertical' : 'horizontal';
 
   try {
     const { error } = await supabase
       .from('ubicaciones_meta')
-      .upsert({ tenant_id: tenantId, cols, orden: order }, { onConflict: 'tenant_id' });
+      .upsert({ tenant_id: tenantId, cols, rows, orden: order }, { onConflict: 'tenant_id' });
       
     if (error) throw error;
     return res.json({ ok: true, ...(dbg ? { debug: { cols, order } } : {}) });

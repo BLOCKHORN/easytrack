@@ -7,8 +7,16 @@ const { fetchSubscriptionForTenant } = require('../utils/subscription');
 const up = (s = '') => String(s || '').trim().toUpperCase();
 
 async function resolveTenantId(req) {
+  // Prioridad 1: Resuelto por Middleware (URL Slug)
   if (req.tenant?.id) return String(req.tenant.id);
   if (req.tenantId) return String(req.tenantId);
+
+  // Prioridad 2: Query Params (tenant_id o tenantId)
+  const qId = req.query?.tenant_id || req.query?.tenantId;
+  if (qId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(qId)) {
+    return String(qId);
+  }
+
   return null;
 }
 
@@ -51,6 +59,7 @@ function applyCommonFilters(qb, { estado, compania, ubicacion, search }) {
 exports.listarPaquetes = async (req, res) => {
   try {
     const tenantId = await resolveTenantId(req);
+    console.log('[DEBUG] listarPaquetes resolved tenantId:', tenantId);
     if (!tenantId) return res.status(403).json({ error: 'No autorizado' });
     
     const { limit, offset, all, estado, compania, ubicacion, search, order = 'fecha_llegada', dir = 'desc' } = req.query || {};
@@ -194,6 +203,8 @@ exports.editarPaquete = async (req, res) => {
     if (req.body.nombre_cliente != null) patch.nombre_cliente = up(req.body.nombre_cliente);
     if (req.body.empresa_transporte != null) patch.empresa_transporte = req.body.empresa_transporte;
     if (req.body.telefono !== undefined) patch.telefono = req.body.telefono ? String(req.body.telefono).trim() : null;
+    if (req.body.entregado !== undefined) patch.entregado = !!req.body.entregado;
+    if (req.body.fecha_entregado !== undefined) patch.fecha_entregado = req.body.fecha_entregado;
     
     let nUbiId = req.body.ubicacion_id;
     let nUbiLabel = req.body.ubicacion_label;

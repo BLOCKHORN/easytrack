@@ -6,6 +6,7 @@ import {
   Tooltip, ResponsiveContainer
 } from "recharts";
 import AnadirPaquete from "./AnadirPaquete";
+import DashboardSkeleton from "./DashboardSkeleton";
 import { supabase } from "../../utils/supabaseClient";
 import PlanBadge from '../../components/Billing/PlanBadge';
 
@@ -243,11 +244,7 @@ export default function Dashboard(props) {
   }, [resumen.diario]);
 
   if (cargandoNegocio) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="w-10 h-10 border-4 border-zinc-100 border-t-brand-500 rounded-full animate-spin" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (

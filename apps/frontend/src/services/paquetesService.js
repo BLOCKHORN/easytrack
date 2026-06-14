@@ -135,10 +135,10 @@ export async function crearPaqueteBackend(datos, token) {
  */
 export async function obtenerPaquetesBackend(token, params = {}) {
   const tid = await getTenantIdOrThrow();
-  const url = new URL(`${API_URL}/paquetes/listar`);
+  const url = new URL(`${API_URL}/paquetes/listar`, window.location.origin);
 
   const query = {
-    tenantId: tid,
+    tenant_id: tid,
     all: params.all ?? 1,               // ← por defecto trae TODO
     limit: params.limit,
     offset: params.offset,
@@ -168,7 +168,7 @@ export async function obtenerPaquetesBackend(token, params = {}) {
  */
 export async function contarPaquetesBackend(token, params = {}) {
   const tid = await getTenantIdOrThrow();
-  const url = new URL(`${API_URL}/paquetes/count`);
+  const url = new URL(`${API_URL}/paquetes/count`, window.location.origin);
 
   const query = {
     tenantId: tid,

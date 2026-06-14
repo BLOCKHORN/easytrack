@@ -7,6 +7,8 @@ import {
   editarPaqueteBackend,
 } from "../../services/paquetesService";
 import { getTenantIdOrThrow } from "../../utils/tenant";
+import BuscarPaqueteSkeleton from "./BuscarPaqueteSkeleton";
+import { getCarrierLogo, getInitials, ImageFallback } from '../UI/CarrierLogo';
 
 const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
 const PROD_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
@@ -81,6 +83,28 @@ const playSuccessChime = () => {
     playFreq(523.25, 0); // Do
     playFreq(659.25, 0.08); // Mi
     playFreq(783.99, 0.16); // Sol
+  } catch {}
+};
+
+const playUndoChime = () => {
+  try {
+    const ctx = __AUDIO_CTX || new (window.AudioContext || window.webkitAudioContext)();
+    __AUDIO_CTX = ctx;
+    const playFreq = (f, t) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = f;
+      gain.gain.setValueAtTime(0, ctx.currentTime + t);
+      gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.4);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime + t);
+      osc.stop(ctx.currentTime + t + 0.5);
+    };
+    playFreq(783.99, 0); // Sol
+    playFreq(659.25, 0.08); // Mi
+    playFreq(523.25, 0.16); // Do (Sentido inverso)
   } catch {}
 };
 
@@ -455,10 +479,14 @@ export default function BuscarPaquete() {
       
       setKpiGlobal(prev => ({...prev, pendientes: Math.max(0, prev.pendientes - 1), entregados: prev.entregados + 1}));
       
-      showToast("Paquete entregado", false, {
-        label: "Deshacer",
-        onClick: () => handleUndoEntregar(pkg)
-      });
+      showToast(
+        <span>Paquete de <strong className="text-emerald-400">{pkg.nombre_cliente}</strong> ({pkg.ubicacion_label}) entregado</span>, 
+        false, 
+        {
+          label: "Deshacer",
+          onClick: () => handleUndoEntregar(pkg)
+        }
+      );
 
       if (window.__AP_PAGE_CACHE) {
         window.__AP_PAGE_CACHE.loaded = false;
@@ -479,7 +507,8 @@ export default function BuscarPaquete() {
       
       fetchPage(); 
       loadGlobalData();
-      showToast("Entrega deshecha");
+      playUndoChime();
+      showToast(<span>Entrega de <strong className="text-emerald-400">{pkg.nombre_cliente}</strong> deshecha</span>);
     } catch (e) {
       showToast("Error al deshacer", true);
     }
@@ -717,13 +746,12 @@ export default function BuscarPaquete() {
         </div>
       </div>
 
-      <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="block lg:hidden divide-y divide-zinc-100">
-          {cargando ? (
-            [...Array(5)].map((_, i) => (
-              <div key={i} className="p-5"><div className="h-20 bg-zinc-100 rounded-xl animate-pulse"></div></div>
-            ))
-          ) : paquetes.length === 0 ? (
+      {cargando ? (
+        <BuscarPaqueteSkeleton />
+      ) : (
+        <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="block lg:hidden divide-y divide-zinc-100">
+            {paquetes.length === 0 ? (
             <div className="py-12 text-center text-zinc-500 font-bold text-sm sm:text-base">No hay paquetes que coincidan.</div>
           ) : (
             <AnimatePresence>
@@ -754,6 +782,13 @@ export default function BuscarPaquete() {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-zinc-600 pl-9">
+                      <ImageFallback 
+                        src={getCarrierLogo(p.compania)}
+                        fallbackText={getInitials(p.compania)}
+                        containerClassName="w-4 h-4 shrink-0"
+                        imgClassName="max-w-full max-h-full object-contain"
+                        fallbackClassName="bg-zinc-100 rounded text-[8px] font-black text-zinc-400"
+                      />
                       <span>{p.compania || "—"}</span>
                       <span className="text-zinc-300">•</span>
                       <span>{formatearFechaLocal(p.fecha_llegada)}</span>
@@ -823,11 +858,7 @@ export default function BuscarPaquete() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
-              {cargando ? (
-                [...Array(RESULTADOS_POR_PAGINA)].map((_, i) => (
-                  <tr key={i}><td colSpan="7" className="py-8 px-6"><div className="h-6 bg-zinc-100 rounded w-full animate-pulse"></div></td></tr>
-                ))
-              ) : paquetes.length === 0 ? (
+              {paquetes.length === 0 ? (
                 <tr><td colSpan="7" className="py-16 text-center text-zinc-500 font-bold text-lg">No hay paquetes que coincidan.</td></tr>
               ) : (
                 <AnimatePresence>
@@ -855,7 +886,16 @@ export default function BuscarPaquete() {
                           </div>
                         </td>
                         <td className="py-5 px-6 font-bold text-zinc-600 text-sm">
-                          {p.compania || "—"}
+                          <div className="flex items-center gap-2">
+                            <ImageFallback 
+                              src={getCarrierLogo(p.compania)}
+                              fallbackText={getInitials(p.compania)}
+                              containerClassName="w-5 h-5 shrink-0"
+                              imgClassName="max-w-full max-h-full object-contain"
+                              fallbackClassName="bg-zinc-100 rounded text-[8px] font-black text-zinc-400"
+                            />
+                            <span>{p.compania || "—"}</span>
+                          </div>
                         </td>
                         <td className="py-5 px-6 text-center">
                           <span className="inline-flex items-center justify-center min-w-[3.5rem] px-3 py-1.5 bg-zinc-100 border border-zinc-200 text-zinc-900 text-lg font-black rounded-lg">
@@ -949,6 +989,7 @@ export default function BuscarPaquete() {
           </div>
         )}
       </div>
+      )}
 
       <AnimatePresence>
         {anySelected && (
