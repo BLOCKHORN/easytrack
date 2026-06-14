@@ -26,7 +26,7 @@ const IconSettings = () => <svg width="24" height="24" viewBox="0 0 24 24" fill=
 const sameJSON = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const rowsFromCount = (n) => Array.from({ length: Math.min(parseInt(n || 0, 10) || 0, 5000) }, (_, i) => ({ label: `B${i + 1}`, codigo: `B${i + 1}`, orden: i }));
 
-const sanitizeUbicaciones = (rows = []) => rows.map((r, i) => ({
+const sanitizeUbicaciones = (num_rows = []) => num_rows.map((r, i) => ({
   label: String(r?.label || `B${i + 1}`).toUpperCase(),
   codigo: String(r?.codigo || r?.label || `B${i + 1}`).toUpperCase(),
   orden: Number.isFinite(r?.orden) ? r.orden : i
@@ -41,7 +41,7 @@ export default function ConfigPage() {
   const [cargando, setCargando] = useState(true);
   
   const [ubiRows, setUbiRows] = useState([]);
-  const [ubiMeta, setUbiMeta] = useState({ cols: 5, rows: 5 });
+  const [ubiMeta, setUbiMeta] = useState({ cols: 5, num_rows: 5 });
   const [usageByCodigo, setUsageByCodigo] = useState({});
   const [empresas, setEmpresas] = useState([]);
   const [empresasDisponibles, setEmpresasDisponibles] = useState([]);
@@ -77,17 +77,17 @@ export default function ConfigPage() {
       setUbiRows(arr.length ? sanitizeUbicaciones(arr) : defaultRows);
       
       const numCols = parseInt(resp?.meta?.cols || 2, 10);
-      let numRows = parseInt(resp?.meta?.rows, 10);
+      let numRows = parseInt(resp?.meta?.num_rows, 10);
       if (Number.isNaN(numRows) || numRows < 1) {
         let maxIdx = -1;
         arr.forEach(u => { if (u.orden > maxIdx) maxIdx = u.orden; });
         numRows = Math.max(2, Math.ceil((maxIdx + 1) / numCols));
       }
 
-      setUbiMeta({ cols: numCols, rows: numRows });
+      setUbiMeta({ cols: numCols, num_rows: numRows });
     } catch {
       setUbiRows([{ label: 'B1', codigo: 'B1', orden: 0 }]);
-      setUbiMeta({ cols: 2, rows: 2 });
+      setUbiMeta({ cols: 2, num_rows: 2 });
     }
   };
 
@@ -154,7 +154,7 @@ useEffect(() => {
 
   const handleUbicacionesChange = useCallback(({ ubicaciones, meta, deletions, forceDeletePackages }) => {
     setUbiRows(ubicaciones);
-    setUbiMeta(prev => ({ ...prev, cols: meta.cols, rows: meta.rows })); 
+    setUbiMeta(prev => ({ ...prev, cols: meta.cols, num_rows: meta.num_rows })); 
     pendingDeletionsRef.current = deletions;
     forceDeleteRef.current = forceDeletePackages;
   }, []);
@@ -178,7 +178,7 @@ useEffect(() => {
         await guardarUbicaciones({
           tenantId: tenant.id,
           ubicaciones: sanitizeUbicaciones(ubiRows),
-          meta: { cols: ubiMeta.cols, rows: ubiMeta.rows },
+          meta: { cols: ubiMeta.cols, num_rows: ubiMeta.num_rows },
           deletions: pendingDeletionsRef.current,
           forceDeletePackages: forceDeleteRef.current
         }, token);

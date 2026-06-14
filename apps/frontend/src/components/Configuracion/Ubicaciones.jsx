@@ -19,7 +19,7 @@ export default function Ubicaciones({
   onToast
 }) {
   const [cols, setCols] = useState(initialMeta?.cols || 2);
-  const [rows, setRows] = useState(initialMeta?.rows || 2);
+  const [num_rows, setRows] = useState(initialMeta?.num_rows || 2);
   const [slots, setSlots] = useState([]);
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [editingLabel, setEditingLabel] = useState("");
@@ -41,9 +41,9 @@ export default function Ubicaciones({
     let maxIdx = -1;
     initial.forEach(u => { if (typeof u.orden === 'number' && u.orden > maxIdx) maxIdx = u.orden; });
 
-    // Use initialMeta.rows if provided, otherwise calculate based on boxes. Default to 2.
+    // Use initialMeta.num_rows if provided, otherwise calculate based on boxes. Default to 2.
     const calculatedRows = Math.max(2, Math.ceil((maxIdx + 1) / c));
-    const providedRows = parseInt(initialMeta?.rows, 10);
+    const providedRows = parseInt(initialMeta?.num_rows, 10);
     const finalRows = Number.isFinite(providedRows) ? Math.max(calculatedRows, providedRows) : calculatedRows;
     const finalCols = c;
 
@@ -59,7 +59,7 @@ export default function Ubicaciones({
 
   const commitChange = (nextSlots, nextCols, nextRows) => {
     const c = nextCols !== undefined ? nextCols : cols;
-    const r = nextRows !== undefined ? nextRows : rows;
+    const r = nextRows !== undefined ? nextRows : num_rows;
     
     let finalSlots = [...nextSlots];
     const targetLength = c * r;
@@ -78,7 +78,7 @@ export default function Ubicaciones({
       const ubicaciones = finalSlots.map((s, i) => s ? { ...s, orden: i } : null).filter(Boolean);
       onChange({
         ubicaciones,
-        meta: { cols: c, rows: r },
+        meta: { cols: c, num_rows: r },
         deletions: deletionsRef.current.slice(),
         forceDeletePackages: forceRef.current
       });
@@ -121,7 +121,7 @@ export default function Ubicaciones({
     if (x < 0 || x >= gridRect.width || y < 0 || y >= gridRect.height) return;
 
     const cellWidth = gridRect.width / cols;
-    const cellHeight = gridRect.height / rows;
+    const cellHeight = gridRect.height / num_rows;
     
     const col = Math.floor(x / cellWidth);
     const row = Math.floor(y / cellHeight);
@@ -217,9 +217,9 @@ export default function Ubicaciones({
             <div className="flex-1">
               <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 block">Filas</label>
               <div className="flex items-center bg-white border border-zinc-200 rounded-xl overflow-hidden h-11">
-                <button onClick={() => commitChange(slots, undefined, clamp(rows - 1, 1, 50))} className="w-10 flex items-center justify-center hover:bg-zinc-50 transition-colors"><IconMinus /></button>
-                <span className="flex-1 text-center font-bold text-zinc-900 border-x border-zinc-100">{rows}</span>
-                <button onClick={() => commitChange(slots, undefined, clamp(rows + 1, 1, 50))} className="w-10 flex items-center justify-center hover:bg-zinc-50 transition-colors"><IconPlus /></button>
+                <button onClick={() => commitChange(slots, undefined, clamp(num_rows - 1, 1, 50))} className="w-10 flex items-center justify-center hover:bg-zinc-50 transition-colors"><IconMinus /></button>
+                <span className="flex-1 text-center font-bold text-zinc-900 border-x border-zinc-100">{num_rows}</span>
+                <button onClick={() => commitChange(slots, undefined, clamp(num_rows + 1, 1, 50))} className="w-10 flex items-center justify-center hover:bg-zinc-50 transition-colors"><IconPlus /></button>
               </div>
             </div>
           </div>
@@ -337,13 +337,13 @@ export default function Ubicaciones({
 
           <div className="mt-6 flex flex-col sm:flex-row gap-3 w-full max-w-sm">
             <button 
-              onClick={() => commitChange(slots, cols + 1, rows)}
+              onClick={() => commitChange(slots, cols + 1, num_rows)}
               className="flex-1 py-3 bg-white border-2 border-dashed border-zinc-300 rounded-xl text-zinc-500 font-black text-[10px] uppercase tracking-widest hover:border-zinc-400 hover:text-zinc-600 transition-all flex items-center justify-center gap-2 shadow-sm"
             >
               <IconPlus /> Columna
             </button>
             <button 
-              onClick={() => commitChange(slots, cols, rows + 1)}
+              onClick={() => commitChange(slots, cols, num_rows + 1)}
               className="flex-1 py-3 bg-white border-2 border-dashed border-zinc-300 rounded-xl text-zinc-500 font-black text-[10px] uppercase tracking-widest hover:border-zinc-400 hover:text-zinc-600 transition-all flex items-center justify-center gap-2 shadow-sm"
             >
               <IconPlus /> Fila

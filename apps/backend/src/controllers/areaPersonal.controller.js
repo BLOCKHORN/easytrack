@@ -84,6 +84,73 @@ async function updateFinanceSettings(req, res) {
 // 2. ESTADÍSTICAS Y MÉTRICAS (RPC)
 // ==========================================
 
+async function getStatsManual(tenantId) {
+  const { data: pkgs, error } = await supabase
+    .from('packages')
+    .select('nombre_cliente, empresa_transporte, ingreso_generado, entregado, fecha_llegada, fecha_entregado')
+    .eq('tenant_id', tenantId);
+  
+  if (error) throw error;
+
+  const delivered = pkgs.filter(p => p.entregado);
+  const pending = pkgs.filter(p => !p.entregado);
+
+  const hoy = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+
+  const resumen = {
+    total_ingresos: delivered.reduce((a, p) => a + (Number(p.ingreso_generado) || 0), 0),
+    total_entregas: delivered.length,
+    almacenActual: pending.length,
+    ingresoHoy: delivered.filter(p => p.fecha_entregado?.startsWith(hoy)).reduce((a, p) => a + (Number(p.ingreso_generado) || 0), 0),
+    recibidosHoy: pkgs.filter(p => p.fecha_llegada?.startsWith(hoy)).length,
+    entregadosHoy: delivered.filter(p => p.fecha_entregado?.startsWith(hoy)).length,
+    primera_entrega: delivered.length ? delivered.reduce((m, p) => p.fecha_entregado < m ? p.fecha_entregado : m, delivered[0].fecha_entregado) : null,
+    ultima_entrega: delivered.length ? delivered.reduce((m, p) => p.fecha_entregado > m ? p.fecha_entregado : m, delivered[0].fecha_entregado) : null
+  };
+
+  // Por Empresa
+  const mapEmp = {};
+  delivered.forEach(p => {
+    const e = p.empresa_transporte || 'Particular';
+    mapEmp[e] = (mapEmp[e] || 0) + (Number(p.ingreso_generado) || 0);
+  });
+  const porEmpresa = Object.entries(mapEmp).map(([name, total]) => ({ empresa_transporte: name, total })).sort((a,b) => b.total - a.total);
+
+  // Top Clientes
+  const mapCli = {};
+  delivered.forEach(p => {
+    const c = p.nombre_cliente || 'Sin nombre';
+    mapCli[c] = (mapCli[c] || 0) + (Number(p.ingreso_generado) || 0);
+  });
+  const topClientes = Object.entries(mapCli).map(([name, total]) => ({ nombre_cliente: name, total })).sort((a,b) => b.total - a.total).slice(0, 10);
+
+  // Diario (Agrupación por fecha de entregado)
+  const mapDiario = {};
+  delivered.forEach(p => {
+    const f = p.fecha_entregado?.split('T')[0];
+    if (f) {
+      if (!mapDiario[f]) mapDiario[f] = { fecha: f, ingresos: 0, entregas: 0 };
+      mapDiario[f].ingresos += Number(p.ingreso_generado) || 0;
+      mapDiario[f].entregas += 1;
+    }
+  });
+  const diario = Object.values(mapDiario).sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  // Mensual (Agrupación por mes de entregado)
+  const mapMensual = {};
+  delivered.forEach(p => {
+    const m = p.fecha_entregado?.substring(0, 7); // YYYY-MM
+    if (m) {
+      if (!mapMensual[m]) mapMensual[m] = { mes: m, total_ingresos: 0, total_entregas: 0 };
+      mapMensual[m].total_ingresos += Number(p.ingreso_generado) || 0;
+      mapMensual[m].total_entregas += 1;
+    }
+  });
+  const mensual = Object.values(mapMensual).sort((a, b) => a.mes.localeCompare(b.mes));
+
+  return { resumen, porEmpresa, topClientes, mensual, diario };
+}
+
 async function obtenerResumenEconomico(req, res) {
   try {
     const tenantId = await resolveTenantId(req);
@@ -97,32 +164,41 @@ async function obtenerResumenEconomico(req, res) {
 
     res.json({ resumen: data.resumen });
   } catch (err) {
+    console.error('[AreaPersonal] Error:', err);
     res.status(500).json({ error: 'Error al obtener resumen económico' });
   }
 }
 
 async function obtenerIngresosMensuales(req, res) {
-  const tenantId = await resolveTenantId(req);
-  const { data } = await supabase.rpc('get_area_personal_stats', { p_tenant_id: tenantId });
-  res.json({ mensual: data?.mensual || [] });
+  try {
+    const tenantId = await resolveTenantId(req);
+    const { data } = await supabase.rpc('get_area_personal_stats', { p_tenant_id: tenantId });
+    res.json({ mensual: data?.mensual || [] });
+  } catch(e) { res.json({ mensual: [] }); }
 }
 
 async function obtenerIngresosPorEmpresa(req, res) {
-  const tenantId = await resolveTenantId(req);
-  const { data } = await supabase.rpc('get_area_personal_stats', { p_tenant_id: tenantId });
-  res.json({ porEmpresa: data?.porEmpresa || [] });
+  try {
+    const tenantId = await resolveTenantId(req);
+    const { data } = await supabase.rpc('get_area_personal_stats', { p_tenant_id: tenantId });
+    res.json({ porEmpresa: data?.porEmpresa || [] });
+  } catch(e) { res.json({ porEmpresa: [] }); }
 }
 
 async function obtenerTopClientes(req, res) {
-  const tenantId = await resolveTenantId(req);
-  const { data } = await supabase.rpc('get_area_personal_stats', { p_tenant_id: tenantId });
-  res.json({ topClientes: data?.topClientes || [] });
+  try {
+    const tenantId = await resolveTenantId(req);
+    const { data } = await supabase.rpc('get_area_personal_stats', { p_tenant_id: tenantId });
+    res.json({ topClientes: data?.topClientes || [] });
+  } catch(e) { res.json({ topClientes: [] }); }
 }
 
 async function obtenerDiario(req, res) {
-  const tenantId = await resolveTenantId(req);
-  const { data } = await supabase.rpc('get_area_personal_stats', { p_tenant_id: tenantId });
-  res.json({ diario: data?.diario || [] });
+  try {
+    const tenantId = await resolveTenantId(req);
+    const { data } = await supabase.rpc('get_area_personal_stats', { p_tenant_id: tenantId });
+    res.json({ diario: data?.diario || [] });
+  } catch(e) { res.json({ diario: [] }); }
 }
 
 async function obtenerUltimasEntregas(req, res) {

@@ -12,7 +12,7 @@ let __SHELF_CACHE = {
   loaded: false,
   ubicaciones: [],
   paquetes: [],
-  metaUbi: { cols: 5, rows: 5, order: 'horizontal' }
+  metaUbi: { cols: 5, num_rows: 5, order: 'horizontal' }
 };
 
 // --- ICONOS ---
@@ -62,7 +62,7 @@ export default function VerEstantes() {
         const newPkgs = Array.isArray(pkgsArr) ? pkgsArr : [];
         const newMeta = { 
           cols: ubiRes.meta?.cols ?? 5, 
-          rows: ubiRes.meta?.rows ?? 5, // Fallback pro
+          num_rows: ubiRes.meta?.num_rows ?? 5, // Fallback pro
           order: ubiRes.meta?.order ?? ubiRes.meta?.orden ?? 'horizontal' 
         };
 
@@ -108,8 +108,8 @@ export default function VerEstantes() {
 
   const cols = clamp(parseInt(metaUbi?.cols ?? 5, 10) || 5, 1, 12);
   const minRowsNeeded = Math.ceil((processedUbicaciones.reduce((max, u) => Math.max(max, u.orden ?? 0), -1) + 1) / cols);
-  const rows = clamp(parseInt(metaUbi?.rows ?? minRowsNeeded, 10) || 5, 2, 50);
-  const totalSlots = cols * Math.max(rows, minRowsNeeded);
+  const num_rows = clamp(parseInt(metaUbi?.num_rows ?? minRowsNeeded, 10) || 5, 2, 50);
+  const totalSlots = cols * Math.max(num_rows, minRowsNeeded);
 
   const getShelfStyle = (count, isSelected, isHovered) => {
     if (isHovered) return { bgColor: 'bg-[#14B07E] border-[#14B07E] ring-4 ring-[#14B07E]/30 scale-[1.08] shadow-2xl z-30 transition-all duration-200', titleColor: 'text-white', countColor: 'text-emerald-100' };

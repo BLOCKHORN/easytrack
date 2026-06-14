@@ -297,8 +297,8 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
 
   const cols = clamp(parseInt(metaUbi?.cols ?? 5, 10) || 5, 1, 12);
   const minRowsNeeded = Math.ceil((rawUbicaciones.reduce((max, u) => Math.max(max, u.orden ?? 0), -1) + 1) / cols);
-  const rows = clamp(parseInt(metaUbi?.rows ?? minRowsNeeded, 10) || 5, 2, 50);
-  const totalSlots = cols * Math.max(rows, minRowsNeeded);
+  const num_rows = clamp(parseInt(metaUbi?.num_rows ?? minRowsNeeded, 10) || 5, 2, 50);
+  const totalSlots = cols * Math.max(num_rows, minRowsNeeded);
 
   const ubicaciones = useMemo(() => {
     return [...rawUbicaciones].sort((a,b) => (a.orden ?? 0) - (b.orden ?? 0)).map((u, i) => ({
