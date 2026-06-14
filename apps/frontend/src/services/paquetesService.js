@@ -146,6 +146,7 @@ export async function obtenerPaquetesBackend(token, params = {}) {
     compania: params.compania,
     ubicacion: params.ubicacion,
     search: params.search,
+    recientes: params.recientes,
     order: params.order,
     dir: params.dir,
   };
@@ -223,6 +224,8 @@ export async function editarPaqueteBackend(paquete, token) {
     telefono: paquete?.telefono || null,
     ubicacion_id: paquete?.ubicacion_id ?? paquete?.balda_id ?? null,
     ubicacion_label: paquete?.ubicacion_label ?? paquete?.compartimento ?? null,
+    entregado: paquete?.entregado,
+    fecha_entregado: paquete?.fecha_entregado
   };
 
   const url = `${API_URL}/paquetes/${id}?tenantId=${encodeURIComponent(tid)}`;

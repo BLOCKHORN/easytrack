@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../../utils/supabaseClient";
 import { getTenantIdOrThrow } from "../../utils/tenant";
-import { eliminarPaqueteBackend, editarPaqueteBackend } from "../../services/paquetesService";
+import { eliminarPaqueteBackend, editarPaqueteBackend, obtenerPaquetesBackend } from "../../services/paquetesService";
 import { cargarUbicaciones } from "../../services/ubicacionesService";
 
 // --- SISTEMA DE CACHÉ EN MEMORIA (SWR) ---
@@ -56,15 +56,15 @@ export default function VerEstantes() {
         const tId = await getTenantIdOrThrow();
         const { data: { session } } = await supabase.auth.getSession();
         
-        const [ubiRes, pkgsRes] = await Promise.all([
+        const [ubiRes, pkgsArr] = await Promise.all([
           cargarUbicaciones(session.access_token, tId),
-          supabase.from('packages').select('*').eq('tenant_id', tId).eq('entregado', false)
+          obtenerPaquetesBackend(session.access_token, { estado: 'pendiente', all: 1 })
         ]);
 
         if (cancel) return;
 
         const newUbis = ubiRes.ubicaciones || [];
-        const newPkgs = (!pkgsRes.error && pkgsRes.data) ? pkgsRes.data : [];
+        const newPkgs = Array.isArray(pkgsArr) ? pkgsArr : [];
         const newMeta = { cols: ubiRes.meta?.cols ?? 5, order: ubiRes.meta?.order ?? ubiRes.meta?.orden ?? 'horizontal' };
 
         __SHELF_CACHE = { loaded: true, ubicaciones: newUbis, paquetes: newPkgs, metaUbi: newMeta };

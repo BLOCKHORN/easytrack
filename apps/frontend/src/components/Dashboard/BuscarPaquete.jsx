@@ -30,6 +30,7 @@ const IconEye = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none
 const IconEyeSlash = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20"/></svg>;
 const IconTimes = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 const IconInfo = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
+const IconClock = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
 const IconLoader = () => <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>;
 
 const RESULTADOS_POR_PAGINA = 10;
@@ -48,6 +49,17 @@ const setRadar = (val) => localStorage.setItem(RADAR_KEY, JSON.stringify(val));
 
 // --- SONIDO DE ÉXITO ---
 let __AUDIO_CTX = null;
+const formatRelativeTime = (isoString) => {
+  if (!isoString) return "";
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "ahora mismo";
+  if (mins < 60) return `hace ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `hace ${hours}h`;
+  return ""; // No mostramos más allá de 24h como relativo
+};
+
 const playSuccessChime = () => {
   try {
     const ctx = __AUDIO_CTX || new (window.AudioContext || window.webkitAudioContext)();
@@ -101,9 +113,30 @@ function highlightExact(text, query) {
 
 export default function BuscarPaquete() {
   const [busqueda, setBusqueda] = useState("");
-  const [estadoFiltro, setEstadoFiltro] = useState("pendiente");
-  const [companiaFiltro, setCompaniaFiltro] = useState("todos");
-  const [ubicacionFiltro, setUbicacionFiltro] = useState("todas");
+  const [estadoFiltro, setEstadoFiltro] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+      return saved.estadoFiltro ?? "pendiente";
+    } catch { return "pendiente"; }
+  });
+  const [recientesFiltro, setRecientesFiltro] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+      return !!saved.recientesFiltro;
+    } catch { return false; }
+  });
+  const [companiaFiltro, setCompaniaFiltro] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+      return saved.companiaFiltro ?? "todos";
+    } catch { return "todos"; }
+  });
+  const [ubicacionFiltro, setUbicacionFiltro] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+      return saved.ubicacionFiltro ?? "todas";
+    } catch { return "todas"; }
+  });
   
   // Ojo con persistencia
   const [revealAll, setRevealAll] = useState(() => localStorage.getItem(REVEAL_KEY) === "true");
@@ -152,9 +185,11 @@ export default function BuscarPaquete() {
   const [confirmState, setConfirmState] = useState({ open: false, payload: null });
   const [confirmBulk, setConfirmBulk] = useState(false);
 
-  const showToast = (msg, isError = false) => {
-    setToastMsg({ msg, isError });
-    setTimeout(() => setToastMsg(null), 3500);
+  const showToast = (msg, isError = false, action = null) => {
+    setToastMsg({ msg, isError, action });
+    setTimeout(() => {
+      setToastMsg(prev => (prev?.msg === msg ? null : prev));
+    }, action ? 8000 : 3500);
   };
 
   const isSelected = (id) => selectedIds.has(id);
@@ -323,6 +358,7 @@ export default function BuscarPaquete() {
             compania: p.empresa_transporte ?? p.compania ?? "",
             entregado: !!p.entregado || retryQueue.current.has(p.id),
             fecha_llegada: p.fecha_llegada ?? p.created_at ?? new Date().toISOString(),
+            fecha_entregado: p.fecha_entregado ?? null,
             ubicacion_id: p.ubicacion_id ?? null,
             ubicacion_label: p.ubicacion_label || "",
           }));
@@ -339,13 +375,6 @@ export default function BuscarPaquete() {
 
   useEffect(() => {
     try {
-      const rawFiltros = localStorage.getItem(LS_KEY);
-      if (rawFiltros) {
-        const saved = JSON.parse(rawFiltros);
-        setEstadoFiltro(saved.estadoFiltro ?? "pendiente");
-        setCompaniaFiltro(saved.companiaFiltro ?? "todos");
-        setUbicacionFiltro(saved.ubicacionFiltro ?? "todas");
-      }
       const rawQueue = localStorage.getItem(QUEUE_KEY);
       if (rawQueue) {
         const savedQueue = JSON.parse(rawQueue);
@@ -359,13 +388,13 @@ export default function BuscarPaquete() {
   }, [processSyncQueue]);
 
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify({ estadoFiltro, companiaFiltro, ubicacionFiltro }));
-  }, [estadoFiltro, companiaFiltro, ubicacionFiltro]);
+    localStorage.setItem(LS_KEY, JSON.stringify({ estadoFiltro, companiaFiltro, ubicacionFiltro, recientesFiltro }));
+  }, [estadoFiltro, companiaFiltro, ubicacionFiltro, recientesFiltro]);
 
   useEffect(() => {
     setSelectedIds(new Set());
     setPaginaActual(1);
-  }, [busqueda, estadoFiltro, companiaFiltro, ubicacionFiltro]);
+  }, [busqueda, estadoFiltro, companiaFiltro, ubicacionFiltro, recientesFiltro]);
 
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
@@ -374,7 +403,7 @@ export default function BuscarPaquete() {
       isFirstMount.current = false; 
     }, 300);
     return () => clearTimeout(searchDebounceRef.current);
-  }, [paginaActual, busqueda, estadoFiltro, companiaFiltro, ubicacionFiltro]);
+  }, [paginaActual, busqueda, estadoFiltro, companiaFiltro, ubicacionFiltro, recientesFiltro]);
 
   const companiasFiltradas = ["todos", ...companias];
   const ubicacionesFiltradas = ["todas", ...ubicaciones.map(u => u.label).sort((a,b)=> {
@@ -403,15 +432,17 @@ export default function BuscarPaquete() {
 
   // --- ENTREGAR PAQUETE (CON FEEDBACK) ---
   const marcarEntregado = (id) => {
+    const pkg = paquetes.find(p => p.id === id);
+    if (!pkg) return;
+
     setEntregandoId(id); 
     
-    // Delay de dopamina: Mostramos el loader, hacemos la transición y luego eliminamos.
     setTimeout(() => {
       playSuccessChime();
       
       setPaquetes(prev => {
         if (estadoFiltro === "pendiente") return prev.filter(p => p.id !== id);
-        return prev.map(p => p.id === id ? { ...p, entregado: true } : p);
+        return prev.map(p => p.id === id ? { ...p, entregado: true, fecha_entregado: new Date().toISOString() } : p);
       });
       
       if (estadoFiltro === "pendiente") setTotalResultados(prev => Math.max(0, prev - 1));
@@ -423,11 +454,35 @@ export default function BuscarPaquete() {
       checkRadar();
       
       setKpiGlobal(prev => ({...prev, pendientes: Math.max(0, prev.pendientes - 1), entregados: prev.entregados + 1}));
+      
+      showToast("Paquete entregado", false, {
+        label: "Deshacer",
+        onClick: () => handleUndoEntregar(pkg)
+      });
+
       if (window.__AP_PAGE_CACHE) {
         window.__AP_PAGE_CACHE.loaded = false;
       }
       setEntregandoId(null);
     }, 600); 
+  };
+
+  const handleUndoEntregar = async (pkg) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await editarPaqueteBackend({ ...pkg, entregado: false, fecha_entregado: null }, session.access_token);
+      
+      setPaquetes(prev => {
+        if (estadoFiltro === "entregado") return prev.filter(p => p.id !== pkg.id);
+        return prev.map(p => p.id === pkg.id ? { ...p, entregado: false, fecha_entregado: null } : p);
+      });
+      
+      fetchPage(); 
+      loadGlobalData();
+      showToast("Entrega deshecha");
+    } catch (e) {
+      showToast("Error al deshacer", true);
+    }
   };
 
   const entregarSeleccionados = () => {
@@ -532,13 +587,23 @@ export default function BuscarPaquete() {
       <AnimatePresence>
         {toastMsg && (
           <motion.div 
-            initial={{ opacity: 0, y: -50, x: '-50%' }} 
-            animate={{ opacity: 1, y: 0, x: '-50%' }} 
-            exit={{ opacity: 0, y: -20, x: '-50%' }}
-            className={`fixed top-24 left-1/2 z-[9999] px-5 sm:px-6 py-3 rounded-xl shadow-lg font-black text-white text-sm sm:text-base flex items-center gap-3 border ${toastMsg.isError ? 'bg-red-600 border-red-500' : 'bg-[#14B07E] border-[#14B07E]'} whitespace-nowrap`}
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 20, x: '-50%' }}
+            className={`fixed bottom-24 left-1/2 z-[9999] px-5 py-3 rounded-2xl shadow-2xl font-bold text-white text-sm flex items-center gap-4 border ${toastMsg.isError ? 'bg-red-600 border-red-500' : 'bg-zinc-900 border-zinc-800'} whitespace-nowrap`}
           >
-            {toastMsg.isError ? <IconTimes /> : <IconCheck />}
-            {toastMsg.msg}
+            <div className="flex items-center gap-2">
+              {toastMsg.isError ? <IconTimes /> : <div className="w-2 h-2 rounded-full bg-brand-400 animate-pulse" />}
+              {toastMsg.msg}
+            </div>
+            {toastMsg.action && (
+              <button 
+                onClick={() => { toastMsg.action.onClick(); setToastMsg(null); }}
+                className="ml-2 px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-[10px] uppercase tracking-widest font-black transition-colors border border-white/10"
+              >
+                {toastMsg.action.label}
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -638,6 +703,14 @@ export default function BuscarPaquete() {
           <select value={ubicacionFiltro} onChange={e => setUbicacionFiltro(e.target.value)} className="px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm sm:text-base font-black text-zinc-800 outline-none focus:border-[#14B07E] truncate cursor-pointer">
             {ubicacionesFiltradas.map(u => <option key={u} value={u}>{u === 'todas' ? 'Todas las Ubicaciones' : u}</option>)}
           </select>
+          
+          <button 
+            onClick={() => setRecientesFiltro(!recientesFiltro)} 
+            className={`px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border text-sm sm:text-base font-black transition-all flex items-center justify-center gap-2 ${recientesFiltro ? 'bg-brand-500 text-white border-brand-500 shadow-md shadow-brand-100' : 'bg-white text-zinc-800 border-zinc-200 hover:bg-zinc-50'}`}
+            title="Actividad reciente"
+          >
+            <IconClock /> <span className="hidden sm:inline">Recientes</span>
+          </button>
           <button onClick={toggleRevealGlobal} className={`px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border text-sm sm:text-base font-black transition-colors flex items-center justify-center gap-2 ${revealAll ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-800 border-zinc-200 hover:bg-zinc-50'}`}>
             {revealAll ? <IconEyeSlash /> : <IconEye />} <span className="hidden sm:inline">{revealAll ? 'Ocultar' : 'Mostrar'}</span>
           </button>
@@ -699,10 +772,17 @@ export default function BuscarPaquete() {
                       </div>
                       <div className="flex justify-end w-full">
                         {p.entregado ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-black text-[#14B07E] bg-[#14B07E]/10 border border-[#14B07E]/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#14B07E]"></span>
-                            Entregado
-                          </span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-black text-brand-600 bg-brand-50 border border-brand-100">
+                              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>
+                              Entregado
+                            </span>
+                            {p.fecha_entregado && (
+                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">
+                                {formatRelativeTime(p.fecha_entregado)}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <button onClick={() => marcarEntregado(p.id)} disabled={isDelivering} className="px-4 py-2 bg-[#14B07E] hover:bg-[#129A6E] text-white text-sm font-black rounded-lg flex items-center justify-center gap-2 transition-transform active:scale-95 w-full min-w-[120px]">
                             {isDelivering ? (
@@ -787,15 +867,29 @@ export default function BuscarPaquete() {
                         </td>
                         <td className="py-5 px-6">
                           {p.entregado ? (
-                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-black text-[#14B07E] bg-[#14B07E]/10 border border-[#14B07E]/20">
-                               <span className="w-1.5 h-1.5 rounded-full bg-[#14B07E]"></span>
-                               Entregado
-                             </span>
+                            <div className="flex flex-col gap-1">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-black text-brand-600 bg-brand-50 border border-brand-100 w-fit">
+                                <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>
+                                Entregado
+                              </span>
+                              {p.fecha_entregado && (
+                                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest pl-1">
+                                  {formatRelativeTime(p.fecha_entregado)}
+                                </span>
+                              )}
+                            </div>
                           ) : (
-                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-black text-zinc-600 bg-zinc-100 border border-zinc-200">
-                               <span className="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
-                               Pendiente
-                             </span>
+                            <button onClick={() => marcarEntregado(p.id)} disabled={isDelivering} className="px-4 py-2 bg-[#14B07E] hover:bg-[#129A6E] text-white text-xs font-black rounded-lg flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-sm shadow-emerald-100">
+                               {isDelivering ? (
+                                 <>
+                                   <IconLoader /> <span>Cerrando</span>
+                                 </>
+                               ) : (
+                                 <>
+                                   <IconCheck /> <span>Entregar</span>
+                                 </>
+                               )}
+                            </button>
                           )}
                         </td>
                         <td className="py-5 px-6 text-right">
@@ -937,11 +1031,11 @@ export default function BuscarPaquete() {
 
       <AnimatePresence>
         {confirmBulk && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" onClick={() => setConfirmBulk(false)} />
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col overflow-hidden border border-zinc-200">
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="relative bg-white w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden border border-zinc-100">
               <div className="p-8 text-center">
-                <div className="w-20 h-20 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-100 shadow-inner">
+                <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
                   <IconTrash />
                 </div>
                 <h3 className="text-2xl font-black text-zinc-950 mb-3 tracking-tight">¿Eliminar {selectedIds.size} paquetes?</h3>

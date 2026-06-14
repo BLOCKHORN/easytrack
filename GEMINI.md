@@ -46,11 +46,13 @@ Sistema centralizado de ajustes con detección de cambios (`dirty state`) y snap
 ... (rest of the file as before) ...
 
 ## 💻 Convenciones y Ajustes de Servidor
-
-### Frontend (Vite)
-- **allowedHosts**: En desarrollo, Vite está configurado con `allowedHosts: true` en `vite.config.js` para permitir el acceso a través de túneles ngrok sin bloqueos de seguridad.
+### Frontend (Vite & Layout)
+- **allowedHosts**: En desarrollo, Vite está configurado con `allowedHosts: true` para permitir ngrok.
+- **Responsive Inmersivo**: Se ha implementado un diseño "edge-to-edge" en móviles para la página de Ajustes, eliminando márgenes laterales y redondeos de tarjetas para ganar espacio.
+- **Sincronización Sticky**: El navbar móvil tiene una altura fija de `72px` (z-50) y los encabezados sticky interiores deben sincronizarse con `top-[72px]` (z-40) para evitar solapamientos feos.
 
 ### Backend (Node.js)
+...
 - **Trust Proxy**: Habilitado (`app.set('trust proxy', 1)`) para capturar correctamente la IP del cliente a través de ngrok/Vercel.
 - **Logging**: Incluye un middleware de logging básico para monitorear rutas y tiempos de respuesta en desarrollo.
 
