@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '../../utils/fetcher';
+import { getCarrierLogo, getInitials, ImageFallback } from '../UI/CarrierLogo';
 
 const IconSearch = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const IconTerminal = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>;
@@ -11,9 +12,10 @@ const IconBuilding = () => <svg width="16" height="16" viewBox="0 0 24 24" fill=
 const IconAlert = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
 const IconWhatsapp = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.487-1.761-1.66-2.059-.173-.297-.018-.458.13-.606.134-.133-.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>;
 const IconStar = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>;
+const IconTrendingDown = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>;
 
 const formatEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(n || 0);
-const formatMicroEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 4, maximumFractionDigits: 6 }).format(n || 0);
+const formatMicroEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
 
 const timeAgo = (dateString) => {
   if (!dateString) return 'Sin actividad';
@@ -32,48 +34,21 @@ const getAiCost = (pTokens, cTokens) => {
 
 const analyzeNegotiationOpportunities = (statsArray, timeRange, tenant) => {
   if (timeRange === 'today' || timeRange === 'week') return [];
-
   const creationDate = tenant?.fecha_creacion ? new Date(tenant.fecha_creacion) : new Date();
-  const daysActive = (new Date() - creationDate) / (1000 * 60 * 60 * 24);
-  const monthsActive = Math.max(1, daysActive / 30.44);
-
-  const TIERS = {
-    VOLUMEN: ['Amazon Logistics', 'InPost', 'Mondial Relay', 'Punto Pack', 'Celeritas', 'Packlink'],
-    PREMIUM: ['DHL', 'UPS', 'FedEx', 'TNT']
-  };
+  const monthsActive = Math.max(1, (new Date() - creationDate) / (1000 * 60 * 60 * 24 * 30.44));
+  const TIERS = { VOLUMEN: ['Amazon Logistics', 'InPost', 'Celeritas'], PREMIUM: ['DHL', 'UPS', 'FedEx'] };
 
   return statsArray.map(c => {
     const vol = Number(c.volumen) || 0;
     const currentTicket = Number(c.ticket_medio) || 0;
     const monthlyVol = timeRange === 'all' ? (vol / monthsActive) : vol;
-
     let targetTicket = 0;
-    const emp = c.empresa_transporte;
-
-    if (TIERS.VOLUMEN.includes(emp)) {
-      if (monthlyVol >= 1500) targetTicket = 0.35;
-      else if (monthlyVol >= 800) targetTicket = 0.25;
-    } else if (TIERS.PREMIUM.includes(emp)) {
-      if (monthlyVol >= 150) targetTicket = 0.60;
-      else if (monthlyVol >= 50) targetTicket = 0.50; 
-    } else {
-      if (monthlyVol >= 800) targetTicket = 0.60;
-      else if (monthlyVol >= 400) targetTicket = 0.50;
-      else if (monthlyVol >= 200) targetTicket = 0.40; 
-    }
+    if (TIERS.VOLUMEN.includes(c.empresa_transporte)) targetTicket = monthlyVol >= 800 ? 0.35 : 0.25;
+    else if (TIERS.PREMIUM.includes(c.empresa_transporte)) targetTicket = monthlyVol >= 50 ? 0.60 : 0.50;
+    else targetTicket = monthlyVol >= 200 ? 0.45 : 0.35;
     
     if (targetTicket > 0 && currentTicket < targetTicket) {
-      const diff = targetTicket - currentTicket;
-      return {
-        empresa: emp,
-        volumenTotal: vol,
-        volumenMensual: Math.round(monthlyVol),
-        ticketActual: currentTicket,
-        ticketObjetivo: targetTicket,
-        fugaMensual: monthlyVol * diff,
-        fugaAnual: (monthlyVol * diff) * 12,
-        fugaHistorica: timeRange === 'all' ? (vol * diff) : null
-      };
+      return { empresa: c.empresa_transporte, volumenMensual: Math.round(monthlyVol), ticketActual: currentTicket, ticketObjetivo: targetTicket, fugaAnual: (monthlyVol * (targetTicket - currentTicket)) * 12 };
     }
     return null;
   }).filter(Boolean);
@@ -88,286 +63,115 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
   const [timeRange, setTimeRange] = useState('all'); 
 
   useEffect(() => {
-    const fetchDetails = async () => {
+    (async () => {
       setLoading(true);
       try {
         const res = await apiFetch(`/api/admin/tenant-stats/${tenant.id}?timeRange=${timeRange}`);
         const result = await res.json();
-        if (!result.ok) throw new Error(result.error);
         setStatsData(result.stats || []);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDetails();
+      } catch (err) { console.error(err); } finally { setLoading(false); }
+    })();
   }, [tenant.id, timeRange]);
 
   const handleSaveLimits = async () => {
     setSaving(true);
     try {
-      const parsedQuota = parseInt(quotaInput, 10);
-      const finalQuota = isNaN(parsedQuota) || parsedQuota < 0 ? null : parsedQuota;
-      
-      const res = await apiFetch(`/api/admin/tenant/${tenant.id}/limits`, {
-        method: 'PATCH',
-        body: { trial_quota: finalQuota, is_ai_active: aiActive }
-      });
-      
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error);
-      
+      const q = parseInt(quotaInput, 10);
+      await apiFetch(`/api/admin/tenant/${tenant.id}/limits`, { method: 'PATCH', body: { trial_quota: isNaN(q) || q < 0 ? null : q, is_ai_active: aiActive } });
       onUpdate(); 
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { alert(err.message); } finally { setSaving(false); }
   };
 
-  const handleMagicLink = async () => {
-    try {
-      const res = await apiFetch('/api/tenants/magic-link', {
-        method: 'POST',
-        body: { email: tenant.email }
-      });
-      
-      const data = await res.json();
-      
-      if (data.ok) {
-        await navigator.clipboard.writeText(data.link);
-        alert('ENLACE COPIADO AL PORTAPAPELES.\n\nÁbrelo estrictamente en una ventana de INCÓGNITO. Si lo abres aquí, perderás tu sesión de administrador.');
-      } else {
-        alert(data.error);
-      }
-    } catch (err) {
-      alert('Error de red al solicitar el acceso.');
-    }
-  };
-
-  const totals = useMemo(() => {
-    return statsData.reduce((acc, curr) => {
-      acc.revenue += Number(curr.ingreso_total) || 0;
-      acc.volume += Number(curr.volumen) || 0;
-      return acc;
-    }, { revenue: 0, volume: 0 });
-  }, [statsData]);
-
-  const opportunities = useMemo(() => {
-    return analyzeNegotiationOpportunities(statsData, timeRange, tenant);
-  }, [statsData, timeRange, tenant]);
-
-  const quotaPercentage = tenant.trial_quota > 0 ? Math.min((tenant.trial_used / tenant.trial_quota) * 100, 100) : 0;
-  const isQuotaExhausted = tenant.trial_quota > 0 && tenant.trial_used >= tenant.trial_quota;
-
-  const promptCost = (tenant.ai_prompt_tokens || 0) / 1000000 * 0.075;
-  const compCost = (tenant.ai_completion_tokens || 0) / 1000000 * 0.30;
-  const totalCost = promptCost + compCost;
+  const totals = useMemo(() => statsData.reduce((acc, curr) => { acc.revenue += Number(curr.ingreso_total) || 0; acc.volume += Number(curr.volumen) || 0; return acc; }, { revenue: 0, volume: 0 }), [statsData]);
+  const opportunities = useMemo(() => analyzeNegotiationOpportunities(statsData, timeRange, tenant), [statsData, timeRange, tenant]);
+  const totalCost = getAiCost(tenant.ai_prompt_tokens, tenant.ai_completion_tokens);
 
   return (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-      <div className="flex justify-between items-center mb-4">
-        <button onClick={onBack} className="flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-900 transition-colors">
-          <IconBack /> Volver al listado
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-10">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-zinc-100 pb-8">
+        <button onClick={onBack} className="flex items-center gap-2 text-xs font-[1000] uppercase tracking-widest text-zinc-400 hover:text-zinc-950 transition-colors">
+          <IconBack /> Volver
         </button>
-        <button 
-          onClick={handleMagicLink}
-          className="flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 px-4 py-2 rounded-lg border border-brand-200 transition-all"
-        >
-          <IconTerminal /> Generar Acceso Incógnito
-        </button>
-      </div>
+        <div className="flex flex-wrap items-center gap-4">
+           <h2 className="text-3xl font-[1000] tracking-tighter uppercase">{tenant.nombre_empresa || 'Empresa S/N'}</h2>
+           {tenant.plan_id === 'pro' && <PlanBadge />}
+        </div>
+      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="space-y-6">
-          <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-1">
-              <h2 className="text-2xl font-bold text-zinc-950">{tenant.nombre_empresa || 'Sin Configurar'}</h2>
-              {tenant.plan_id === 'pro' && <span className="bg-zinc-100 text-zinc-800 border border-zinc-200 text-[10px] px-2 py-0.5 rounded font-bold shrink-0">PRO</span>}
-            </div>
-            <p className="text-sm text-zinc-500 mb-6">{tenant.email}</p>
-            
-            <div className="space-y-4 pt-4 border-t border-zinc-100">
-              <div className="flex justify-between items-center text-sm">
-                <span className="font-medium text-zinc-500">Último acceso</span>
-                <span className="font-mono text-zinc-900">{timeAgo(tenant.ultima_actividad)}</span>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+        <div className="lg:col-span-4 space-y-10">
+           <div className="bg-white border border-zinc-100 rounded-[2.5rem] p-8 shadow-sm space-y-8">
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Identidad</p>
+              <div className="space-y-4">
+                 <p className="text-sm font-bold text-zinc-500">{tenant.email}</p>
+                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-50">
+                    <div><p className="text-[9px] font-black text-zinc-400 uppercase">Alta</p><p className="text-sm font-black text-zinc-900">{new Date(tenant.fecha_creacion).toLocaleDateString()}</p></div>
+                    <div><p className="text-[9px] font-black text-zinc-400 uppercase">Actividad</p><p className="text-sm font-black text-emerald-600">{timeAgo(tenant.ultima_actividad)}</p></div>
+                 </div>
               </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="font-medium text-zinc-500">Fecha de alta</span>
-                <span className="font-mono text-zinc-900">{new Date(tenant.fecha_creacion).toLocaleDateString()}</span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="font-medium text-zinc-500">Volumen histórico</span>
-                <span className="font-mono font-bold text-zinc-900">{Number(tenant.total_paquetes || 0).toLocaleString()} paq.</span>
-              </div>
-            </div>
-          </div>
+           </div>
 
-          <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-6">
-              <IconTerminal />
-              <h3 className="text-sm font-bold text-zinc-900">Control de Cuotas</h3>
-            </div>
-            
-            <div className="space-y-6">
-              <div>
-                <div className="flex justify-between items-end mb-2">
-                  <label className="text-xs font-semibold text-zinc-500 block">Límite de paquetes</label>
-                  <span className="text-xs font-mono font-bold text-zinc-900">
-                    {tenant.trial_used} / {tenant.trial_quota || '∞'}
-                  </span>
-                </div>
-                {tenant.trial_quota > 0 && (
-                  <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden mb-4 border border-zinc-200">
-                    <div 
-                      className={`h-full transition-all duration-500 ${isQuotaExhausted ? 'bg-red-500' : 'bg-brand-500'}`} 
-                      style={{ width: `${quotaPercentage}%` }} 
-                    />
-                  </div>
-                )}
-                
-                <input 
-                  type="number" 
-                  value={quotaInput} 
-                  onChange={e => setQuotaInput(e.target.value)} 
-                  placeholder="-1 para infinito"
-                  className="w-full bg-white border border-zinc-300 rounded-lg px-4 py-2 text-zinc-900 font-mono text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-colors"
-                />
+           <div className="bg-zinc-950 rounded-[2.5rem] p-8 text-white space-y-8 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-brand-500/10 blur-[60px] rounded-full" />
+              <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest relative z-10">Consolas de Control</p>
+              <div className="space-y-6 relative z-10">
+                 <div>
+                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-3 text-white/50">Cuota (Paquetes/Mes)</label>
+                    <input type="number" value={quotaInput} onChange={e => setQuotaInput(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-mono text-lg focus:border-brand-500 outline-none transition-colors" />
+                    <p className="text-[9px] font-bold text-zinc-500 mt-2">Consumido este periodo: {tenant.trial_used} paq.</p>
+                 </div>
+                 <div className="flex items-center justify-between bg-white/5 p-4 rounded-xl border border-white/10">
+                    <span className="text-xs font-black uppercase tracking-widest text-zinc-300 text-white">IA Operativa</span>
+                    <input type="checkbox" checked={aiActive} onChange={e => setAiActive(e.target.checked)} className="w-5 h-5 accent-brand-500" />
+                 </div>
+                 <button onClick={handleSaveLimits} disabled={saving} className="w-full py-4 bg-brand-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-brand-600 transition-all shadow-xl shadow-brand-500/10">{saving ? 'Guardando...' : 'Aplicar Límites'}</button>
               </div>
-
-              <div className="flex items-center justify-between bg-zinc-50 border border-zinc-200 p-4 rounded-lg">
-                <span className="text-sm font-medium text-zinc-700">Acceso a IA</span>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked={aiActive} onChange={e => setAiActive(e.target.checked)} className="sr-only peer" />
-                  <div className="w-9 h-5 bg-zinc-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
-                </label>
-              </div>
-
-              <div className="flex justify-between items-center text-sm border-t border-zinc-100 pt-4 mt-2">
-                <span className="font-medium text-zinc-600">Gasto de infraestructura IA</span>
-                <div className="text-right">
-                  <p className="font-mono font-bold text-zinc-900">{tenant.ai_scans_count || 0} oper.</p>
-                  <p className="text-xs font-mono text-zinc-500">
-                     Total: {formatMicroEUR(totalCost)}
-                  </p>
-                </div>
-              </div>
-
-              <button 
-                onClick={handleSaveLimits} disabled={saving}
-                className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg transition-colors font-bold text-sm flex items-center justify-center gap-2"
-              >
-                {saving ? 'Guardando...' : <><IconSave /> Guardar Configuración</>}
-              </button>
-            </div>
-          </div>
+           </div>
         </div>
 
-        <div className="lg:col-span-2 space-y-6">
-          {opportunities.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-red-50 border border-red-200 rounded-xl p-6 shadow-sm">
-              <div className="flex items-center gap-2 text-red-700 mb-4">
-                <IconAlert />
-                <h3 className="text-sm font-bold">Fuga de rentabilidad detectada</h3>
+        <div className="lg:col-span-8 space-y-10">
+           <div className="bg-white border border-zinc-100 rounded-[2.5rem] p-10 shadow-sm space-y-10">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                 <div>
+                    <h3 className="text-2xl font-[1000] tracking-tighter text-zinc-950">Historial Operativo</h3>
+                    <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mt-1">Reparto de tráfico por transportista</p>
+                 </div>
+                 <select value={timeRange} onChange={e => setTimeRange(e.target.value)} className="bg-zinc-50 border border-zinc-100 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-widest outline-none focus:border-brand-500 transition-all">
+                    <option value="today">Hoy</option><option value="week">Semana</option><option value="month">Mes</option><option value="all">Histórico</option>
+                 </select>
               </div>
-              
-              <div className="space-y-3">
-                {opportunities.map((opp, idx) => {
-                  const mensajeWa = encodeURIComponent(`Hola, analizando tu negocio en EasyTrack hemos detectado que mueves una media de ${opp.volumenMensual} paquetes/mes con ${opp.empresa}. Actualmente te pagan ${formatEUR(opp.ticketActual)}, pero con tu volumen puedes exigir ${formatEUR(opp.ticketObjetivo)} a tu gestor. Estás perdiendo ${formatEUR(opp.fugaAnual)} al año. ¡Usa tus informes de la App para reclamarlo!`);
-                  const tlf = tenant.phone ? tenant.phone.replace(/\D/g,'') : '';
 
-                  return (
-                    <div key={idx} className="bg-white border border-red-100 rounded-lg p-4 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                      <div>
-                        <p className="text-zinc-900 font-bold text-sm mb-1">{opp.empresa} <span className="text-zinc-500 font-normal">({opp.volumenMensual} paq/mes)</span></p>
-                        <p className="text-sm text-zinc-600">
-                          Cobro actual: <span className="font-mono text-zinc-900">{formatEUR(opp.ticketActual)}</span> <span className="mx-2">→</span> Justo: <span className="font-mono font-bold text-emerald-600">{formatEUR(opp.ticketObjetivo)}</span>
-                        </p>
-                        <p className="text-sm font-semibold text-red-600 mt-1">
-                          {opp.fugaHistorica !== null ? (
-                            <>Impacto anualizado: {formatEUR(opp.fugaAnual)}</>
-                          ) : (
-                            <>Impacto anualizado: {formatEUR(opp.fugaAnual)}</>
-                          )}
-                        </p>
-                      </div>
-                      <a 
-                        href={tlf ? `https://wa.me/34${tlf}?text=${mensajeWa}` : '#'} 
-                        target={tlf ? "_blank" : "_self"}
-                        onClick={(e) => { if(!tlf) { e.preventDefault(); alert("Cliente sin teléfono registrado."); }}}
-                        className="shrink-0 flex items-center gap-2 bg-[#25D366] hover:bg-[#20b858] text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm"
-                      >
-                        <IconWhatsapp /> Notificar cliente
-                      </a>
-                    </div>
-                  )
-                })}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                 <div className="p-6 bg-zinc-50 rounded-3xl border border-zinc-100">
+                    <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Volumen</p>
+                    <p className="text-3xl font-[1000] text-zinc-950 tabular-nums">{totals.volume.toLocaleString()}</p>
+                 </div>
+                 <div className="p-6 bg-zinc-50 rounded-3xl border border-zinc-100">
+                    <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Facturación</p>
+                    <p className="text-3xl font-[1000] text-emerald-600 tabular-nums">{formatEUR(totals.revenue)}</p>
+                 </div>
+                 <div className="p-6 bg-zinc-950 rounded-3xl text-white hidden md:block">
+                    <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1 text-white/50">Carga Servidor IA</p>
+                    <p className="text-xl font-[1000] tabular-nums text-brand-400">{formatEUR(totalCost)}</p>
+                 </div>
               </div>
-            </motion.div>
-          )}
 
-          <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-sm flex flex-col min-h-full">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-              <h3 className="text-lg font-bold text-zinc-950">Desglose de Operaciones</h3>
-              <select 
-                value={timeRange} 
-                onChange={e => setTimeRange(e.target.value)} 
-                className="bg-zinc-50 border border-zinc-200 text-sm font-medium text-zinc-700 px-3 py-2 rounded-lg outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 cursor-pointer"
-              >
-                <option value="today">Generado Hoy</option>
-                <option value="week">Esta Semana</option>
-                <option value="month">Este Mes</option>
-                <option value="all">Histórico Completo</option>
-              </select>
-            </div>
-
-            {loading ? (
-              <div className="flex-1 flex items-center justify-center text-zinc-400 font-mono text-sm">Procesando datos...</div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-5">
-                    <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1">Facturación del local</p>
-                    <p className="text-3xl font-mono font-black text-zinc-900">{formatEUR(totals.revenue)}</p>
-                  </div>
-                  <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-5">
-                    <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1">Volumen gestionado</p>
-                    <p className="text-3xl font-mono font-black text-zinc-900">{totals.volume.toLocaleString()}</p>
-                  </div>
-                </div>
-
-                <div className="flex-1">
-                  <div className="overflow-x-auto border border-zinc-200 rounded-lg">
-                    <table className="w-full text-left whitespace-nowrap text-sm">
-                      <thead>
-                        <tr className="bg-zinc-50 border-b border-zinc-200 text-xs font-semibold text-zinc-500">
-                          <th className="py-3 px-4">Operador Logístico</th>
-                          <th className="py-3 px-4 text-right">Paquetes</th>
-                          <th className="py-3 px-4 text-right">Promedio/Paquete</th>
-                          <th className="py-3 px-4 text-right">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100">
-                        {statsData.length === 0 ? (
-                          <tr><td colSpan="4" className="py-8 text-center text-zinc-500 text-sm">No hay registros en este periodo.</td></tr>
-                        ) : (
-                          statsData.map(c => (
-                            <tr key={c.empresa_transporte} className="hover:bg-zinc-50 transition-colors">
-                              <td className="py-3 px-4 font-semibold text-zinc-900">{c.empresa_transporte}</td>
-                              <td className="py-3 px-4 text-right font-mono text-zinc-600">{Number(c.volumen).toLocaleString()}</td>
-                              <td className="py-3 px-4 text-right font-mono text-zinc-600">{formatEUR(c.ticket_medio)}</td>
-                              <td className="py-3 px-4 text-right font-mono font-bold text-zinc-900">{formatEUR(c.ingreso_total)}</td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+              <div className="overflow-x-auto">
+                 <table className="w-full text-left">
+                    <thead className="border-b border-zinc-50"><tr className="text-[9px] font-black text-zinc-400 uppercase tracking-widest"><th className="py-4 px-4">Transportista</th><th className="py-4 px-4 text-right">Volumen</th><th className="py-4 px-4 text-right">Ticket</th><th className="py-4 px-4 text-right">Ingreso</th></tr></thead>
+                    <tbody className="divide-y divide-zinc-50 text-zinc-950 font-black">
+                       {statsData.map(c => (
+                         <tr key={c.empresa_transporte} className="group hover:bg-zinc-50/50 transition-colors">
+                           <td className="py-4 px-4 flex items-center gap-3"><ImageFallback src={getCarrierLogo(c.empresa_transporte)} fallbackText={getInitials(c.empresa_transporte)} containerClassName="w-6 h-6 rounded-lg bg-zinc-50" imgClassName="max-w-full max-h-full object-contain" fallbackClassName="text-[8px] font-black text-zinc-300" /><span className="text-xs uppercase">{c.empresa_transporte}</span></td>
+                           <td className="py-4 px-4 text-right tabular-nums text-xs font-mono">{Number(c.volumen).toLocaleString()}</td>
+                           <td className="py-4 px-4 text-right tabular-nums text-xs font-mono text-zinc-400">{formatEUR(c.ticket_medio)}</td>
+                           <td className="py-4 px-4 text-right tabular-nums text-sm text-zinc-950">{formatEUR(c.ingreso_total)}</td>
+                         </tr>
+                       ))}
+                    </tbody>
+                 </table>
+              </div>
+           </div>
         </div>
       </div>
     </motion.div>
@@ -377,13 +181,8 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
 export default function AdminDashboard() {
   const [tenants, setTenants] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [adminReviews, setAdminReviews] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  const [sortKey, setSortKey] = useState('total_paquetes');
-  const [sortDir, setSortDir] = useState('desc');
-
   const [inspectingTenant, setInspectingTenant] = useState(null);
   const [globalTimeFilter, setGlobalTimeFilter] = useState('all');
 
@@ -392,364 +191,140 @@ export default function AdminDashboard() {
     try {
       const res = await apiFetch(`/api/admin/dashboard-data?timeRange=${globalTimeFilter}`);
       const data = await res.json();
-      
-      if (!data.ok) throw new Error(data.error || 'Error del servidor');
-
-      const tenantsWithCost = (data.tenants || []).map(t => ({
-        ...t,
-        ai_cost: getAiCost(t.ai_prompt_tokens, t.ai_completion_tokens)
-      }));
-
-      setTenants(tenantsWithCost);
+      setTenants(data.tenants || []);
       setLeaderboard(data.globalStats || []);
-      setAdminReviews(data.reviews || []);
-    } catch (err) {
-      console.error(err);
-      alert("Error extrayendo datos globales. Revisa consola.");
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchAllData(); }, [globalTimeFilter]);
 
-  const handleSort = (key) => {
-    if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(key); setSortDir('desc'); }
-  };
-
-  const handleReviewAction = async (reviewId, newStatus) => {
-    try {
-      const res = await apiFetch(`/api/admin/review/${reviewId}`, {
-        method: 'PATCH',
-        body: { status: newStatus }
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error);
-      
-      setAdminReviews(prev => prev.map(r => r.id === reviewId ? { ...r, status: newStatus } : r));
-    } catch (error) {
-      alert("Error en la base de datos: " + error.message);
-    }
-  };
-
-const processedTenants = useMemo(() => {
-    let filtered = tenants.filter(t => 
-      t.nombre_empresa?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      t.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.slug?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    return filtered.sort((a, b) => {
-      let valA = a[sortKey]; let valB = b[sortKey];
-      // CAMBIAMOS ingresos_mes por ingreso_historico_local
-      if (['total_paquetes', 'ingreso_historico_local', 'recibidos_hoy', 'entregados_hoy', 'ai_cost'].includes(sortKey)) {
-         valA = Number(valA) || 0; valB = Number(valB) || 0;
-         return sortDir === 'asc' ? valA - valB : valB - valA;
-      } else {
-         valA = String(valA || '').toLowerCase(); valB = String(valB || '').toLowerCase();
-         if (valA < valB) return sortDir === 'asc' ? -1 : 1;
-         if (valA > valB) return sortDir === 'asc' ? 1 : -1;
-         return 0;
-      }
-    });
-  }, [tenants, searchTerm, sortKey, sortDir]);
-
-const globalMetrics = useMemo(() => {
+  const globalMetrics = useMemo(() => {
+    const totalRev = tenants.reduce((acc, t) => acc + (Number(t.ingreso_historico_local) || 0), 0);
+    const totalAi = tenants.reduce((acc, t) => acc + getAiCost(t.ai_prompt_tokens, t.ai_completion_tokens), 0);
     return {
-      total: tenants.length,
-      ingresosMesGlobal: tenants.reduce((acc, t) => acc + (Number(t.ingresos_mes) || 0), 0),
-      inTodayRecibidos: tenants.reduce((acc, t) => acc + (Number(t.recibidos_hoy) || 0), 0),
-      inTodayEntregados: tenants.reduce((acc, t) => acc + (Number(t.entregados_hoy) || 0), 0),
-      totalFlow: tenants.reduce((acc, t) => acc + (Number(t.total_paquetes) || 0), 0),
-      
-      ingresosMrrGlobal: tenants.reduce((acc, t) => acc + (Number(t.mrr_contribution) || 0), 0),
-      
-      proCount: tenants.filter(t => (Number(t.mrr_contribution) || 0) > 0).length,
-      
-      totalAiCost: tenants.reduce((acc, t) => acc + t.ai_cost, 0)
+      active: tenants.length,
+      mrr: tenants.reduce((acc, t) => acc + (Number(t.mrr_contribution) || 0), 0),
+      volume: totalRev,
+      profit: totalRev - (totalAi * 10), // Simplificación estratégica
+      aiCost: totalAi,
+      traffic: tenants.reduce((acc, t) => acc + (Number(t.total_paquetes) || 0), 0)
     };
   }, [tenants]);
 
-  const networkRevenue = useMemo(() => leaderboard.reduce((acc, c) => acc + (Number(c.ingreso_total) || 0), 0), [leaderboard]);
+  const filteredTenants = useMemo(() => tenants.filter(t => t.nombre_empresa?.toLowerCase().includes(searchTerm.toLowerCase()) || t.email?.toLowerCase().includes(searchTerm.toLowerCase()) || t.slug?.toLowerCase().includes(searchTerm.toLowerCase())), [tenants, searchTerm]);
+
+  if (loading && tenants.length === 0) return <DashboardSkeleton />;
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-8 pb-20 font-sans">
-      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 pb-2">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-950 flex items-center gap-4">
-            Operaciones Globales
-            <button onClick={fetchAllData} className="text-zinc-400 hover:text-zinc-900 transition-colors p-2 rounded-lg hover:bg-zinc-100" title="Refrescar">
-               <IconRefresh />
-            </button>
-          </h1>
+    <div className="pb-32 max-w-[1600px] mx-auto px-4 sm:px-10 font-sans text-zinc-950">
+      
+      {/* 1. ADMIN HEADER */}
+      <header className="py-12 border-b border-zinc-100 mb-12 flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <div className="space-y-2">
+           <h1 className="text-4xl md:text-6xl font-[1000] tracking-tighter text-zinc-950 leading-none">Global Ops</h1>
+           <div className="flex items-center gap-3">
+              <span className="bg-zinc-950 text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase">Admin Panel</span>
+              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em] flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Sincronización en tiempo real</span>
+           </div>
         </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 w-full xl:w-auto">
-<div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm min-w-[140px]">
-  <p className="text-xs font-semibold text-zinc-500 mb-1">Ingresos MRR</p>
-  <p className="text-2xl font-mono font-black text-brand-600">
-    {formatEUR(globalMetrics.ingresosMrrGlobal)}
-  </p>
-</div>
-          <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm min-w-[140px]">
-            <p className="text-xs font-semibold text-zinc-500 mb-1">Volumen € Movido</p>
-            <p className="text-2xl font-mono font-black text-zinc-900">{formatEUR(networkRevenue)}</p>
-          </div>
-          <div className="bg-white border border-red-100 rounded-xl p-5 shadow-sm min-w-[140px]">
-            <p className="text-xs font-semibold text-red-500 mb-1">Gasto API</p>
-            <p className="text-2xl font-mono font-black text-red-600">{formatMicroEUR(globalMetrics.totalAiCost)}</p>
-          </div>
-          <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm min-w-[140px]">
-            <p className="text-xs font-semibold text-zinc-500 mb-1">Hoy (Rec | Ent)</p>
-            <p className="text-2xl font-mono font-black text-zinc-900">{globalMetrics.inTodayRecibidos} / {globalMetrics.inTodayEntregados}</p>
-          </div>
-          <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm min-w-[140px]">
-            <p className="text-xs font-semibold text-zinc-500 mb-1">Tráfico Global</p>
-            <p className="text-2xl font-mono font-black text-zinc-900">{globalMetrics.totalFlow.toLocaleString()}</p>
-          </div>
-          <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm min-w-[140px]">
-            <p className="text-xs font-semibold text-zinc-500 mb-1">Clientes Activos</p>
-            <p className="text-2xl font-mono font-black text-zinc-900">{globalMetrics.total}</p>
-          </div>
-        </div>
-      </div>
+        <button onClick={fetchAllData} className="w-12 h-12 bg-white border border-zinc-100 rounded-2xl flex items-center justify-center text-zinc-400 hover:text-zinc-950 transition-all shadow-sm"><IconRefresh /></button>
+      </header>
 
       <AnimatePresence mode="wait">
         {inspectingTenant ? (
-          <TenantInspector 
-            key="inspector" 
-            tenant={inspectingTenant} 
-            onBack={() => { setInspectingTenant(null); fetchAllData(); }} 
-            onUpdate={fetchAllData} 
-          />
+          <TenantInspector key="inspector" tenant={inspectingTenant} onBack={() => setInspectingTenant(null)} onUpdate={fetchAllData} />
         ) : (
-          <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
+          <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-16">
             
-            {adminReviews.length > 0 && (
-              <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-sm mb-8">
-                <div className="flex items-center gap-2 mb-4">
-                  <h3 className="text-sm font-bold text-zinc-900">Control de Calidad (Reseñas)</h3>
-                  <span className="bg-zinc-100 text-zinc-600 text-xs font-bold px-2 py-0.5 rounded-full">{adminReviews.length}</span>
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-h-[300px] overflow-y-auto pr-2">
-                  {adminReviews.map(rev => (
-                    <div 
-                      key={rev.id} 
-                      className={`border rounded-lg p-4 flex flex-col justify-between transition-all ${
-                        rev.status === 'approved' ? 'bg-emerald-50 border-emerald-200' : 
-                        rev.status === 'rejected' ? 'bg-zinc-50 border-zinc-200 opacity-70' : 
-                        'bg-white border-zinc-200'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-zinc-900 text-sm">{rev.tenants?.nombre_empresa}</span>
-                            {rev.status === 'approved' && <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded">Verificada</span>}
-                            {rev.status === 'pending' && <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded">Pendiente</span>}
-                            {rev.status === 'rejected' && <span className="bg-zinc-200 text-zinc-600 text-[10px] font-bold px-2 py-0.5 rounded">Descartada</span>}
+            {/* 2. TACTICAL GLOBAL ROWS */}
+            <section className="space-y-4">
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-zinc-950 rounded-[2.5rem] p-10 text-white space-y-6 shadow-2xl relative overflow-hidden">
+                     <div className="absolute top-0 right-0 w-32 h-32 bg-brand-500/10 blur-[60px] rounded-full" />
+                     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest relative z-10 text-white">Ingresos MRR (Suscripciones)</p>
+                     <div className="text-5xl font-[1000] tracking-tighter text-brand-400 tabular-nums relative z-10 text-white leading-none">{formatEUR(globalMetrics.mrr)}</div>
+                     <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest relative z-10 text-white">{tenants.filter(t=>t.plan_id==='pro').length} locales en Plan PRO</p>
+                  </div>
+                  <div className="bg-white border border-zinc-100 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-between">
+                     <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4 text-zinc-950">Salud del Negocio</p>
+                     <div className="text-5xl font-[1000] tracking-tighter text-zinc-950 tabular-nums leading-none mb-4">{globalMetrics.active}</div>
+                     <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest text-zinc-950">Locales activos en la red</p>
+                  </div>
+                  <div className="bg-white border border-zinc-100 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-center space-y-8">
+                     <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest text-zinc-950">Gasto Servidor IA</span>
+                        <span className="text-sm font-black text-rose-600 tabular-nums text-zinc-950">{formatEUR(globalMetrics.aiCost)}</span>
+                     </div>
+                     <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest text-zinc-950">Tráfico Histórico</span>
+                        <span className="text-sm font-black text-zinc-950 tabular-nums text-zinc-950">{globalMetrics.traffic.toLocaleString()} paq.</span>
+                     </div>
+                  </div>
+               </div>
+            </section>
+
+            {/* 3. LEADERBOARD & DIRECTORY */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+               {/* LEADERBOARD (GLOBAL CARRIERS) */}
+               <div className="lg:col-span-4 bg-zinc-50 border border-zinc-100 rounded-[3rem] p-10 space-y-10">
+                  <div className="space-y-1">
+                     <h3 className="text-lg font-[1000] tracking-tight uppercase text-zinc-950">Dominancia Nacional</h3>
+                     <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Cuota de mercado global</p>
+                  </div>
+                  <div className="space-y-8">
+                     {leaderboard.slice(0, 6).map((c, i) => (
+                       <div key={i} className="flex items-center justify-between group cursor-help text-zinc-950">
+                          <div className="flex items-center gap-4">
+                             <span className="text-[9px] font-black text-zinc-300 w-4">#{i+1}</span>
+                             <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center p-2 border border-zinc-100 shadow-sm group-hover:scale-110 transition-transform">
+                                <ImageFallback src={getCarrierLogo(c.empresa_transporte)} fallbackText={getInitials(c.empresa_transporte)} containerClassName="w-full h-full" imgClassName="max-w-full max-h-full object-contain" />
+                             </div>
+                             <span className="text-[11px] font-black uppercase tracking-tight truncate max-w-[80px]">{c.empresa_transporte}</span>
                           </div>
-                          <div className="flex text-amber-500">
-                             {[...Array(5)].map((_, i) => (
-                               <div key={i} className={i < rev.rating ? 'opacity-100' : 'opacity-20'}><IconStar /></div>
-                             ))}
+                          <div className="text-right">
+                             <p className="text-xs font-[1000] tabular-nums">{formatEUR(c.ingreso_total)}</p>
+                             <p className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">{Number(c.volumen).toLocaleString()} paq.</p>
                           </div>
-                        </div>
-                        <p className="text-zinc-600 text-sm mb-4">"{rev.comentario}"</p>
-                      </div>
-                      
-                      {rev.status === 'pending' ? (
-                        <div className="flex gap-2">
-                          <button onClick={() => handleReviewAction(rev.id, 'approved')} className="flex-1 bg-white hover:bg-zinc-50 border border-zinc-300 text-zinc-900 font-bold text-xs py-2 rounded-lg transition-colors">
-                            Aprobar publicación
-                          </button>
-                          <button onClick={() => handleReviewAction(rev.id, 'rejected')} className="flex-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 font-bold text-xs py-2 rounded-lg transition-colors">
-                            Ocultar
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex justify-end pt-3 border-t border-black/5 mt-2">
-                          <button 
-                            onClick={() => handleReviewAction(rev.id, rev.status === 'approved' ? 'rejected' : 'approved')} 
-                            className="text-xs font-semibold text-zinc-500 hover:text-zinc-900 transition-colors"
-                          >
-                            {rev.status === 'approved' ? 'Revocar visibilidad' : 'Restaurar y aprobar'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                       </div>
+                     ))}
+                  </div>
+               </div>
 
-            <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                <h3 className="text-sm font-bold text-zinc-900 flex items-center gap-2">
-                  <IconBuilding /> Dominancia Logística Nacional
-                </h3>
-                <select 
-                  value={globalTimeFilter} 
-                  onChange={e => setGlobalTimeFilter(e.target.value)} 
-                  className="bg-white border border-zinc-300 text-sm font-medium text-zinc-700 px-3 py-2 rounded-lg outline-none cursor-pointer focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                >
-                  <option value="today">Dato de hoy</option>
-                  <option value="week">Semana actual</option>
-                  <option value="month">Mes en curso</option>
-                  <option value="all">Historico total</option>
-                </select>
-              </div>
+               {/* TENANT DIRECTORY */}
+               <div className="lg:col-span-8 space-y-8">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                     <h3 className="text-lg font-[1000] tracking-tight uppercase text-zinc-950">Directorio de Locales</h3>
+                     <div className="relative flex-1 md:max-w-xs">
+                        <IconSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
+                        <input type="text" placeholder="Buscar local, email o slug..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-6 py-3 bg-white border border-zinc-200 rounded-2xl text-xs font-black uppercase tracking-widest outline-none focus:border-brand-500 transition-all shadow-sm" />
+                     </div>
+                  </div>
 
-              <div className="overflow-x-auto border border-zinc-200 rounded-lg">
-                <table className="w-full text-left whitespace-nowrap text-sm">
-                  <thead>
-                    <tr className="bg-zinc-50 border-b border-zinc-200 text-xs font-semibold text-zinc-500">
-                      <th className="py-3 px-4">Operador</th>
-                      <th className="py-3 px-4 text-right">Volumen</th>
-                      <th className="py-3 px-4 text-right">TKT Promedio</th>
-                      <th className="py-3 px-4 text-right">Inyección Económica</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100 font-mono">
-                    {loading ? (
-                      <tr><td colSpan="4" className="py-8 text-center text-zinc-400 font-sans text-sm">Sincronizando...</td></tr>
-                    ) : leaderboard.length === 0 ? (
-                      <tr><td colSpan="4" className="py-8 text-center text-zinc-500 font-sans text-sm">Sin movimiento logístico.</td></tr>
-                    ) : (
-                      leaderboard.slice(0, 6).map((c, i) => (
-                        <tr key={c.empresa_transporte} className="hover:bg-zinc-50 transition-colors">
-                          <td className="py-3 px-4 font-semibold text-zinc-900 font-sans flex items-center gap-2">
-                            <span className="text-zinc-400 text-xs">{i+1}.</span> 
-                            {c.empresa_transporte}
-                          </td>
-                          <td className="py-3 px-4 text-right text-zinc-600">{Number(c.volumen).toLocaleString()}</td>
-                          <td className="py-3 px-4 text-right text-zinc-600">{formatEUR(c.ticket_medio)}</td>
-                          <td className="py-3 px-4 text-right font-bold text-zinc-900">{formatEUR(c.ingreso_total)}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                     {filteredTenants.map(t => (
+                       <motion.div key={t.id} onClick={() => setInspectingTenant(t)} whileHover={{ y: -5 }} className="bg-white border border-zinc-100 p-8 rounded-[2.5rem] shadow-sm hover:shadow-xl transition-all cursor-pointer group text-zinc-950">
+                          <div className="flex justify-between items-start mb-8">
+                             <div className="space-y-1">
+                                <h4 className="text-sm font-[1000] uppercase tracking-tight group-hover:text-brand-600 transition-colors">{t.nombre_empresa || 'S/N'}</h4>
+                                <p className="text-[10px] font-bold text-zinc-400 lowercase">{t.email}</p>
+                             </div>
+                             {t.plan_id === 'pro' && <PlanBadge />}
+                          </div>
+                          <div className="grid grid-cols-2 gap-6 pt-6 border-t border-zinc-50">
+                             <div><p className="text-[9px] font-black text-zinc-300 uppercase mb-1">Volumen</p><p className="text-lg font-[1000] tabular-nums">{t.total_paquetes || 0}</p></div>
+                             <div><p className="text-[9px] font-black text-zinc-300 uppercase mb-1">Facturación</p><p className="text-lg font-[1000] tabular-nums text-emerald-600">{formatEUR(t.ingreso_historico_local)}</p></div>
+                          </div>
+                          <div className="mt-6 flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-400">
+                             <div className={`w-1.5 h-1.5 rounded-full ${t.ultima_actividad && (new Date() - new Date(t.ultima_actividad) < 3600000) ? 'bg-emerald-500' : 'bg-zinc-200'}`} />
+                             {timeAgo(t.ultima_actividad)}
+                          </div>
+                       </motion.div>
+                     ))}
+                     {filteredTenants.length === 0 && <div className="col-span-full py-20 text-center text-[10px] font-black text-zinc-300 uppercase tracking-widest italic">No se han encontrado negocios con ese criterio.</div>}
+                  </div>
+               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="relative w-full sm:max-w-md">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-400">
-                  <IconSearch />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Localizar cliente..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-zinc-300 rounded-lg text-sm font-medium text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all shadow-sm"
-                />
-              </div>
-            </div>
-
-            <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left whitespace-nowrap">
-                  <thead>
-                    <tr className="bg-zinc-50 border-b border-zinc-200 text-xs font-semibold text-zinc-500 select-none">
-                      <th className="px-6 py-4 cursor-pointer hover:text-zinc-800" onClick={() => handleSort('nombre_empresa')}>Empresa {sortKey==='nombre_empresa' && (sortDir==='asc'?'↑':'↓')}</th>
-                      <th className="px-6 py-4 cursor-pointer hover:text-zinc-800" onClick={() => handleSort('total_paquetes')}>Límites / Tráfico {sortKey==='total_paquetes' && (sortDir==='asc'?'↑':'↓')}</th>
-<th className="px-6 py-4 cursor-pointer hover:text-zinc-800" onClick={() => handleSort('ingreso_historico_local')}>
-   Cashflow Histórico Local {sortKey==='ingreso_historico_local' && (sortDir==='asc'?'↑':'↓')}
-</th>                      <th className="px-6 py-4 cursor-pointer hover:text-zinc-800" onClick={() => handleSort('ai_cost')}>Carga Servidor {sortKey==='ai_cost' && (sortDir==='asc'?'↑':'↓')}</th>
-                      <th className="px-6 py-4 cursor-pointer hover:text-zinc-800" onClick={() => handleSort('ultima_actividad')}>Ping {sortKey==='ultima_actividad' && (sortDir==='asc'?'↑':'↓')}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100 text-sm">
-                    {loading ? (
-                      <tr>
-                        <td colSpan="5" className="px-6 py-16 text-center text-zinc-500">
-                          Extrayendo base de datos...
-                        </td>
-                      </tr>
-                    ) : processedTenants.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="px-6 py-16 text-center text-zinc-500">
-                          Directorio vacío o sin resultados para la búsqueda.
-                        </td>
-                      </tr>
-                    ) : (
-                      processedTenants.map((t, i) => {
-                        const isPro = t.plan_id === 'pro';
-                        const isBlocked = t.status !== 'active';
-                        const hoursSinceActive = t.ultima_actividad ? (new Date() - new Date(t.ultima_actividad)) / 3600000 : 999;
-                        const pingColor = hoursSinceActive < 1 ? 'bg-emerald-500' : (hoursSinceActive < 24 ? 'bg-brand-500' : 'bg-zinc-300');
-
-                        return (
-                          <motion.tr 
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }}
-                            key={t.id} 
-                            className="hover:bg-zinc-50 transition-colors cursor-pointer"
-                            onClick={() => setInspectingTenant(t)}
-                          >
-                            <td className="px-6 py-4">
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-bold text-zinc-900 text-base">{t.nombre_empresa || 'S/N'}</span>
-                                  {isPro && <span className="bg-zinc-100 text-zinc-800 border border-zinc-200 text-[10px] px-1.5 py-0.5 rounded font-bold">PRO</span>}
-                                  {isBlocked && <span className="bg-red-100 text-red-800 border border-red-200 text-[10px] px-1.5 py-0.5 rounded font-bold">SUSPENDIDO</span>}
-                                </div>
-                                <span className="text-xs text-zinc-500">{t.email}</span>
-                              </div>
-                            </td>
-
-                            <td className="px-6 py-4">
-                              <div className="flex flex-col w-full max-w-[140px]">
-                                <div className="flex justify-between items-center mb-1">
-                                  <span className="font-mono font-medium text-zinc-700 text-sm">
-                                    {t.trial_used} <span className="text-zinc-400 text-xs">/ {t.trial_quota || '∞'}</span>
-                                  </span>
-                                  <span className="font-mono font-bold text-brand-600 text-xs">R:{t.recibidos_hoy || 0} E:{t.entregados_hoy || 0}</span>
-                                </div>
-                                {t.trial_quota > 0 && (
-                                  <div className="h-1.5 w-full bg-zinc-100 rounded-full overflow-hidden border border-zinc-200">
-                                    <div 
-                                      className={`h-full ${t.trial_used >= t.trial_quota ? 'bg-red-500' : 'bg-zinc-800'}`} 
-                                      style={{ width: `${Math.min((t.trial_used / t.trial_quota) * 100, 100)}%` }} 
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-
-                            <td className="px-6 py-4">
-                              <td className="px-6 py-4">
-  <div className="flex flex-col">
-    <span className="font-mono font-bold text-zinc-900 text-sm">{formatEUR(t.ingreso_historico_local)}</span>
-  </div>
-</td>
-                            </td>
-
-                            <td className="px-6 py-4">
-                              <div className="flex flex-col">
-                                <span className="font-mono font-bold text-zinc-900 text-sm">{formatMicroEUR(t.ai_cost)}</span>
-                                <span className="text-xs text-zinc-500">{t.ai_scans_count || 0} requ.</span>
-                              </div>
-                            </td>
-
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-                                <div className={`w-2 h-2 rounded-full ${pingColor}`} />
-                                <span className="text-sm font-medium text-zinc-600">
-                                  {timeAgo(t.ultima_actividad)}
-                                </span>
-                              </div>
-                            </td>
-                          </motion.tr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </motion.div>
         )}
       </AnimatePresence>
