@@ -23,6 +23,7 @@ const IconPlus = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="non
 const IconClose = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
 const IconPhone = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
 const IconLock = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+const IconCheck = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
 
 const formatEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(n || 0);
 const calcularDias = (f) => f ? Math.floor((new Date() - new Date(f)) / 86400000) : 0;
@@ -118,6 +119,21 @@ export default function Dashboard(props) {
   if (cargando) return <DashboardSkeleton />;
 
   const go = (path) => { if (slug) navigate(`/${slug}${path}`); else navigate(path); };
+
+  const handleEntregarHuerfano = async (id) => {
+    try {
+      setResumen(prev => ({
+        ...prev,
+        huerfanosMaestros: prev.huerfanosMaestros.filter(p => p.id !== id),
+        almacenActual: Math.max(0, prev.almacenActual - 1),
+        entregadosHoy: prev.entregadosHoy + 1
+      }));
+      await supabase.from('packages').update({ entregado: true, fecha_entregado: new Date().toISOString() }).eq('id', id);
+      if (actualizarPaquetes) actualizarPaquetes();
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const LockedValue = ({ children, isLocked }) => {
     if (!isLocked) return children;
@@ -254,42 +270,44 @@ export default function Dashboard(props) {
                <option value={7}>+7 Días</option>
             </select>
          </div>
-         <div className="overflow-x-auto max-h-[300px] overflow-y-auto custom-scrollbar">
-            <table className="w-full text-left whitespace-nowrap">
-              <thead className="sticky top-0 z-10 bg-white/80 backdrop-blur-md">
-                 <tr>
-                    <th className="py-3 pr-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b border-zinc-100">Cliente</th>
-                    <th className="py-3 px-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b border-zinc-100">Agencia</th>
-                    <th className="py-3 px-4 text-center text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b border-zinc-100">Ubicación</th>
-                    <th className="py-3 px-4 text-right text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b border-zinc-100">Antigüedad</th>
-                    <th className="py-3 pl-4 text-right text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b border-zinc-100">Acción</th>
-                 </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-50">
-                {huerfanos.length === 0 ? <tr><td colSpan="5" className="py-12 text-center text-[10px] font-black text-zinc-300 uppercase tracking-widest italic">Stock saneado.</td></tr> : huerfanos.slice(0, 50).map(p => (
-                  <tr key={p.id} className="group hover:bg-zinc-50 transition-all">
-                    <td className="py-3 pr-4">
-                      <p className="text-sm font-[1000] uppercase truncate max-w-[200px] text-zinc-950">{p.nombre_cliente}</p>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                         <ImageFallback src={getCarrierLogo(p.empresa_transporte)} fallbackText={getInitials(p.empresa_transporte)} containerClassName="w-6 h-6" imgClassName="max-w-full max-h-full object-contain" fallbackClassName="text-[8px] font-black text-zinc-300" />
-                         <span className="text-[10px] font-black text-zinc-400 uppercase">{p.empresa_transporte}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="text-zinc-900 font-black font-mono text-[10px] px-3 py-1 rounded-lg bg-zinc-100 border border-zinc-200">{p.ubicacion_label}</span>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <span className={`text-[10px] font-black ${calcularDias(p.fecha_llegada) >= 7 ? 'text-rose-500' : 'text-zinc-400'}`}>{calcularDias(p.fecha_llegada)}D</span>
-                    </td>
-                    <td className="py-3 pl-4 text-right">
-                       {p.telefono && <a href={`https://wa.me/34${p.telefono.replace(/\D/g,'')}`} target="_blank" className="p-2 text-emerald-600 hover:scale-110 transition-all inline-block"><IconPhone /></a>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+         <div className="flex flex-col gap-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+            {huerfanos.length === 0 ? (
+               <div className="py-12 text-center text-[10px] font-black text-zinc-300 uppercase tracking-widest italic">Stock saneado.</div>
+            ) : huerfanos.slice(0, 50).map(p => {
+               const dias = calcularDias(p.fecha_llegada);
+               const isCritical = dias >= 7;
+               return (
+                 <div key={p.id} className="group bg-white border border-zinc-100 hover:border-zinc-200 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all">
+                   <div className="flex items-center gap-4">
+                     <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center p-1.5 shrink-0">
+                        <ImageFallback src={getCarrierLogo(p.empresa_transporte)} fallbackText={getInitials(p.empresa_transporte)} containerClassName="w-full h-full" imgClassName="max-w-full max-h-full object-contain filter grayscale group-hover:grayscale-0 transition-all" fallbackClassName="text-[8px] font-black text-zinc-300" />
+                     </div>
+                     <div className="min-w-0 flex-1">
+                        <p className="text-sm font-[1000] text-zinc-950 uppercase tracking-tight truncate pr-4">{p.nombre_cliente}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                           <span className="bg-zinc-900 text-white font-mono font-black text-[10px] px-2 py-0.5 rounded-md">{p.ubicacion_label}</span>
+                           <span className={`text-[10px] font-black flex items-center gap-1 ${isCritical ? 'text-rose-500' : 'text-zinc-500'}`}>
+                              <IconClock className="w-3 h-3" /> {dias} días
+                           </span>
+                        </div>
+                     </div>
+                   </div>
+                   
+                   <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0 pt-3 md:pt-0 border-t border-zinc-50 md:border-0">
+                     {p.telefono ? (
+                        <a href={`https://wa.me/34${p.telefono.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-sm">
+                           <IconPhone /> Avisar
+                        </a>
+                     ) : (
+                        <span className="flex-1 md:flex-none text-center text-[9px] font-black text-zinc-300 uppercase tracking-widest italic px-4 py-2.5 bg-zinc-50 rounded-xl">Sin Tel.</span>
+                     )}
+                     <button onClick={() => handleEntregarHuerfano(p.id)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-100 text-zinc-600 hover:bg-zinc-950 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-sm">
+                        <IconCheck /> Entregar
+                     </button>
+                   </div>
+                 </div>
+               );
+            })}
          </div>
       </div>
 
