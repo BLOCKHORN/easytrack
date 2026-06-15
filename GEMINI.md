@@ -31,66 +31,58 @@ A partir de junio de 2026, el proyecto opera bajo un modelo de aislamiento total
 
 ## 🚀 Módulos y Flujos Principales
 
-### 1. Onboarding y UX Guiado
-- **Onboarding Tour**: Sistema de guiado interactivo (`OnboardingTour.jsx`) que se activa para nuevos usuarios. Detecta el estado mediante `localStorage` (`onboarding_done`).
-- **Corrección Crítica**: El tooltip se oculta automáticamente si el elemento objetivo desaparece durante la navegación, reapareciendo solo cuando detecta el nuevo objetivo.
+### 1. Dashboard Operativo (Táctico)
+- **Layout en 3 Bandas:** Diseño "unboxed" y minimalista que separa Inventario, Flujo Diario y Caja de Hoy.
+- **Seguridad para Empleados:** Las métricas de ganancias están protegidas por el componente `PinGate.jsx`. Si el administrador establece un PIN en configuración, los números se ocultan tras un candado.
+- **Actividad en Vivo:** Feed en tiempo real de entradas y salidas para dar sensación de pulso operativo.
+- **Top Fidelidad:** Ranking de los mejores clientes mostrado tácticamente para mejorar el trato en el mostrador.
 
-### 2. Configuración Modular (`ConfigPage`)
-Sistema centralizado de ajustes con detección de cambios (`dirty state`) y snapshots:
-- **Identidad**: Nombre de empresa y configuración básica.
-- **Transportistas**: Gestión de agencias de transporte y precios de entrega.
-- **Almacén Dinámico**: Configuración visual de estantes y huecos.
-- **Seguridad**: Gestión de PIN de acceso para operarios mediante funciones RPC (`tenant_pin_status`, `tenant_pin_set`, etc.).
+### 2. Área Financiera (Estratégica)
+- **Capital Retenido:** Cálculo en base de datos (`get_area_personal_stats`) que suma el ingreso potencial de los paquetes físicos actualmente en el local.
+- **Optimización ROI:** Algoritmo que detecta "agencias parásitas" (alto volumen, bajo margen) y sugiere mejoras de rentabilidad por estante.
+- **Auditorías de Cierre:** Generación de snapshots inmutables del estado del negocio (exclusivo para usuarios PRO).
 
-### 3. Gestión de Paquetes e IA
-... (rest of the file as before) ...
+### 3. Configuración Modular (`ConfigPage`)
+- Sistema centralizado de ajustes con detección de cambios (`dirty state`).
+- Gestión visual de Almacén Dinámico (`num_rows` reemplazó a `rows` por seguridad SQL).
+- Gestión de PIN de acceso mediante funciones RPC (`tenant_pin_status`, `tenant_pin_set`).
+
+### 4. Gestión de Paquetes e IA
+- **Infraestructura de IA**: El backend utiliza un sistema de redundancia con múltiples modelos de Gemini (`2.5-flash`, `2.0-flash`, `2.0-flash-lite`) y lógica de reintentos para errores 503.
+- **Extracción de Datos**: Captura normalizada de `cliente`, `empresa` y `telefono`.
+- **Logos de Agencias**: Componente `CarrierLogo.jsx` mapea dinámicamente nombres a logotipos oficiales a todo color.
+
+---
 
 ## 💻 Convenciones y Ajustes de Servidor
-### Frontend (Vite & Layout)
-- **allowedHosts**: En desarrollo, Vite está configurado con `allowedHosts: true` para permitir ngrok.
-- **Responsive Inmersivo**: Se ha implementado un diseño "edge-to-edge" en móviles para la página de Ajustes, eliminando márgenes laterales y redondeos de tarjetas para ganar espacio.
-- **Sincronización Sticky**: El navbar móvil tiene una altura fija de `72px` (z-50) y los encabezados sticky interiores deben sincronizarse con `top-[72px]` (z-40) para evitar solapamientos feos.
 
-### Backend (Node.js)
-...
-- **Trust Proxy**: Habilitado (`app.set('trust proxy', 1)`) para capturar correctamente la IP del cliente a través de ngrok/Vercel.
-- **Logging**: Incluye un middleware de logging básico para monitorear rutas y tiempos de respuesta en desarrollo.
+### Frontend (Vite & UI Premium)
+- **allowedHosts**: `true` en Vite para permitir conexiones ngrok durante el desarrollo móvil.
+- **Estética Fintech:** Uso extensivo de tipografías pesadas (`font-[1000]`), Tailwind CSS, `framer-motion` para micro-interacciones, y layouts compactos sin bordes agresivos para maximizar la densidad de datos sin agobiar.
+- **Sincronización Sticky**: Control estricto del eje Z y alturas fijas (`72px`) para la navegación móvil.
 
----
-*Este documento es la "Verdad Única" para el desarrollo. Mantener actualizado tras cambios arquitectónicos significativos.*
-
-- **Infraestructura de IA**: El backend utiliza un sistema de redundancia con múltiples modelos de Gemini (`2.5-flash`, `2.0-flash`, `2.0-flash-lite`) y lógica de reintentos para errores 503.
-- **Extracción de Datos**: El prompt está optimizado para capturar `cliente`, `empresa` (normalizada) y `telefono`.
-- **Seguimiento de Uso**: Registro de tokens consumidos por inquilino mediante la función RPC `increment_ai_usage`.
-
-### 4. Gestión de Inquilinos (Multi-tenancy)
-- Aislamiento total mediante `tenant_id`.
-- El frontend gestiona el contexto global en `TenantContext.jsx`.
-- Middleware `subscriptionFirewall` bloquea funcionalidades premium según el estado de Stripe.
-
----
-
-## 💻 Convenciones de Desarrollo
-
-### Backend (CommonJS)
-- **Controladores**: Manejan la lógica de negocio.
-- **Utils**: `supabaseClient.js` expone `supabaseAdmin` para operaciones administrativas y `supabaseAuth` para verificaciones de usuario.
-- **Rutas**: Protegidas por `requireAuth`.
-
-### Frontend (React Moderno)
-- **Componentes**: Uso de `motion` (Framer Motion) para transiciones fluidas.
-- **Servicios**: Los servicios en `src/services/` (ej. `paquetesService.js`) centralizan las llamadas a la API y normalizan las respuestas.
-- **Estilos**: Tailwind CSS con una paleta personalizada (`brand-500` para el color corporativo).
+### Backend (Node.js & Supabase)
+- **Trust Proxy**: Habilitado para capturar la IP real del cliente a través de túneles y Vercel.
+- **RPCs Inteligentes**: Gran parte del "Business Intelligence" (cálculo de crecimiento, benchmarks globales, capital retenido) se ha delegado a funciones de PostgreSQL (`get_area_personal_stats`, `obtener_resumen_dashboard`) para garantizar tiempos de respuesta por debajo de los 100ms.
+- **Servicios Unificados**: Evitar llamadas directas a `/api/X` con `API_BASE` hardcodeadas; utilizar siempre los servicios de `apps/frontend/src/services/` (ej. `billingService.js`).
 
 ---
 
 ## 📊 Base de Datos (Esquema Clave)
 
 - `tenants`: Configuración del negocio, slug, Stripe ID y límites de IA.
-- `packages`: Inventario. Soporta esquema nuevo (`ubicacion_id`, `ubicacion_label`) y legacy (`balda_id`, `compartimento`).
-- `ubicaciones`: Estructura física del almacén (etiquetas, orden, coordenadas).
-- `memberships`: Vínculo entre usuarios de Auth y inquilinos.
-- `billing_plans`: Definición de planes y límites.
+- `packages`: Inventario vivo e histórico.
+- `ubicaciones`: Estructura física del almacén. Utiliza `num_rows` para las alturas.
+- `billing_plans` / `subscriptions`: Gestión del tier del usuario. En desarrollo ("lab"), los planes PRO y VIP se simulan mediante flags de base de datos (`plan_id = 'pro'`).
+
+---
+
+## 📝 Estado Actual y Tareas Pendientes (Junio 2026)
+- ✅ **Completado:** Rediseño total del Dashboard y Área Financiera con métricas avanzadas (Capital Retenido, ROI, Benchmarks).
+- ✅ **Completado:** Sistema de seguridad PIN integrado nativamente en los componentes financieros.
+- ✅ **Completado:** Despliegue a rama `main` validado y sincronizado con Supabase Producción.
+- ⏳ **Pendiente:** Sincronizar o poblar la tabla `billing_plans` del entorno de Laboratorio si se desean hacer pruebas locales de la pasarela de pago sin que se muestren datos hardcodeados o "dummy".
+- ⏳ **Pendiente:** Realizar pruebas E2E (End-to-End) del flujo de registro -> pago en Stripe -> redirección, una vez Vercel haya terminado de desplegar `main`.
 
 ---
 *Este documento es la "Verdad Única" para el desarrollo. Mantener actualizado tras cambios arquitectónicos significativos.*
