@@ -35,6 +35,10 @@ export async function getPlans() {
   return r?.plans || [];
 }
 
+export async function getLimits() {
+  return await authFetch('/limits/me');
+}
+
 export async function startCheckout(planCode) {
   const r = await authFetch('/billing/checkout', {
     method: 'POST',

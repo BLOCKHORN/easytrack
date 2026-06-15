@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, useSpring, useTransform, AnimatePresence } from "framer-motion";
 import { supabase } from "../../utils/supabaseClient";
+import { useTenant } from "../../context/TenantContext";
 
 const IconStar = () => (
   <svg className="w-3 h-3 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
@@ -37,6 +38,7 @@ const AnimatedNumber = ({ value }) => {
 
 export default function Hero() {
   const navigate = useNavigate();
+  const { tenant, loading: tenantLoading } = useTenant();
   const [index, setIndex] = useState(0);
   const [rawTenants, setRawTenants] = useState(0);
   const [rawPkgs, setRawPkgs] = useState(0);
@@ -71,6 +73,18 @@ export default function Hero() {
     }, 15000); 
     return () => clearInterval(interval);
   }, []);
+
+  const handlePanelClick = () => {
+    if (!isLoggedIn) {
+      navigate("/registro");
+      return;
+    }
+    if (tenant?.slug) {
+      navigate(`/${tenant.slug}/dashboard`);
+    } else {
+      navigate("/dashboard");
+    }
+  };
 
   const scrollToTestimonials = () => {
     const el = document.getElementById('testimonios');
@@ -138,8 +152,9 @@ export default function Hero() {
               <motion.button 
                 whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                 transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                onClick={() => navigate(isLoggedIn ? "/dashboard" : "/registro")}
-                className="group w-full sm:w-auto h-12 md:h-14 px-8 flex items-center justify-center bg-white text-zinc-950 font-[900] rounded-xl text-sm uppercase tracking-widest shadow-2xl will-change-transform"
+                onClick={handlePanelClick}
+                className="group w-full sm:w-auto h-12 md:h-14 px-8 flex items-center justify-center bg-white text-zinc-950 font-[900] rounded-xl text-sm uppercase tracking-widest shadow-2xl will-change-transform disabled:opacity-50"
+                disabled={isLoggedIn && tenantLoading}
               >
                 {isLoggedIn ? "Mi panel" : "Empezar gratis"}
               </motion.button>
