@@ -74,7 +74,7 @@ export default function AreaPersonal() {
 
       setEntitlements(neg?.entitlements || null);
       setResumen(d1?.resumen || null);
-      setMensualSrv(Array.isArray(d2?.mensual) ? d2.mensual : []);
+      setMensualSrv(Array.isArray(d2?.mensual) ? [...d2.mensual].reverse() : []);
       setPorEmpresa(Array.isArray(d3?.porEmpresa) ? d3.porEmpresa : []);
       setPinEnabled(!!pinS.enabled);
 

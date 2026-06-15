@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams, useOutletContext } from "react-rou
 import { motion, AnimatePresence } from "framer-motion";
 import {
   XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, AreaChart, Area
+  Tooltip, ResponsiveContainer, BarChart, Bar
 } from "recharts";
 import AnadirPaquete from "./AnadirPaquete";
 import DashboardSkeleton from "./DashboardSkeleton";
@@ -64,17 +64,19 @@ export default function Dashboard(props) {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
-        const [nRes, rRes, actRes, finRes, pinS] = await Promise.all([
+        const [nRes, rRes, actRes, finRes, tcRes, pinS] = await Promise.all([
           fetch(`${apiBase}/negocio`, { headers: { Authorization: `Bearer ${session.access_token}` } }),
           fetch(`${apiBase}/resumen`, { headers: { Authorization: `Bearer ${session.access_token}` } }),
           supabase.from('packages').select('*').order('updated_at', { ascending: false }).limit(6),
           fetch(`${apiBase.replace('dashboard', 'area-personal')}/resumen`, { headers: { Authorization: `Bearer ${session.access_token}` } }).catch(() => null),
+          fetch(`${apiBase.replace('dashboard', 'area-personal')}/top-clientes`, { headers: { Authorization: `Bearer ${session.access_token}` } }).catch(() => null),
           getPinStatus(tenantSlug).catch(() => ({ enabled: false }))
         ]);
 
         const n = await nRes.json();
         const r = await rRes.json();
         const f = finRes ? await finRes.json() : null;
+        const tc = tcRes ? await tcRes.json() : null;
 
         if (cancel) return;
 
@@ -94,7 +96,7 @@ export default function Dashboard(props) {
 
         setNegocio(n?.negocio || n); setEntitlements(n?.entitlements || null); setResumen(newRes); setSlug(n?.negocio?.slug || n?.slug);
         if (!actRes.error) setActividad(actRes.data);
-        if (f?.topClientes) setTopClientes(f.topClientes);
+        if (tc?.topClientes) setTopClientes(tc.topClientes);
 
         __DASHBOARD_CACHE = { loaded: true, negocio: n?.negocio || n, entitlements: n?.entitlements, slug: n?.negocio?.slug || n?.slug, resumen: newRes, actividad: actRes.data || [] };
         setCargando(false);
@@ -194,16 +196,14 @@ export default function Dashboard(props) {
            </div>
            <div className="flex-1 -ml-10">
              <ResponsiveContainer>
-               <AreaChart data={chartData}>
-                 <defs>
-                   <linearGradient id="gIn" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#14b8a6" stopOpacity={0.1}/><stop offset="95%" stopColor="#14b8a6" stopOpacity={0}/></linearGradient>
-                 </defs>
+               <BarChart data={chartData}>
+                 <CartesianGrid strokeDasharray="8 8" vertical={false} stroke="#f4f4f7" />
                  <XAxis dataKey="date" hide />
                  <YAxis hide />
                  <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.05)', padding: '10px' }} />
-                 <Area type="monotone" dataKey="in" stroke="#14b8a6" strokeWidth={4} fill="url(#gIn)" animationDuration={800} />
-                 <Area type="monotone" dataKey="out" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" fill="transparent" />
-               </AreaChart>
+                 <Bar dataKey="in" fill="#14b8a6" radius={[4, 4, 0, 0]} animationDuration={800} />
+                 <Bar dataKey="out" fill="#10b981" radius={[4, 4, 0, 0]} animationDuration={800} />
+               </BarChart>
              </ResponsiveContainer>
            </div>
         </div>
@@ -254,10 +254,19 @@ export default function Dashboard(props) {
                <option value={7}>+7 Días</option>
             </select>
          </div>
-         <div className="overflow-x-auto">
+         <div className="overflow-x-auto max-h-[300px] overflow-y-auto custom-scrollbar">
             <table className="w-full text-left whitespace-nowrap">
+              <thead className="sticky top-0 z-10 bg-white/80 backdrop-blur-md">
+                 <tr>
+                    <th className="py-3 pr-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b border-zinc-100">Cliente</th>
+                    <th className="py-3 px-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b border-zinc-100">Agencia</th>
+                    <th className="py-3 px-4 text-center text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b border-zinc-100">Ubicación</th>
+                    <th className="py-3 px-4 text-right text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b border-zinc-100">Antigüedad</th>
+                    <th className="py-3 pl-4 text-right text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b border-zinc-100">Acción</th>
+                 </tr>
+              </thead>
               <tbody className="divide-y divide-zinc-50">
-                {huerfanos.slice(0, 3).map(p => (
+                {huerfanos.length === 0 ? <tr><td colSpan="5" className="py-12 text-center text-[10px] font-black text-zinc-300 uppercase tracking-widest italic">Stock saneado.</td></tr> : huerfanos.slice(0, 50).map(p => (
                   <tr key={p.id} className="group hover:bg-zinc-50 transition-all">
                     <td className="py-3 pr-4">
                       <p className="text-sm font-[1000] uppercase truncate max-w-[200px] text-zinc-950">{p.nombre_cliente}</p>
