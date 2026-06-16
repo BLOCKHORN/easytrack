@@ -176,12 +176,19 @@ export default function AdminDashboard() {
 
   useEffect(() => { fetchAllData(); }, [globalTimeFilter]);
 
+  const VIP_SLUGS = ['blockhorn', 'estanco-benidoleig'];
+
   const globalMetrics = useMemo(() => {
     const totalRev = tenants.reduce((acc, t) => acc + (Number(t.ingreso_historico_local) || 0), 0);
     const totalAi = tenants.reduce((acc, t) => acc + getAiCost(t.ai_prompt_tokens, t.ai_completion_tokens), 0);
+    
+    // Filtramos VIPs del MRR
+    const payingTenants = tenants.filter(t => !VIP_SLUGS.includes(t.slug));
+    
     return {
       active: tenants.length,
-      mrr: tenants.reduce((acc, t) => acc + (Number(t.mrr_contribution) || 0), 0),
+      mrr: payingTenants.reduce((acc, t) => acc + (Number(t.mrr_contribution) || 0), 0),
+      proCount: payingTenants.filter(t => t.plan_id === 'pro').length,
       traffic: tenants.reduce((acc, t) => acc + (Number(t.total_paquetes) || 0), 0),
       revenue: totalRev,
       aiCost: totalAi
