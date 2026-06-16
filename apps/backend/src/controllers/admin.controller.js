@@ -23,10 +23,10 @@ exports.getDashboardData = async (req, res) => {
       supabaseAdmin.from('tenants').select('id, stripe_customer_id')
     ]);
 
-    if (tenantsRes.error) throw tenantsRes.error;
-    if (globalStatsRes.error) throw globalStatsRes.error;
-    if (reviewsRes.error) throw reviewsRes.error;
-    if (stripeIdsRes.error) throw stripeIdsRes.error;
+    if (tenantsRes.error) { console.error('tenantsRes.error:', tenantsRes.error); throw tenantsRes.error; }
+    if (globalStatsRes.error) { console.error('globalStatsRes.error:', globalStatsRes.error); throw globalStatsRes.error; }
+    if (reviewsRes.error) { console.error('reviewsRes.error:', reviewsRes.error); throw reviewsRes.error; }
+    if (stripeIdsRes.error) { console.error('stripeIdsRes.error:', stripeIdsRes.error); throw stripeIdsRes.error; }
 
     // Creamos un mapa rápido de IDs para no saturar con bucles anidados
     const stripeMap = stripeIdsRes.data.reduce((acc, curr) => {
