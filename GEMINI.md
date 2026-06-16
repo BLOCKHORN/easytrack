@@ -10,14 +10,13 @@ A partir de junio de 2026, el proyecto opera bajo un modelo de aislamiento total
 - **Host**: Hetzner (Bare Metal).
 - **Acceso**: Túnel ngrok dinámico y Tailscale (puerto 5173).
 - **Base de Datos**: Proyecto Supabase independiente (`isffcijmzmdzrnsubdeg`).
-- **Configuración**: Archivos `.env` locales en `apps/backend` y `apps/frontend` (Nunca subir a Git).
 - **Seguridad**: RLS desactivado en el laboratorio para agilidad de desarrollo.
 
 ### 2. Entorno de Producción
 - **Frontend**: Vercel (conectado a rama `main`).
 - **Backend**: Render (conectado a rama `main`).
 - **Base de Datos**: Proyecto Supabase principal (`goehrvohidoqsoadwhrj`).
-- **Variables**: Gestionadas exclusivamente desde los paneles de Vercel/Render.
+- **Backups**: Copia de seguridad limpia en `/root/Easytrack_PROD_BACKUP_LATEST`.
 
 ### 3. Flujo de Trabajo Git (Protocolo Safe-to-Prod)
 1. **Desarrollo**: Se trabaja siempre en la rama `desarrollo`.
@@ -31,58 +30,46 @@ A partir de junio de 2026, el proyecto opera bajo un modelo de aislamiento total
 
 ## 🚀 Módulos y Flujos Principales
 
-### 1. Dashboard Operativo (Táctico)
-- **Layout en 3 Bandas:** Diseño "unboxed" y minimalista que separa Inventario, Flujo Diario y Caja de Hoy.
-- **Seguridad para Empleados:** Las métricas de ganancias están protegidas por el componente `PinGate.jsx`. Si el administrador establece un PIN en configuración, los números se ocultan tras un candado.
-- **Actividad en Vivo:** Feed en tiempo real de entradas y salidas para dar sensación de pulso operativo.
-- **Top Fidelidad:** Ranking de los mejores clientes mostrado tácticamente para mejorar el trato en el mostrador.
+### 1. Centro de Mando Global (Admin Dashboard)
+- **Localización**: `/admin/dashboard`.
+- **Métricas Tácticas**: MRR real (excluye VIPs), Salud de Red, Flujo Global y Gasto Gemini en tiempo real.
+- **Micro-Pricing**: Los costes de IA se calculan y muestran con precisión de 4 decimales (Micro-EUR).
+- **Cuentas VIP**: Slugs `blockhorn` y `estanco-benidoleig` están excluidos de las métricas de ingresos para no falsear el crecimiento.
 
-### 2. Área Financiera (Estratégica)
-- **Capital Retenido:** Cálculo en base de datos (`get_area_personal_stats`) que suma el ingreso potencial de los paquetes físicos actualmente en el local.
-- **Optimización ROI:** Algoritmo que detecta "agencias parásitas" (alto volumen, bajo margen) y sugiere mejoras de rentabilidad por estante.
-- **Auditorías de Cierre:** Generación de snapshots inmutables del estado del negocio (exclusivo para usuarios PRO).
+### 2. Dashboard Operativo y Auditoría
+- **Layout en 3 Bandas:** Diseño "unboxed" que separa Inventario, Flujo Diario y Caja de Hoy.
+- **Auditoría Accionable**: Gestión de paquetes estancados mediante tarjetas móviles con botón "Entregar" integrado (actualización optimista).
+- **Seguridad PIN**: Las métricas de ganancias se ocultan tras un candado (`PinGate.jsx`) si el administrador establece un PIN.
 
-### 3. Configuración Modular (`ConfigPage`)
-- Sistema centralizado de ajustes con detección de cambios (`dirty state`).
-- Gestión visual de Almacén Dinámico (`num_rows` reemplazó a `rows` por seguridad SQL).
-- Gestión de PIN de acceso mediante funciones RPC (`tenant_pin_status`, `tenant_pin_set`).
+### 3. Área Financiera (Estratégica)
+- **Capital Retenido:** Cálculo en base de datos que suma el ingreso potencial de los paquetes físicos actualmente en el local.
+- **Optimización ROI:** Algoritmo que detecta "agencias parásitas" (alto volumen, bajo margen).
 
-### 4. Gestión de Paquetes e IA
-- **Infraestructura de IA**: El backend utiliza un sistema de redundancia con múltiples modelos de Gemini (`2.5-flash`, `2.0-flash`, `2.0-flash-lite`) y lógica de reintentos para errores 503.
-- **Extracción de Datos**: Captura normalizada de `cliente`, `empresa` y `telefono`.
-- **Logos de Agencias**: Componente `CarrierLogo.jsx` mapea dinámicamente nombres a logotipos oficiales a todo color.
+### 4. Configuración Modular (`ConfigPage`)
+- Gestión visual de Almacén Dinámico (`num_rows` para alturas).
+- Sincronización de PIN y ajustes de transportistas con snapshots inmutables.
 
 ---
 
 ## 💻 Convenciones y Ajustes de Servidor
 
 ### Frontend (Vite & UI Premium)
-- **allowedHosts**: `true` en Vite para permitir conexiones ngrok durante el desarrollo móvil.
-- **Estética Fintech:** Uso extensivo de tipografías pesadas (`font-[1000]`), Tailwind CSS, `framer-motion` para micro-interacciones, y layouts compactos sin bordes agresivos para maximizar la densidad de datos sin agobiar.
-- **Sincronización Sticky**: Control estricto del eje Z y alturas fijas (`72px`) para la navegación móvil.
+- **allowedHosts**: `true` en Vite para permitir conexiones móviles.
+- **Estética Fintech:** Tipografías pesadas (`font-[1000]`), micro-interacciones de `framer-motion`, y layouts compactos de alta densidad.
+- **Sincronización Sticky**: Altura fija de `72px` para navegación móvil y control estricto de capas Z.
 
 ### Backend (Node.js & Supabase)
-- **Trust Proxy**: Habilitado para capturar la IP real del cliente a través de túneles y Vercel.
-- **RPCs Inteligentes**: Gran parte del "Business Intelligence" (cálculo de crecimiento, benchmarks globales, capital retenido) se ha delegado a funciones de PostgreSQL (`get_area_personal_stats`, `obtener_resumen_dashboard`) para garantizar tiempos de respuesta por debajo de los 100ms.
-- **Servicios Unificados**: Evitar llamadas directas a `/api/X` con `API_BASE` hardcodeadas; utilizar siempre los servicios de `apps/frontend/src/services/` (ej. `billingService.js`).
+- **RPCs V6**: Uso de funciones administrativas sincronizadas con el esquema de producción para evitar conflictos de caché (ej. `admin_get_tenants_final_v6`).
+- **Seguridad**: El controlador de Admin incluye manejo de errores técnico visible en el frontend para diagnóstico rápido de fallos en DB.
 
 ---
 
 ## 📊 Base de Datos (Esquema Clave)
 
-- `tenants`: Configuración del negocio, slug, Stripe ID y límites de IA.
-- `packages`: Inventario vivo e histórico.
-- `ubicaciones`: Estructura física del almacén. Utiliza `num_rows` para las alturas.
-- `billing_plans` / `subscriptions`: Gestión del tier del usuario. En desarrollo ("lab"), los planes PRO y VIP se simulan mediante flags de base de datos (`plan_id = 'pro'`).
-
----
-
-## 📝 Estado Actual y Tareas Pendientes (Junio 2026)
-- ✅ **Completado:** Rediseño total del Dashboard y Área Financiera con métricas avanzadas (Capital Retenido, ROI, Benchmarks).
-- ✅ **Completado:** Sistema de seguridad PIN integrado nativamente en los componentes financieros.
-- ✅ **Completado:** Despliegue a rama `main` validado y sincronizado con Supabase Producción.
-- ⏳ **Pendiente:** Sincronizar o poblar la tabla `billing_plans` del entorno de Laboratorio si se desean hacer pruebas locales de la pasarela de pago sin que se muestren datos hardcodeados o "dummy".
-- ⏳ **Pendiente:** Realizar pruebas E2E (End-to-End) del flujo de registro -> pago en Stripe -> redirección, una vez Vercel haya terminado de desplegar `main`.
+- `tenants`: Incluye `is_ai_active`, `ai_prompt_tokens`, `ai_completion_tokens`.
+- `packages`: Historial de entradas/salidas con `ingreso_generado` calculado por transportista.
+- `ubicaciones`: Estructura física. Usa `num_rows` para las alturas.
+- `superadmins`: Control de acceso para el panel de Operaciones Globales.
 
 ---
 *Este documento es la "Verdad Única" para el desarrollo. Mantener actualizado tras cambios arquitectónicos significativos.*
