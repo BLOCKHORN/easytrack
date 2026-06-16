@@ -14,18 +14,18 @@ exports.getDashboardData = async (req, res) => {
     if (!(await checkAdmin(req.user.id))) return res.status(403).json({ ok: false, error: 'Acceso denegado.' });
 
     const { timeRange = 'all' } = req.query;
+// Versión Salvavidas: Solo datos core verificados
+const [tenantsRes, globalStatsRes, reviewsRes, stripeIdsRes] = await Promise.all([
+  supabaseAdmin.rpc('admin_get_final_tenants'),
+  supabaseAdmin.rpc('admin_get_global_carrier_stats', { p_time_range: timeRange }),
+  supabaseAdmin.from('reviews').select('id, rating, comentario, status, created_at, tenants(nombre_empresa)').order('created_at', { ascending: false }),
+  supabaseAdmin.from('tenants').select('id, stripe_customer_id')
+]);
 
-    const [tenantsRes, globalStatsRes, reviewsRes, stripeIdsRes] = await Promise.all([
-      supabaseAdmin.rpc('admin_get_global_data'),
-      supabaseAdmin.rpc('admin_get_global_carrier_stats', { p_time_range: timeRange }),
-      supabaseAdmin.from('reviews').select('id, rating, comentario, status, created_at, tenants(nombre_empresa)').order('created_at', { ascending: false }),
-      supabaseAdmin.from('tenants').select('id, stripe_customer_id')
-    ]);
-
-    if (tenantsRes.error) {
-      console.error('[Admin] RPC tenants error:', tenantsRes.error);
-      return res.status(500).json({ ok: false, error: `Error DB Tenants: ${tenantsRes.error.message}` });
-    }
+if (tenantsRes.error) {
+  console.error('[Admin Recovery] Tenants RPC Error:', tenantsRes.error);
+  return res.status(500).json({ ok: false, error: `Error DB Tenants: ${tenantsRes.error.message}` });
+}
     if (globalStatsRes.error) {
       console.error('[Admin] RPC globalStats error:', globalStatsRes.error);
       return res.status(500).json({ ok: false, error: `Error DB Stats: ${globalStatsRes.error.message}` });
