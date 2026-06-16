@@ -17,7 +17,7 @@ exports.getDashboardData = async (req, res) => {
 
     // Añadimos una cuarta consulta concurrente directa a la tabla tenants
     const [tenantsRes, globalStatsRes, reviewsRes, stripeIdsRes] = await Promise.all([
-      supabaseAdmin.rpc('admin_get_all_tenants'),
+      supabaseAdmin.rpc('admin_get_tenants_v3'),
       supabaseAdmin.rpc('admin_get_global_carrier_stats', { p_time_range: timeRange }),
       supabaseAdmin.from('reviews').select('id, rating, comentario, status, created_at, tenants(nombre_empresa)').order('created_at', { ascending: false }),
       supabaseAdmin.from('tenants').select('id, stripe_customer_id')
