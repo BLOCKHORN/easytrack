@@ -17,7 +17,6 @@ const IconStar = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="cur
 const IconTrendingDown = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>;
 
 const formatEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(n || 0);
-const formatMicroEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
 
 const timeAgo = (dateString) => {
   if (!dateString) return 'Sin actividad';
@@ -26,34 +25,6 @@ const timeAgo = (dateString) => {
   interval = seconds / 3600; if (interval > 1) return Math.floor(interval) + 'h';
   interval = seconds / 60; if (interval > 1) return Math.floor(interval) + 'm';
   return 'Ahora';
-};
-
-const getAiCost = (pTokens, cTokens) => {
-  const p = (Number(pTokens) || 0) / 1000000 * 0.075;
-  const c = (Number(cTokens) || 0) / 1000000 * 0.30;
-  return p + c;
-};
-
-const analyzeNegotiationOpportunities = (statsArray, timeRange, tenant) => {
-  if (timeRange === 'today' || timeRange === 'week') return [];
-  const creationDate = tenant?.fecha_creacion ? new Date(tenant.fecha_creacion) : new Date();
-  const monthsActive = Math.max(1, (new Date() - creationDate) / (1000 * 60 * 60 * 24 * 30.44));
-  const TIERS = { VOLUMEN: ['Amazon Logistics', 'InPost', 'Celeritas'], PREMIUM: ['DHL', 'UPS', 'FedEx'] };
-
-  return statsArray.map(c => {
-    const vol = Number(c.volumen) || 0;
-    const currentTicket = Number(c.ticket_medio) || 0;
-    const monthlyVol = timeRange === 'all' ? (vol / monthsActive) : vol;
-    let targetTicket = 0;
-    if (TIERS.VOLUMEN.includes(c.empresa_transporte)) targetTicket = monthlyVol >= 800 ? 0.35 : 0.25;
-    else if (TIERS.PREMIUM.includes(c.empresa_transporte)) targetTicket = monthlyVol >= 50 ? 0.60 : 0.50;
-    else targetTicket = monthlyVol >= 200 ? 0.45 : 0.35;
-    
-    if (targetTicket > 0 && currentTicket < targetTicket) {
-      return { empresa: c.empresa_transporte, volumenMensual: Math.round(monthlyVol), ticketActual: currentTicket, ticketObjetivo: targetTicket, fugaAnual: (monthlyVol * (targetTicket - currentTicket)) * 12 };
-    }
-    return null;
-  }).filter(Boolean);
 };
 
 const TenantInspector = ({ tenant, onBack, onUpdate }) => {
@@ -85,8 +56,6 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
   };
 
   const totals = useMemo(() => statsData.reduce((acc, curr) => { acc.revenue += Number(curr.ingreso_total) || 0; acc.volume += Number(curr.volumen) || 0; return acc; }, { revenue: 0, volume: 0 }), [statsData]);
-  const opportunities = useMemo(() => analyzeNegotiationOpportunities(statsData, timeRange, tenant), [statsData, timeRange, tenant]);
-  const totalCost = getAiCost(tenant.ai_prompt_tokens, tenant.ai_completion_tokens);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-10">
@@ -96,7 +65,6 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
         </button>
         <div className="flex flex-wrap items-center gap-4">
            <h2 className="text-3xl font-[1000] tracking-tighter uppercase">{tenant.nombre_empresa || 'Empresa S/N'}</h2>
-           {tenant.plan_id === 'pro' && <PlanBadge />}
         </div>
       </header>
 
@@ -108,7 +76,7 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
                  <p className="text-sm font-bold text-zinc-500">{tenant.email}</p>
                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-50">
                     <div><p className="text-[9px] font-black text-zinc-400 uppercase">Alta</p><p className="text-sm font-black text-zinc-900">{new Date(tenant.fecha_creacion).toLocaleDateString()}</p></div>
-                    <div><p className="text-[9px] font-black text-zinc-400 uppercase">Actividad</p><p className="text-sm font-black text-emerald-600">{timeAgo(tenant.ultima_actividad)}</p></div>
+                    <div><p className="text-[9px] font-black text-zinc-400 uppercase">Status</p><p className="text-sm font-black text-emerald-600 uppercase">{tenant.status}</p></div>
                  </div>
               </div>
            </div>
@@ -120,10 +88,9 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
                  <div>
                     <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-3 text-white/50">Cuota (Paquetes/Mes)</label>
                     <input type="number" value={quotaInput} onChange={e => setQuotaInput(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-mono text-lg focus:border-brand-500 outline-none transition-colors" />
-                    <p className="text-[9px] font-bold text-zinc-500 mt-2">Consumido este periodo: {tenant.trial_used} paq.</p>
                  </div>
                  <div className="flex items-center justify-between bg-white/5 p-4 rounded-xl border border-white/10">
-                    <span className="text-xs font-black uppercase tracking-widest text-zinc-300 text-white">IA Operativa</span>
+                    <span className="text-xs font-black uppercase tracking-widest text-zinc-300">IA Operativa</span>
                     <input type="checkbox" checked={aiActive} onChange={e => setAiActive(e.target.checked)} className="w-5 h-5 accent-brand-500" />
                  </div>
                  <button onClick={handleSaveLimits} disabled={saving} className="w-full py-4 bg-brand-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-brand-600 transition-all shadow-xl shadow-brand-500/10">{saving ? 'Guardando...' : 'Aplicar Límites'}</button>
@@ -143,7 +110,7 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
                  </select>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-2 gap-6">
                  <div className="p-6 bg-zinc-50 rounded-3xl border border-zinc-100">
                     <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Volumen</p>
                     <p className="text-3xl font-[1000] text-zinc-950 tabular-nums">{totals.volume.toLocaleString()}</p>
@@ -151,10 +118,6 @@ const TenantInspector = ({ tenant, onBack, onUpdate }) => {
                  <div className="p-6 bg-zinc-50 rounded-3xl border border-zinc-100">
                     <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Facturación</p>
                     <p className="text-3xl font-[1000] text-emerald-600 tabular-nums">{formatEUR(totals.revenue)}</p>
-                 </div>
-                 <div className="p-6 bg-zinc-950 rounded-3xl text-white hidden md:block">
-                    <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1 text-white/50">Carga Servidor IA</p>
-                    <p className="text-xl font-[1000] tabular-nums text-brand-400">{formatEUR(totalCost)}</p>
                  </div>
               </div>
 
@@ -184,32 +147,34 @@ export default function AdminDashboard() {
   const [tenants, setTenants] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [inspectingTenant, setInspectingTenant] = useState(null);
   const [globalTimeFilter, setGlobalTimeFilter] = useState('all');
 
   const fetchAllData = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const res = await apiFetch(`/api/admin/dashboard-data?timeRange=${globalTimeFilter}`);
       const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Error al cargar datos');
       setTenants(data.tenants || []);
       setLeaderboard(data.globalStats || []);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err) { 
+        console.error(err); 
+        setErrorMsg(err.message);
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchAllData(); }, [globalTimeFilter]);
 
   const globalMetrics = useMemo(() => {
-    const totalRev = tenants.reduce((acc, t) => acc + (Number(t.ingreso_historico_local) || 0), 0);
-    const totalAi = tenants.reduce((acc, t) => acc + getAiCost(t.ai_prompt_tokens, t.ai_completion_tokens), 0);
     return {
       active: tenants.length,
       mrr: tenants.reduce((acc, t) => acc + (Number(t.mrr_contribution) || 0), 0),
-      volume: totalRev,
-      profit: totalRev - (totalAi * 10), // Simplificación estratégica
-      aiCost: totalAi,
-      traffic: tenants.reduce((acc, t) => acc + (Number(t.total_paquetes) || 0), 0)
+      traffic: tenants.reduce((acc, t) => acc + (Number(t.total_paquetes) || 0), 0),
+      revenue: tenants.reduce((acc, t) => acc + (Number(t.ingreso_historico_local) || 0), 0)
     };
   }, [tenants]);
 
@@ -230,11 +195,17 @@ export default function AdminDashboard() {
            <h1 className="text-4xl md:text-6xl font-[1000] tracking-tighter text-zinc-950 leading-none">Global Ops</h1>
            <div className="flex items-center gap-3">
               <span className="bg-zinc-950 text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase">Admin Panel</span>
-              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em] flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Sincronización en tiempo real</span>
+              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em] flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live</span>
            </div>
         </div>
         <button onClick={fetchAllData} className="w-12 h-12 bg-white border border-zinc-100 rounded-2xl flex items-center justify-center text-zinc-400 hover:text-zinc-950 transition-all shadow-sm"><IconRefresh /></button>
       </header>
+
+      {errorMsg && (
+          <div className="mb-10 p-6 bg-red-50 border border-red-100 rounded-3xl text-red-600 font-bold text-sm">
+             ⚠️ Error detectado: {errorMsg}
+          </div>
+      )}
 
       <AnimatePresence mode="wait">
         {inspectingTenant ? (
@@ -247,23 +218,23 @@ export default function AdminDashboard() {
                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-zinc-950 rounded-[2.5rem] p-10 text-white space-y-6 shadow-2xl relative overflow-hidden">
                      <div className="absolute top-0 right-0 w-32 h-32 bg-brand-500/10 blur-[60px] rounded-full" />
-                     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest relative z-10 text-white">Ingresos MRR (Suscripciones)</p>
-                     <div className="text-5xl font-[1000] tracking-tighter text-brand-400 tabular-nums relative z-10 text-white leading-none">{formatEUR(globalMetrics.mrr)}</div>
-                     <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest relative z-10 text-white">{tenants.filter(t=>t.plan_id==='pro').length} locales en Plan PRO</p>
+                     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest relative z-10">Ingresos MRR Est.</p>
+                     <div className="text-5xl font-[1000] tracking-tighter text-brand-400 tabular-nums relative z-10 leading-none">{formatEUR(globalMetrics.mrr)}</div>
+                     <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest relative z-10">{tenants.filter(t=>t.plan_id==='pro').length} locales PRO</p>
                   </div>
                   <div className="bg-white border border-zinc-100 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-between">
-                     <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4 text-zinc-950">Salud del Negocio</p>
+                     <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4">Salud del Negocio</p>
                      <div className="text-5xl font-[1000] tracking-tighter text-zinc-950 tabular-nums leading-none mb-4">{globalMetrics.active}</div>
-                     <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest text-zinc-950">Locales activos en la red</p>
+                     <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Locales activos en la red</p>
                   </div>
                   <div className="bg-white border border-zinc-100 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-center space-y-8">
                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest text-zinc-950">Gasto Servidor IA</span>
-                        <span className="text-sm font-black text-rose-600 tabular-nums text-zinc-950">{formatEUR(globalMetrics.aiCost)}</span>
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Flujo Global</span>
+                        <span className="text-sm font-black text-zinc-950 tabular-nums">{globalMetrics.traffic.toLocaleString()} paq.</span>
                      </div>
                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest text-zinc-950">Tráfico Histórico</span>
-                        <span className="text-sm font-black text-zinc-950 tabular-nums text-zinc-950">{globalMetrics.traffic.toLocaleString()} paq.</span>
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Cashflow Red</span>
+                        <span className="text-sm font-black text-emerald-600 tabular-nums">{formatEUR(globalMetrics.revenue)}</span>
                      </div>
                   </div>
                </div>
@@ -279,7 +250,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="space-y-8">
                      {leaderboard.slice(0, 6).map((c, i) => (
-                       <div key={i} className="flex items-center justify-between group cursor-help text-zinc-950">
+                       <div key={i} className="flex items-center justify-between group cursor-help">
                           <div className="flex items-center gap-4">
                              <span className="text-[9px] font-black text-zinc-300 w-4">#{i+1}</span>
                              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center p-2 border border-zinc-100 shadow-sm group-hover:scale-110 transition-transform">
@@ -308,7 +279,7 @@ export default function AdminDashboard() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                      {filteredTenants.map(t => (
-                       <motion.div key={t.id} onClick={() => setInspectingTenant(t)} whileHover={{ y: -5 }} className="bg-white border border-zinc-100 p-8 rounded-[2.5rem] shadow-sm hover:shadow-xl transition-all cursor-pointer group text-zinc-950">
+                       <motion.div key={t.id} onClick={() => setInspectingTenant(t)} whileHover={{ y: -5 }} className="bg-white border border-zinc-100 p-8 rounded-[2.5rem] shadow-sm hover:shadow-xl transition-all cursor-pointer group">
                           <div className="flex justify-between items-start mb-8">
                              <div className="space-y-1">
                                 <h4 className="text-sm font-[1000] uppercase tracking-tight group-hover:text-brand-600 transition-colors">{t.nombre_empresa || 'S/N'}</h4>
@@ -319,10 +290,6 @@ export default function AdminDashboard() {
                           <div className="grid grid-cols-2 gap-6 pt-6 border-t border-zinc-50">
                              <div><p className="text-[9px] font-black text-zinc-300 uppercase mb-1">Volumen</p><p className="text-lg font-[1000] tabular-nums">{t.total_paquetes || 0}</p></div>
                              <div><p className="text-[9px] font-black text-zinc-300 uppercase mb-1">Facturación</p><p className="text-lg font-[1000] tabular-nums text-emerald-600">{formatEUR(t.ingreso_historico_local)}</p></div>
-                          </div>
-                          <div className="mt-6 flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-400">
-                             <div className={`w-1.5 h-1.5 rounded-full ${t.ultima_actividad && (new Date() - new Date(t.ultima_actividad) < 3600000) ? 'bg-emerald-500' : 'bg-zinc-200'}`} />
-                             {timeAgo(t.ultima_actividad)}
                           </div>
                        </motion.div>
                      ))}

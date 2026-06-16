@@ -15,7 +15,6 @@ exports.getDashboardData = async (req, res) => {
 
     const { timeRange = 'all' } = req.query;
 
-    // Llamada simplificada y robusta
     const [tenantsRes, globalStatsRes, reviewsRes, stripeIdsRes] = await Promise.all([
       supabaseAdmin.rpc('admin_get_global_data'),
       supabaseAdmin.rpc('admin_get_global_carrier_stats', { p_time_range: timeRange }),
@@ -31,16 +30,12 @@ exports.getDashboardData = async (req, res) => {
       console.error('[Admin] RPC globalStats error:', globalStatsRes.error);
       return res.status(500).json({ ok: false, error: `Error DB Stats: ${globalStatsRes.error.message}` });
     }
-    if (reviewsRes.error) { console.error('reviewsRes.error:', reviewsRes.error); throw reviewsRes.error; }
-    if (stripeIdsRes.error) { console.error('stripeIdsRes.error:', stripeIdsRes.error); throw stripeIdsRes.error; }
 
-    // Creamos un mapa rápido de IDs para no saturar con bucles anidados
-    const stripeMap = stripeIdsRes.data.reduce((acc, curr) => {
+    const stripeMap = (stripeIdsRes.data || []).reduce((acc, curr) => {
       acc[curr.id] = curr.stripe_customer_id;
       return acc;
     }, {});
 
-    // Inyectamos el stripe_customer_id a los datos que nos devuelve tu RPC
     const tenantsWithStripe = (tenantsRes.data || []).map(t => ({
       ...t,
       stripe_customer_id: stripeMap[t.id] || null
@@ -53,7 +48,8 @@ exports.getDashboardData = async (req, res) => {
       reviews: reviewsRes.data || []
     });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: 'Error extrayendo datos globales' });
+    console.error('[Admin] getDashboardData crash:', error);
+    return res.status(500).json({ ok: false, error: 'Error fatal extrayendo datos' });
   }
 };
 
