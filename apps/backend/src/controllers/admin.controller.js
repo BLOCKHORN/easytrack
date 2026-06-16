@@ -15,16 +15,22 @@ exports.getDashboardData = async (req, res) => {
 
     const { timeRange = 'all' } = req.query;
 
-    // Añadimos una cuarta consulta concurrente directa a la tabla tenants
+    // Llamada simplificada y robusta
     const [tenantsRes, globalStatsRes, reviewsRes, stripeIdsRes] = await Promise.all([
-      supabaseAdmin.rpc('admin_get_tenants_v3'),
+      supabaseAdmin.rpc('admin_get_global_data'),
       supabaseAdmin.rpc('admin_get_global_carrier_stats', { p_time_range: timeRange }),
       supabaseAdmin.from('reviews').select('id, rating, comentario, status, created_at, tenants(nombre_empresa)').order('created_at', { ascending: false }),
       supabaseAdmin.from('tenants').select('id, stripe_customer_id')
     ]);
 
-    if (tenantsRes.error) { console.error('tenantsRes.error:', tenantsRes.error); throw tenantsRes.error; }
-    if (globalStatsRes.error) { console.error('globalStatsRes.error:', globalStatsRes.error); throw globalStatsRes.error; }
+    if (tenantsRes.error) {
+      console.error('[Admin] RPC tenants error:', tenantsRes.error);
+      return res.status(500).json({ ok: false, error: `Error DB Tenants: ${tenantsRes.error.message}` });
+    }
+    if (globalStatsRes.error) {
+      console.error('[Admin] RPC globalStats error:', globalStatsRes.error);
+      return res.status(500).json({ ok: false, error: `Error DB Stats: ${globalStatsRes.error.message}` });
+    }
     if (reviewsRes.error) { console.error('reviewsRes.error:', reviewsRes.error); throw reviewsRes.error; }
     if (stripeIdsRes.error) { console.error('stripeIdsRes.error:', stripeIdsRes.error); throw stripeIdsRes.error; }
 
