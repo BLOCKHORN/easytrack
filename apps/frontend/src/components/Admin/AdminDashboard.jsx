@@ -18,6 +18,12 @@ const IconTrendingDown = () => <svg width="12" height="12" viewBox="0 0 24 24" f
 
 const formatEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(n || 0);
 
+const getAiCost = (pTokens, cTokens) => {
+    const p = (Number(pTokens) || 0) / 1000000 * 0.075;
+    const c = (Number(cTokens) || 0) / 1000000 * 0.30;
+    return p + c;
+};
+
 const timeAgo = (dateString) => {
   if (!dateString) return 'Sin actividad';
   const seconds = Math.floor((new Date() - new Date(dateString)) / 1000);
@@ -170,19 +176,27 @@ export default function AdminDashboard() {
   useEffect(() => { fetchAllData(); }, [globalTimeFilter]);
 
   const globalMetrics = useMemo(() => {
+    const totalRev = tenants.reduce((acc, t) => acc + (Number(t.ingreso_historico_local) || 0), 0);
+    const totalAi = tenants.reduce((acc, t) => {
+        const p = (Number(t.ai_prompt_tokens) || 0) / 1000000 * 0.075;
+        const c = (Number(t.ai_completion_tokens) || 0) / 1000000 * 0.30;
+        return acc + (p + c);
+    }, 0);
     return {
       active: tenants.length,
       mrr: tenants.reduce((acc, t) => acc + (Number(t.mrr_contribution) || 0), 0),
       traffic: tenants.reduce((acc, t) => acc + (Number(t.total_paquetes) || 0), 0),
-      revenue: tenants.reduce((acc, t) => acc + (Number(t.ingreso_historico_local) || 0), 0)
+      revenue: totalRev,
+      aiCost: totalAi
     };
   }, [tenants]);
 
-  const filteredTenants = useMemo(() => tenants.filter(t => 
-    (t.nombre_empresa?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
-    (t.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
-    (t.slug?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-  ), [tenants, searchTerm]);
+  const processedTenants = useMemo(() => {
+    return filteredTenants.map(t => ({
+      ...t,
+      ai_cost: getAiCost(t.ai_prompt_tokens, t.ai_completion_tokens)
+    })).sort((a, b) => (Number(b.total_paquetes) || 0) - (Number(a.total_paquetes) || 0));
+  }, [filteredTenants]);
 
   if (loading && tenants.length === 0) return <DashboardSkeleton />;
 
@@ -229,8 +243,8 @@ export default function AdminDashboard() {
                   </div>
                   <div className="bg-white border border-zinc-100 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-center space-y-8">
                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Flujo Global</span>
-                        <span className="text-sm font-black text-zinc-950 tabular-nums">{globalMetrics.traffic.toLocaleString()} paq.</span>
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest text-rose-600">Gasto Gemini</span>
+                        <span className="text-sm font-black text-rose-600 tabular-nums">{formatEUR(globalMetrics.aiCost)}</span>
                      </div>
                      <div className="flex justify-between items-center">
                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Cashflow Red</span>
@@ -278,7 +292,7 @@ export default function AdminDashboard() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                     {filteredTenants.map(t => (
+                     {processedTenants.map(t => (
                        <motion.div key={t.id} onClick={() => setInspectingTenant(t)} whileHover={{ y: -5 }} className="bg-white border border-zinc-100 p-8 rounded-[2.5rem] shadow-sm hover:shadow-xl transition-all cursor-pointer group">
                           <div className="flex justify-between items-start mb-8">
                              <div className="space-y-1">
@@ -287,13 +301,14 @@ export default function AdminDashboard() {
                              </div>
                              {t.plan_id === 'pro' && <PlanBadge />}
                           </div>
-                          <div className="grid grid-cols-2 gap-6 pt-6 border-t border-zinc-50">
+                          <div className="grid grid-cols-3 gap-6 pt-6 border-t border-zinc-50">
                              <div><p className="text-[9px] font-black text-zinc-300 uppercase mb-1">Volumen</p><p className="text-lg font-[1000] tabular-nums">{t.total_paquetes || 0}</p></div>
-                             <div><p className="text-[9px] font-black text-zinc-300 uppercase mb-1">Facturación</p><p className="text-lg font-[1000] tabular-nums text-emerald-600">{formatEUR(t.ingreso_historico_local)}</p></div>
+                             <div><p className="text-[9px] font-black text-zinc-300 uppercase mb-1">Caja</p><p className="text-lg font-[1000] tabular-nums text-emerald-600">{formatEUR(t.ingreso_historico_local)}</p></div>
+                             <div><p className="text-[9px] font-black text-zinc-300 uppercase mb-1">IA Cost</p><p className="text-lg font-[1000] tabular-nums text-rose-500">{formatEUR(t.ai_cost)}</p></div>
                           </div>
                        </motion.div>
                      ))}
-                     {filteredTenants.length === 0 && <div className="col-span-full py-20 text-center text-[10px] font-black text-zinc-300 uppercase tracking-widest italic">No se han encontrado negocios con ese criterio.</div>}
+                     {processedTenants.length === 0 && <div className="col-span-full py-20 text-center text-[10px] font-black text-zinc-300 uppercase tracking-widest italic">No se han encontrado negocios con ese criterio.</div>}
                   </div>
                </div>
             </div>

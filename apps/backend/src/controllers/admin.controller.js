@@ -14,7 +14,7 @@ exports.getDashboardData = async (req, res) => {
     if (!(await checkAdmin(req.user.id))) return res.status(403).json({ ok: false, error: 'Acceso denegado.' });
 
     const { timeRange = 'all' } = req.query;
-    // Versión Restaurada: Usando la función maestra admin_get_all_tenants
+    // Versión Restaurada y Verificada: Usando admin_get_all_tenants
     const [tenantsRes, globalStatsRes, reviewsRes, stripeIdsRes] = await Promise.all([
       supabaseAdmin.rpc('admin_get_all_tenants'),
       supabaseAdmin.rpc('admin_get_global_carrier_stats', { p_time_range: timeRange }),
@@ -23,7 +23,7 @@ exports.getDashboardData = async (req, res) => {
     ]);
 
     if (tenantsRes.error) {
-      console.error('[Admin] Tenants RPC error:', tenantsRes.error);
+      console.error('[Admin] RPC tenants error:', tenantsRes.error);
       return res.status(500).json({ ok: false, error: `Error DB Tenants: ${tenantsRes.error.message}` });
     }
     if (globalStatsRes.error) {
