@@ -1,5 +1,14 @@
 'use strict';
 
+const seedRandom = (str) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const x = Math.sin(hash) * 10000;
+  return x - Math.floor(x);
+};
+
 const generateMockLeads = (cp, city, centerLat, centerLon) => {
   const shopTemplates = [
     { name: "Papelería e Imprenta Alfil", street: "Calle de Colón, 14" },
@@ -13,12 +22,15 @@ const generateMockLeads = (cp, city, centerLat, centerLon) => {
   ];
 
   return shopTemplates.map((template, idx) => {
-    // Generate slight random offset around the center (between -0.008 and +0.008)
-    const latOffset = (Math.random() - 0.5) * 0.016;
-    const lonOffset = (Math.random() - 0.5) * 0.016;
+    // Generate deterministic offsets based on cp and index
+    const seedLat = seedRandom(`${cp}-${idx}-lat`);
+    const seedLon = seedRandom(`${cp}-${idx}-lon`);
+
+    const latOffset = (seedLat - 0.5) * 0.016;
+    const lonOffset = (seedLon - 0.5) * 0.016;
 
     return {
-      id: `mock-pudo-${cp}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+      id: `mock-pudo-${cp}-${idx}`,
       lat: centerLat + latOffset,
       lon: centerLon + lonOffset,
       name: `SEUR Pickup - ${template.name}`,
