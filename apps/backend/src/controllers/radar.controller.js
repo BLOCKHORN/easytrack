@@ -10,6 +10,43 @@ const seedRandom = (str) => {
 };
 
 const generateMockLeads = (cp, city, centerLat, centerLon) => {
+  const isBenidoleig = cp === "03759" || String(city || "").toUpperCase().includes("BENIDOLEIG");
+  
+  if (isBenidoleig) {
+    return [
+      {
+        id: "mock-pudo-03759-estanco",
+        lat: 38.7940808,
+        lon: -0.0189657,
+        name: "SEUR Pickup - Estanco Benidoleig",
+        operator: 'SEUR Pickup',
+        street: "Avenida del Mar, 2",
+        city: "Benidoleig",
+        phone: null
+      },
+      {
+        id: "mock-pudo-03759-bazar",
+        lat: 38.786501,
+        lon: -0.016102,
+        name: "SEUR Pickup - Tienda de Alimentación y Bazar",
+        operator: 'SEUR Pickup',
+        street: "Plaza Constitución, 5",
+        city: "Benidoleig",
+        phone: null
+      },
+      {
+        id: "mock-pudo-03759-farmacia",
+        lat: 38.785203,
+        lon: -0.017204,
+        name: "SEUR Pickup - Colaborador Farmacia",
+        operator: 'SEUR Pickup',
+        street: "Calle Mayor, 10",
+        city: "Benidoleig",
+        phone: null
+      }
+    ];
+  }
+
   const shopTemplates = [
     { name: "Papelería e Imprenta Alfil", street: "Calle de Colón, 14" },
     { name: "Kiosco y Prensa Plaza", street: "Avenida de la Constitución, 8" },
