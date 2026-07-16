@@ -128,7 +128,7 @@ export default function AdminRadar() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`
         },
-        body: JSON.stringify({ codigo_postal: cp, poblacion: city })
+        body: JSON.stringify({ codigo_postal: cp, poblacion: city, lat, lon: lng })
       });
 
       const data = await res.json();

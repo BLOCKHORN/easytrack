@@ -32,7 +32,7 @@ const generateMockLeads = (cp, city, centerLat, centerLon) => {
 
 exports.scanRadar = async (req, res) => {
   try {
-    const { codigo_postal, poblacion = "" } = req.body;
+    const { codigo_postal, poblacion = "", lat, lon } = req.body;
 
     if (!codigo_postal) {
       return res.status(400).json({ error: 'Se requiere un código postal para el radar de SEUR' });
@@ -86,21 +86,23 @@ exports.scanRadar = async (req, res) => {
     } catch (apiError) {
       console.warn("[Radar SEUR] API principal bloqueada o caída. Ejecutando fallback local:", apiError.message);
 
-      // FALLBACK: Geocodificar CP usando Nominatim y generar leads simulados realistas
-      let centerLat = 39.4699;
-      let centerLon = -0.3762; // Valencia por defecto
+      // FALLBACK: Usar coordenadas recibidas o geocodificar CP usando Nominatim
+      let centerLat = lat !== undefined ? parseFloat(lat) : 39.4699;
+      let centerLon = lon !== undefined ? parseFloat(lon) : -0.3762;
 
-      try {
-        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${codigo_postal}&country=Spain&format=json&limit=1`, {
-          headers: { 'User-Agent': 'Easytrack-Radar-Service/1.0' }
-        });
-        const geoData = await geoRes.json();
-        if (geoData && geoData[0]) {
-          centerLat = parseFloat(geoData[0].lat);
-          centerLon = parseFloat(geoData[0].lon);
+      if (lat === undefined || lon === undefined) {
+        try {
+          const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${codigo_postal}&country=Spain&format=json&limit=1`, {
+            headers: { 'User-Agent': 'Easytrack-Radar-Service/1.0' }
+          });
+          const geoData = await geoRes.json();
+          if (geoData && geoData[0]) {
+            centerLat = parseFloat(geoData[0].lat);
+            centerLon = parseFloat(geoData[0].lon);
+          }
+        } catch (geoErr) {
+          console.error("[Radar Fallback] Error geocodificando código postal con Nominatim:", geoErr.message);
         }
-      } catch (geoErr) {
-        console.error("[Radar Fallback] Error geocodificando código postal con Nominatim:", geoErr.message);
       }
 
       const leads = generateMockLeads(codigo_postal, poblacion, centerLat, centerLon);
