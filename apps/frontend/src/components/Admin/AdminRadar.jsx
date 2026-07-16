@@ -25,6 +25,7 @@ export default function AdminRadar() {
   const [statusMsg, setStatusMsg] = useState("SISTEMA SINCRONIZADO");
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   const itemsPerPage = 6;
 
   const totalPages = Math.ceil(leads.length / itemsPerPage);
@@ -96,7 +97,7 @@ export default function AdminRadar() {
     });
   }, [leads, selectedLead]);
 
-  const scanArea = async () => {
+  const scanArea = async (customLat, customLng) => {
     if (!mapInstance.current || loading) return;
 
     setLoading(true);
@@ -105,11 +106,12 @@ export default function AdminRadar() {
     setCurrentPage(1);
 
     try {
-      const center = mapInstance.current.getCenter();
-      const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${center.lat}&lon=${center.lng}&format=json`);
+      const lat = customLat !== undefined ? customLat : mapInstance.current.getCenter().lat;
+      const lng = customLng !== undefined ? customLng : mapInstance.current.getCenter().lng;
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
       const geoData = await geoRes.json();
       const cp = geoData.address?.postcode;
-      const city = geoData.address?.city || geoData.address?.town || "";
+      const city = geoData.address?.city || geoData.address?.town || geoData.address?.village || "";
 
       if (!cp) throw new Error("ÁREA SIN COBERTURA");
 
@@ -142,6 +144,36 @@ export default function AdminRadar() {
     }
   };
 
+  const searchLocation = async (e) => {
+    if (e) e.preventDefault();
+    if (!searchQuery.trim() || !mapInstance.current || loading) return;
+
+    setLoading(true);
+    setStatusMsg("BUSCANDO UBICACIÓN...");
+
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1`);
+      const data = await res.json();
+
+      if (!data || data.length === 0) {
+        throw new Error("UBICACIÓN NO ENCONTRADA");
+      }
+
+      const { lat, lon } = data[0];
+      const latitude = parseFloat(lat);
+      const longitude = parseFloat(lon);
+
+      mapInstance.current.flyTo([latitude, longitude], 14, { duration: 0.5 });
+      
+      // Esperar a que comience la animación y ejecutar el radar en esa coordenada
+      await scanArea(latitude, longitude);
+
+    } catch (error) {
+      setStatusMsg(`ERROR: ${error.message.toUpperCase()}`);
+      setLoading(false);
+    }
+  };
+
   const handleLeadClick = (lead) => {
     setSelectedLead(lead);
     if (mapInstance.current) {
@@ -158,19 +190,37 @@ export default function AdminRadar() {
           .leaflet-tile { filter: saturate(0.5) opacity(0.8); }
         `}} />
 
-        <div className="absolute top-6 left-6 z-[400] flex flex-col gap-3">
+        <div className="absolute top-6 left-6 z-[400] flex flex-col gap-3 w-72 sm:w-80">
+          <form onSubmit={searchLocation} className="flex gap-2 bg-white/95 backdrop-blur-md border border-zinc-200 p-1.5 rounded-xl shadow-lg w-full">
+            <input
+              type="text"
+              placeholder="Buscar lugar (ej: Benidoleig)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent border-0 outline-none text-xs font-semibold px-3 py-1.5 text-zinc-800 placeholder-zinc-400"
+              disabled={loading}
+            />
+            <button
+              type="submit"
+              disabled={loading || !searchQuery.trim()}
+              className="px-4 py-1.5 bg-zinc-950 hover:bg-zinc-800 disabled:bg-zinc-200 text-white disabled:text-zinc-400 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all"
+            >
+              Buscar
+            </button>
+          </form>
+
           <button
-            onClick={scanArea}
+            onClick={() => scanArea()}
             disabled={loading || !leafletReady}
-            className="flex items-center gap-3 px-6 py-3 bg-zinc-950 hover:bg-zinc-800 disabled:bg-zinc-200 text-white disabled:text-zinc-500 font-bold uppercase tracking-widest text-[10px] rounded-xl transition-all shadow-lg active:scale-95"
+            className="flex items-center justify-center gap-3 px-6 py-3.5 bg-zinc-950 hover:bg-zinc-850 disabled:bg-zinc-200 text-white disabled:text-zinc-500 font-bold uppercase tracking-widest text-[10px] rounded-xl transition-all shadow-lg active:scale-95 w-full"
           >
             {loading ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <IconTarget />}
-            {loading ? 'PROCESANDO...' : 'EJECUTAR RADAR'}
+            {loading ? 'PROCESANDO...' : 'EJECUTAR RADAR EN EL ÁREA'}
           </button>
 
-          <div className="bg-white/90 backdrop-blur-md border border-zinc-200 px-4 py-2 rounded-xl flex items-center gap-3 shadow-sm">
+          <div className="bg-white/95 backdrop-blur-md border border-zinc-200 px-4 py-2.5 rounded-xl flex items-center gap-3 shadow-sm w-full">
             <div className={`w-2 h-2 rounded-full bg-brand-500 ${loading ? 'animate-pulse' : ''}`} />
-            <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{statusMsg}</span>
+            <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest truncate">{statusMsg}</span>
           </div>
         </div>
 
