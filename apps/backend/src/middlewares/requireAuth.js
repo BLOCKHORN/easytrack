@@ -10,6 +10,34 @@ const attach = (req, { user, tenant }) => {
   }
 };
 
+const crypto = require('crypto');
+
+function verifySupabaseTokenLocally(token) {
+  const secret = process.env.SUPABASE_JWT_SECRET;
+  if (!secret) return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [headerB64, payloadB64, sigB64] = parts;
+    const expectedSig = crypto
+      .createHmac('sha256', secret)
+      .update(headerB64 + '.' + payloadB64)
+      .digest('base64url');
+    if (sigB64 !== expectedSig) return null;
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < now) return null;
+    if (!payload.sub) return null;
+    return {
+      id: payload.sub,
+      email: String(payload.email || '').trim().toLowerCase(),
+      user_metadata: payload.user_metadata || {}
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function resolveUser(req) {
   if (process.env.AUTH_BYPASS === 'true' && process.env.NODE_ENV !== 'production') {
     return { id: 'dev-bypass', email: 'dev@example.com' };
@@ -18,11 +46,19 @@ async function resolveUser(req) {
   const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
   if (!token) return null;
 
+  // 1. Verificación instantánea criptográfica local (0ms, inmune a caídas de red o bloqueos de Render)
+  const localUser = verifySupabaseTokenLocally(token);
+  if (localUser) return localUser;
+
+  // 2. Fallback supabaseAuth
   try {
     const { data, error } = await supabaseAuth.auth.getUser(token);
-    if (error || !data?.user) return null;
-    return { id: data.user.id, email: String(data.user.email || '').trim().toLowerCase() };
-  } catch { return null; }
+    if (!error && data?.user) {
+      return { id: data.user.id, email: String(data.user.email || '').trim().toLowerCase() };
+    }
+  } catch {}
+
+  return null;
 }
 
 async function resolveTenantForUser(userId, slug, email) {

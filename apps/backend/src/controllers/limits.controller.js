@@ -20,7 +20,7 @@ exports.getLimitsMe = async (req, res) => {
         tenantId = t?.id || tenantId;
       }
       if (!tenantId && req.user?.id) {
-        const { data: mem } = await supabaseAdmin.from('memberships').select('tenant_id').eq('user_id', req.user.id).order('updated_at', { ascending: false }).limit(1).maybeSingle();
+        const { data: mem } = await supabaseAdmin.from('memberships').select('tenant_id').eq('user_id', req.user.id).limit(1).maybeSingle();
         tenantId = mem?.tenant_id || tenantId;
       }
     }

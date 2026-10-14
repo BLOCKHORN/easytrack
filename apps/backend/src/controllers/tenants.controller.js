@@ -13,9 +13,9 @@ async function ensureTenantByEmail(email) {
 
   const { data: exist } = await supabaseAdmin
     .from('tenants')
-    .select(`${TENANT_FIELDS}, updated_at`)
+    .select(TENANT_FIELDS)
     .ilike('email', em)
-    .order('updated_at', { ascending: false })
+    .order('fecha_creacion', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (exist) return exist;

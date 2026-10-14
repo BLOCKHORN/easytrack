@@ -56,7 +56,7 @@ async function resolveTenantId(req) {
   }
   const email = req.user?.email;
   if (email) {
-    const { data: t } = await supabaseAdmin.from('tenants').select('id').ilike('email', email).order('updated_at', { ascending: false }).limit(1).maybeSingle();
+    const { data: t } = await supabaseAdmin.from('tenants').select('id').ilike('email', email).order('fecha_creacion', { ascending: false }).limit(1).maybeSingle();
     if (t?.id) return t.id;
   }
   return null;
