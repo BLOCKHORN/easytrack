@@ -543,9 +543,13 @@ exports.obtenerCarriers = async (req, res) => {
         query('SELECT * FROM public.empresas_transporte_tenant WHERE tenant_id = $1 ORDER BY nombre', [tenantId]),
         query('SELECT * FROM public.empresas_transporte ORDER BY nombre')
       ]);
+      const tenantList = tCarriers.rows || [];
+      const globalList = gCarriers.rows || [];
+      const carriers = tenantList.length > 0 ? tenantList : globalList;
       return res.json({
-        empresas: tCarriers.rows || [],
-        disponibles: gCarriers.rows || []
+        empresas: tenantList,
+        disponibles: globalList,
+        carriers: carriers
       });
     }
 
@@ -564,9 +568,13 @@ exports.obtenerCarriers = async (req, res) => {
 
     if (errGlobal) throw errGlobal;
 
+    const tenantList = tenantCarriers || [];
+    const globalList = globalCarriers || [];
+    const carriers = tenantList.length > 0 ? tenantList : globalList;
     return res.json({ 
-      empresas: tenantCarriers || [],
-      disponibles: globalCarriers || []
+      empresas: tenantList,
+      disponibles: globalList,
+      carriers: carriers
     });
   } catch (error) {
     console.error('[obtenerCarriers Error]', error);

@@ -321,26 +321,60 @@ export default function BuscarPaquete() {
       const tId = await getTenantIdOrThrow();
       setTenantId(tId);
 
-      const resKPI = await apiFetch('/api/paquetes/count');
-      if (resKPI.ok) {
-        const dataKPI = await resKPI.json();
-        setKpiGlobal({ total: dataKPI.total || 0, entregados: dataKPI.entregados || 0, pendientes: dataKPI.pendientes || 0 });
-      }
+      await Promise.allSettled([
+        // KPI Global
+        (async () => {
+          try {
+            const resKPI = await apiFetch('/api/paquetes/count');
+            if (resKPI.ok) {
+              const dataKPI = await resKPI.json();
+              setKpiGlobal({ total: dataKPI.total || 0, entregados: dataKPI.entregados || 0, pendientes: dataKPI.pendientes || 0 });
+            }
+          } catch (e) {
+            console.error('Error fetching KPIs:', e);
+          }
+        })(),
 
-      const resCarriers = await apiFetch('/api/ubicaciones/carriers');
-      if (resCarriers.ok) {
-        const dataCarriers = await resCarriers.json();
-        const carriersList = dataCarriers?.carriers || dataCarriers || [];
-        setCompanias(carriersList.map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b)));
-      }
+        // Compañías de Transporte
+        (async () => {
+          try {
+            const resCarriers = await apiFetch('/api/ubicaciones/carriers');
+            if (resCarriers.ok) {
+              const dataCarriers = await resCarriers.json();
+              const rawList = Array.isArray(dataCarriers)
+                ? dataCarriers
+                : (Array.isArray(dataCarriers?.empresas) && dataCarriers.empresas.length > 0)
+                  ? dataCarriers.empresas
+                  : (Array.isArray(dataCarriers?.carriers) && dataCarriers.carriers.length > 0)
+                    ? dataCarriers.carriers
+                    : (Array.isArray(dataCarriers?.disponibles) ? dataCarriers.disponibles : []);
+              const names = rawList.map(e => e?.nombre || e).filter(Boolean);
+              setCompanias([...new Set(names)].sort((a,b) => String(a).localeCompare(String(b))));
+            }
+          } catch (e) {
+            console.error('Error fetching carriers:', e);
+          }
+        })(),
 
-      const resUbis = await apiFetch('/api/ubicaciones/estructura');
-      if (resUbis.ok) {
-        const dataUbis = await resUbis.json();
-        const ubiList = dataUbis?.ubicaciones || dataUbis || [];
-        setUbicaciones(ubiList.map(r => ({ id: r.id, label: String(r.label || "").toUpperCase() })));
-      }
-    } catch (e) {}
+        // Ubicaciones / Estanterías
+        (async () => {
+          try {
+            const resUbis = await apiFetch('/api/ubicaciones/estructura');
+            if (resUbis.ok) {
+              const dataUbis = await resUbis.json();
+              const ubiList = Array.isArray(dataUbis?.ubicaciones)
+                ? dataUbis.ubicaciones
+                : (Array.isArray(dataUbis) ? dataUbis : []);
+              setUbicaciones(ubiList.map(r => ({ id: r.id, label: String(r.label || r.codigo || "").toUpperCase() })).filter(u => u.label));
+            }
+          } catch (e) {
+            console.error('Error fetching ubicaciones:', e);
+          }
+        })()
+      ]);
+    } catch (e) {
+      console.error('Error in loadGlobalData:', e);
+    }
   };
 
   const fetchPage = async () => {
