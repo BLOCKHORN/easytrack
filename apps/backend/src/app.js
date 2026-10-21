@@ -64,9 +64,7 @@ function originChecker(origin, cb) {
       ALLOWED_ORIGINS.includes(origin) ||
       host === 'localhost' || host === '127.0.0.1' ||
       host.endsWith('.ngrok-free.dev') ||
-      host.endsWith('.devtunnels.ms') ||
-      host.endsWith('.vercel.app') ||
-      host.endsWith('.onrender.com');
+      host.endsWith('.devtunnels.ms');
     return cb(null, ok);
   } catch {}
   return cb(new Error('CORS_NOT_ALLOWED'));
