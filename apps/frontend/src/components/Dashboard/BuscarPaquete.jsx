@@ -35,7 +35,7 @@ const IconInfo = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="non
 const IconClock = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
 const IconLoader = () => <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>;
 
-const RESULTADOS_POR_PAGINA = 10;
+const RESULTADOS_POR_PAGINA = 25;
 const LS_KEY = "buscar_paquete_filtros_v12";
 const QUEUE_KEY = "easytrack_sync_queue";
 const REVEAL_KEY = "easytrack_reveal_names"; // Persistencia del Ojo
@@ -181,6 +181,7 @@ export default function BuscarPaquete() {
   const [kpiGlobal, _setKpiGlobal] = useState(__SEARCH_CACHE.kpiGlobal);
   const [companias, _setCompanias] = useState(__SEARCH_CACHE.companias);
   const [ubicaciones, _setUbicaciones] = useState(__SEARCH_CACHE.ubicaciones);
+  const [searchCounts, setSearchCounts] = useState({ total: 0, entregados: 0, pendientes: 0 });
 
   const [olvidos, setOlvidos] = useState([]);
   const [entregandoId, setEntregandoId] = useState(null);
@@ -391,7 +392,7 @@ export default function BuscarPaquete() {
         compania: companiaFiltro,
         ubicacion: ubicacionFiltro,
         search: searchFuzzy,
-        order: 'fecha_llegada',
+        order: recientesFiltro ? 'created_at' : 'fecha_llegada',
         dir: 'desc'
       });
 
@@ -403,6 +404,12 @@ export default function BuscarPaquete() {
       if (resPkgs.ok && resCount.ok) {
         const dataPkgs = await resPkgs.json();
         const dataCount = await resCount.json();
+
+        setSearchCounts({
+          total: dataCount.total || 0,
+          entregados: dataCount.entregados || 0,
+          pendientes: dataCount.pendientes || 0
+        });
 
         const list = (dataPkgs.paquetes || [])
           .filter(p => estadoFiltro !== "pendiente" || !retryQueue.current.has(p.id))
@@ -778,8 +785,32 @@ export default function BuscarPaquete() {
         <div className="bg-white border border-zinc-200/80 rounded-xl shadow-sm overflow-hidden">
           <div className="block lg:hidden divide-y divide-zinc-100">
             {paquetes.length === 0 ? (
-            <div className="py-8 text-center text-zinc-400 font-medium text-xs sm:text-sm">No hay paquetes que coincidan.</div>
-          ) : (
+              <div className="py-10 px-4 text-center">
+                <p className="text-sm font-semibold text-zinc-600">No hay paquetes que coincidan con estos filtros.</p>
+                {estadoFiltro === "pendiente" && searchCounts.entregados > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs text-zinc-500 mb-2">Se han encontrado {searchCounts.entregados} paquete(s) ya entregados.</p>
+                    <button 
+                      onClick={() => setEstadoFiltro("entregado")} 
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 transition-colors active:scale-[0.97]"
+                    >
+                      Ver en Entregados
+                    </button>
+                  </div>
+                )}
+                {estadoFiltro === "entregado" && searchCounts.pendientes > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs text-zinc-500 mb-2">Se han encontrado {searchCounts.pendientes} paquete(s) pendientes de entrega.</p>
+                    <button 
+                      onClick={() => setEstadoFiltro("pendiente")} 
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 transition-colors active:scale-[0.97]"
+                    >
+                      Ver en Pendientes
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
             <AnimatePresence>
               {paquetes.map(p => {
                 const revealed = revealAll || revealedSet.has(p.id);
@@ -885,7 +916,33 @@ export default function BuscarPaquete() {
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {paquetes.length === 0 ? (
-                <tr><td colSpan="7" className="py-16 text-center text-zinc-500 font-bold text-lg">No hay paquetes que coincidan.</td></tr>
+                <tr>
+                  <td colSpan="7" className="py-12 px-6 text-center">
+                    <p className="text-base font-semibold text-zinc-700">No hay paquetes que coincidan con los filtros actuales.</p>
+                    {estadoFiltro === "pendiente" && searchCounts.entregados > 0 && (
+                      <div className="mt-3 flex items-center justify-center gap-2">
+                        <span className="text-sm text-zinc-500">Existen <strong className="text-zinc-800 font-bold">{searchCounts.entregados}</strong> paquete(s) que coinciden ya entregados.</span>
+                        <button 
+                          onClick={() => setEstadoFiltro("entregado")} 
+                          className="px-3 py-1.5 rounded-md bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 transition-colors active:scale-[0.97]"
+                        >
+                          Ver en Entregados
+                        </button>
+                      </div>
+                    )}
+                    {estadoFiltro === "entregado" && searchCounts.pendientes > 0 && (
+                      <div className="mt-3 flex items-center justify-center gap-2">
+                        <span className="text-sm text-zinc-500">Existen <strong className="text-zinc-800 font-bold">{searchCounts.pendientes}</strong> paquete(s) aún pendientes.</span>
+                        <button 
+                          onClick={() => setEstadoFiltro("pendiente")} 
+                          className="px-3 py-1.5 rounded-md bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 transition-colors active:scale-[0.97]"
+                        >
+                          Ver en Pendientes
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
               ) : (
                 <AnimatePresence>
                   {paquetes.map(p => {
