@@ -1,19 +1,20 @@
 // src/services/paquetesService.js
 // 📦 Servicio de paquetes (compatible con esquema nuevo y legacy)
 import { getTenantIdOrThrow } from '../utils/tenant';
+import { apiFetch } from '../utils/fetcher';
 
-const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
 const PROD_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 const API_BASE = isLocal ? '' : PROD_URL;
 const API_URL = `${API_BASE}/api`;
 
 function authHeaders(token) {
-  if (!token) throw new Error('[paquetesService] Falta token JWT de Supabase');
-  return {
+  const headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'Authorization': `Bearer ${token}`,
   };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return headers;
 }
 
 async function parseMaybeJson(resp) {
@@ -59,7 +60,7 @@ function normalizePaquete(row = {}) {
     compania: empresa,
     entregado: !!row.entregado,
     fecha_llegada: row.fecha_llegada ?? row.created_at ?? null,
-    telefono: row.telefono ?? null, // <-- Aseguramos mapear el teléfono si existe
+    telefono: row.telefono ?? null,
 
     ubicacion_id: ubiId,
     ubicacion_label: typeof ubiLabel === 'string' ? ubiLabel : null,
@@ -79,15 +80,14 @@ function normalizePaquete(row = {}) {
 
 // Llamada a la IA para escanear etiquetas
 export async function escanearEtiquetaIA(imageBase64, token) {
-  const url = `${API_URL}/ia/scan-label`;
-  const resp = await fetch(url, {
+  const resp = await apiFetch('/api/ia/scan-label', {
     method: 'POST',
-    headers: authHeaders(token),
-    body: JSON.stringify({ imageBase64 }),
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: { imageBase64 },
   });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, 'POST /ia/scan-label');
-  return body; // Devuelve { cliente, compania, telefono }
+  return body;
 }
 
 // Crear un nuevo paquete (el backend devuelve { paquete })
@@ -98,24 +98,21 @@ export async function crearPaqueteBackend(datos, token) {
     tenant_id: tid,
     nombre_cliente: datos.nombre_cliente,
     empresa_transporte: datos.empresa_transporte,
-    telefono: datos.telefono || null, // <-- Enviamos teléfono al backend
+    telefono: datos.telefono || null,
   };
 
-  // Preferimos NUEVO esquema
   if (datos.ubicacion_id != null)    payload.ubicacion_id = datos.ubicacion_id;
   if (datos.ubicacion_label != null) payload.ubicacion_label = datos.ubicacion_label;
 
-  // Compat legacy si no vino lo nuevo
   if (payload.ubicacion_id == null && payload.ubicacion_label == null) {
     if (datos.balda_id != null)      payload.ubicacion_id = datos.balda_id;
     if (datos.compartimento != null) payload.ubicacion_label = datos.compartimento;
   }
 
-  const url = `${API_URL}/paquetes/crear`;
-  const resp = await fetch(url, {
+  const resp = await apiFetch('/api/paquetes/crear', {
     method: 'POST',
-    headers: authHeaders(token),
-    body: JSON.stringify(payload),
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: payload,
   });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, 'POST /paquetes/crear');
@@ -124,22 +121,13 @@ export async function crearPaqueteBackend(datos, token) {
   return normalizePaquete(created);
 }
 
-/**
- * Obtener lista de paquetes (por tenant) con soporte de:
- * - all=1 (trae todo desde backend, paginado interno de 1000)
- * - o paginación client: limit/offset
- * - filtros: estado ('pendiente'|'entregado'|'todos'), compania, ubicacion, search
- * - orden: order (campo), dir ('asc'|'desc')
- *
- * DEFAULT: all=1 para evitar el cap de 1000 sin tocar el resto del frontend.
- */
 export async function obtenerPaquetesBackend(token, params = {}) {
   const tid = await getTenantIdOrThrow();
-  const url = new URL(`${API_URL}/paquetes/listar`, window.location.origin);
+  const qp = new URLSearchParams();
 
   const query = {
     tenant_id: tid,
-    all: params.all ?? 1,               // ← por defecto trae TODO
+    all: params.all ?? 1,
     limit: params.limit,
     offset: params.offset,
     estado: params.estado,
@@ -151,24 +139,22 @@ export async function obtenerPaquetesBackend(token, params = {}) {
     dir: params.dir,
   };
   for (const [k, v] of Object.entries(query)) {
-    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
+    if (v !== undefined && v !== null && v !== '') qp.set(k, v);
   }
 
-  const resp = await fetch(url.toString(), { method: 'GET', headers: authHeaders(token) });
+  const resp = await apiFetch(`/api/paquetes/listar?${qp.toString()}`, { 
+    method: 'GET', 
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, 'GET /paquetes/listar');
   const arr = pickArray(body);
   return arr.map(normalizePaquete);
 }
 
-/**
- * Conteo exacto para KPI (no depende de la lista)
- * Acepta los mismos filtros que el listado.
- * Devuelve: { total, entregados, pendientes }
- */
 export async function contarPaquetesBackend(token, params = {}) {
   const tid = await getTenantIdOrThrow();
-  const url = new URL(`${API_URL}/paquetes/count`, window.location.origin);
+  const qp = new URLSearchParams();
 
   const query = {
     tenantId: tid,
@@ -178,10 +164,13 @@ export async function contarPaquetesBackend(token, params = {}) {
     search: params.search,
   };
   for (const [k, v] of Object.entries(query)) {
-    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
+    if (v !== undefined && v !== null && v !== '') qp.set(k, v);
   }
 
-  const resp = await fetch(url.toString(), { method: 'GET', headers: authHeaders(token) });
+  const resp = await apiFetch(`/api/paquetes/count?${qp.toString()}`, { 
+    method: 'GET', 
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, 'GET /paquetes/count');
   return {
@@ -191,28 +180,29 @@ export async function contarPaquetesBackend(token, params = {}) {
   };
 }
 
-// Eliminar un paquete
 export async function eliminarPaqueteBackend(id, token) {
   const tid = await getTenantIdOrThrow();
-  const url = `${API_URL}/paquetes/${id}?tenantId=${encodeURIComponent(tid)}`;
-  const resp = await fetch(url, { method: 'DELETE', headers: authHeaders(token) });
+  const resp = await apiFetch(`/api/paquetes/${id}?tenantId=${encodeURIComponent(tid)}`, { 
+    method: 'DELETE', 
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, `DELETE /paquetes/${id}`);
   return { ok: true };
 }
 
-// Marcar como entregado
 export async function entregarPaqueteBackend(id, token) {
   const tid = await getTenantIdOrThrow();
-  const url = `${API_URL}/paquetes/entregar/${id}?tenantId=${encodeURIComponent(tid)}`;
-  const resp = await fetch(url, { method: 'PATCH', headers: authHeaders(token) });
+  const resp = await apiFetch(`/api/paquetes/entregar/${id}?tenantId=${encodeURIComponent(tid)}`, { 
+    method: 'PATCH', 
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, `PATCH /paquetes/entregar/${id}`);
   const updated = body?.paquete ?? body;
   return updated?.id ? normalizePaquete(updated) : { ok: true };
 }
 
-// Editar (mover de ubicación, cambiar nombre/compañía, etc.)
 export async function editarPaqueteBackend(paquete, token) {
   const tid = await getTenantIdOrThrow();
   const id = paquete?.id;
@@ -228,11 +218,10 @@ export async function editarPaqueteBackend(paquete, token) {
     fecha_entregado: paquete?.fecha_entregado
   };
 
-  const url = `${API_URL}/paquetes/${id}?tenantId=${encodeURIComponent(tid)}`;
-  const resp = await fetch(url, {
+  const resp = await apiFetch(`/api/paquetes/${id}?tenantId=${encodeURIComponent(tid)}`, {
     method: 'PUT',
-    headers: authHeaders(token),
-    body: JSON.stringify(patch),
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: patch,
   });
   const body = await parseMaybeJson(resp);
   ensureOk(resp, body, `PUT /paquetes/${id}`);

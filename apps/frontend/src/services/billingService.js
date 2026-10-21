@@ -1,25 +1,9 @@
 'use strict';
 
-import { supabase } from '../utils/supabaseClient';
-
-const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
-const PROD_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
-const API_BASE = isLocal ? '' : PROD_URL;
-const API = `${API_BASE}/api`;
+import { apiFetch } from '../utils/fetcher';
 
 async function authFetch(path, opts = {}) {
-  const { data: sdata } = await supabase.auth.getSession();
-  const token = sdata?.session?.access_token;
-
-  const res = await fetch(`${API}${path}`, {
-    ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(opts.headers || {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    }
-  });
-
+  const res = await apiFetch(`/api${path}`, opts);
   const body = await res.json().catch(() => null);
 
   if (!res.ok || body?.ok === false) {
@@ -42,7 +26,7 @@ export async function getLimits() {
 export async function startCheckout(planCode) {
   const r = await authFetch('/billing/checkout', {
     method: 'POST',
-    body: JSON.stringify({ plan_code: planCode }),
+    body: { plan_code: planCode },
   });
   if (!r?.url) throw new Error('No se pudo obtener la URL de pago');
   return r.url;

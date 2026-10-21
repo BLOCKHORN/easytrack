@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '../../utils/supabaseClient';
+import { apiFetch } from '../../utils/fetcher';
+import { authService } from '../../services/authService';
+import { useAuth } from '../../context/AuthContext';
 import ReviewBanner from './ReviewBanner';
 import OnboardingTour from '../UI/OnboardingTour';
 
-const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
 const PROD_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 const API_BASE = isLocal ? '' : PROD_URL;
 
@@ -27,7 +29,7 @@ const TypewriterLogo = ({ size = "text-2xl", cursorHeight = "h-6" }) => {
 const IconChart = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>;
 const IconPlus = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
 const IconSearch = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
-const IconGrid = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>;
+const IconGrid = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>;
 const IconUser = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
 const IconSettings = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 const IconGlobe = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>;
@@ -42,6 +44,7 @@ const IconGift = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="non
 export default function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPartner, setIsPartner] = useState(false);
   const [showTour, setShowTour] = useState(false);
@@ -53,21 +56,12 @@ export default function DashboardLayout() {
   useEffect(() => {
     let isMounted = true;
     const checkOnboarding = async () => {
-      // Si ya terminó el tour o estamos en una ruta que no es inicio/ajustes, no hacemos nada de momento
       if (localStorage.getItem('onboarding_done')) return;
-      
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-
-        // Comprobamos si tiene ubicaciones configuradas
-        const res = await fetch(`${API_BASE}/api/ubicaciones`, {
-          headers: { Authorization: `Bearer ${session.access_token}` }
-        });
+        const res = await apiFetch(`${API_BASE}/api/ubicaciones`);
         if (res.ok) {
           const data = await res.json();
           const ucount = Array.isArray(data.ubicaciones) ? data.ubicaciones.length : 0;
-          // Si no hay ubicaciones, activamos el tour guiado
           if (ucount === 0 && isMounted) {
             setShowTour(true);
           }
@@ -78,13 +72,7 @@ export default function DashboardLayout() {
     
     const checkPartnerStatus = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-
-        const res = await fetch(`${API_BASE}/api/partners/me`, {
-          headers: { Authorization: `Bearer ${session.access_token}` }
-        });
-        
+        const res = await apiFetch(`${API_BASE}/api/partners/me`);
         if (res.ok) {
           const data = await res.json();
           if (data.isPartner && isMounted) {
@@ -98,8 +86,10 @@ export default function DashboardLayout() {
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/login');
+    try { await logout(); } catch (e) {}
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = '/';
   };
 
   const navItems = [
@@ -241,13 +231,14 @@ export default function DashboardLayout() {
         </div>
       </aside>
 
-      <header className="md:hidden sticky top-0 z-50 bg-zinc-950 flex items-center justify-between h-[72px] px-5 shadow-lg border-b border-zinc-800/50">
-        <div className="cursor-pointer" onClick={() => navigate('.')}>
+      <header className="md:hidden sticky top-0 z-50 bg-zinc-950/95 border-b border-zinc-800/80 flex items-center justify-between h-14 px-4 pt-safe">
+        <div className="cursor-pointer flex items-center gap-2" onClick={() => navigate('.')}>
           <TypewriterLogo size="text-xl" cursorHeight="h-5" />
         </div>
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
-          className="relative w-10 h-10 flex items-center justify-center text-zinc-300 hover:text-white transition-colors"
+          className="w-10 h-10 -mr-1 flex items-center justify-center text-zinc-400 hover:text-white rounded-lg active:scale-[0.96] transition-transform"
+          aria-label="Abrir menú"
         >
           {isMobileMenuOpen ? <IconX /> : <IconMenu />}
         </button>
@@ -256,99 +247,108 @@ export default function DashboardLayout() {
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.2 }}
-            className="md:hidden fixed top-[72px] left-0 right-0 z-30 bg-zinc-950 border-b border-zinc-800/50 shadow-2xl p-5 px-6 pb-8"
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.15 }}
+            className="md:hidden fixed top-14 left-0 right-0 z-30 bg-zinc-950 border-b border-zinc-800/80 p-4 pb-6 space-y-1 shadow-2xl"
           >
-            <div className="flex flex-col gap-2">
-              <div className="text-[11px] font-black text-zinc-500 uppercase tracking-widest mb-2 pl-2">Gestión</div>
-              {mobileMenu.map(item => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={({ isActive }) => `relative flex items-center gap-4 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all ${isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </NavLink>
-              ))}
-              
-              <div className="w-full h-px bg-zinc-800/50 my-4" />
-              
-              <a href="/" className="flex items-center gap-4 px-4 py-3.5 rounded-2xl font-bold text-sm text-zinc-400 hover:bg-zinc-900 hover:text-white transition-all">
-                <IconGlobe /> Volver a la Web
-              </a>
-              <button onClick={handleLogout} className="flex items-center gap-4 px-4 py-3.5 rounded-2xl font-bold text-sm text-red-400 hover:bg-red-500/10 transition-all text-left">
-                <IconLogout /> Cerrar Sesión
-              </button>
-            </div>
+            <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2 px-3">Gestión de Cuenta</div>
+            {mobileMenu.map(item => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-colors active:scale-[0.97] ${isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+            
+            <div className="w-full h-px bg-zinc-800/60 my-2" />
+            
+            <a href="/" className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm text-zinc-400 hover:bg-zinc-900 hover:text-white transition-colors active:scale-[0.97]">
+              <IconGlobe /> Volver a la Web
+            </a>
+            <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm text-rose-400 hover:bg-rose-500/10 transition-colors text-left active:scale-[0.97]">
+              <IconLogout /> Cerrar Sesión
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden relative pb-[88px] md:pb-0">
+      <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden relative pb-24 md:pb-0">
         {isMobileMenuOpen && (
           <div 
-            className="md:hidden fixed inset-0 z-20 bg-black/40 backdrop-blur-sm"
+            className="md:hidden fixed inset-0 z-20 bg-black/60"
             onClick={() => setIsMobileMenuOpen(false)}
           />
         )}
         <motion.div
           key={location.pathname}
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
-          className="flex-1 px-4 pt-4 md:p-8 max-w-[1440px] w-full mx-auto"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.15 }}
+          className="flex-1 px-3 py-3 sm:px-6 sm:py-6 md:p-8 max-w-[1440px] w-full mx-auto"
         >
           <Outlet />
         </motion.div>
       </main>
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-800/80 pb-safe">
-        <div className="flex items-end justify-between px-6 py-2">
-          
-          <div className="flex flex-1 justify-between pr-4">
-            {mobileNavLeft.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.end}
-                className={({ isActive }) => `flex flex-col items-center justify-center w-14 transition-colors ${isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                <div className="mb-1.5">{item.icon}</div>
-                <span className="text-[9px] font-black uppercase tracking-wider">{item.label}</span>
-              </NavLink>
-            ))}
-          </div>
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 border-t border-zinc-800/80 pb-safe">
+        <div className="grid grid-cols-5 h-14 items-center px-2">
+          {/* 1. Inicio */}
+          <NavLink
+            to="."
+            end
+            className={({ isActive }) => `flex flex-col items-center justify-center h-full gap-0.5 transition-colors active:scale-[0.96] ${isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+          >
+            <div className="shrink-0"><IconChart /></div>
+            <span className="text-[10px] font-medium leading-none">Inicio</span>
+          </NavLink>
 
-          <div className="relative shrink-0 flex justify-center -mt-8">
-            <NavLink 
+          {/* 2. Buscar */}
+          <NavLink
+            to="buscar"
+            className={({ isActive }) => `flex flex-col items-center justify-center h-full gap-0.5 transition-colors active:scale-[0.96] ${isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+          >
+            <div className="shrink-0"><IconSearch /></div>
+            <span className="text-[10px] font-medium leading-none">Buscar</span>
+          </NavLink>
+
+          {/* 3. Botón Central Sobresaliendo (Añadir) */}
+          <div className="relative flex flex-col items-center justify-center">
+            <NavLink
               to="anadir"
               state={{ openScanner: true }}
-              className={({ isActive }) => `relative flex flex-col items-center justify-center transition-transform active:scale-95 ${isActive ? '' : 'hover:-translate-y-1'}`}
+              className="group -mt-6 flex flex-col items-center justify-center focus:outline-none"
+              aria-label="Añadir Paquete"
             >
-              <div className="w-[60px] h-[60px] bg-gradient-to-tr from-brand-500 to-brand-400 rounded-full flex items-center justify-center text-white pro-fab shadow-xl">
-                <IconScan />
+              <div className="w-[50px] h-[50px] bg-brand-600 hover:bg-brand-500 text-white rounded-full flex items-center justify-center shadow-lg border-4 border-zinc-950 transition-transform active:scale-[0.92]">
+                <IconPlus />
               </div>
+              <span className="text-[9px] font-semibold text-zinc-400 group-hover:text-white mt-0.5 leading-none">Añadir</span>
             </NavLink>
           </div>
 
-          <div className="flex flex-1 justify-between pl-4">
-            {mobileNavRight.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={({ isActive }) => `flex flex-col items-center justify-center w-14 transition-colors ${isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                <div className="mb-1.5">{item.icon}</div>
-                <span className="text-[9px] font-black uppercase tracking-wider">{item.label}</span>
-              </NavLink>
-            ))}
-          </div>
+          {/* 4. Almacén */}
+          <NavLink
+            to="almacen"
+            className={({ isActive }) => `flex flex-col items-center justify-center h-full gap-0.5 transition-colors active:scale-[0.96] ${isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+          >
+            <div className="shrink-0"><IconGrid /></div>
+            <span className="text-[10px] font-medium leading-none">Almacén</span>
+          </NavLink>
 
+          {/* 5. Finanzas */}
+          <NavLink
+            to="personal"
+            className={({ isActive }) => `flex flex-col items-center justify-center h-full gap-0.5 transition-colors active:scale-[0.96] ${isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+          >
+            <div className="shrink-0"><IconUser /></div>
+            <span className="text-[10px] font-medium leading-none">Finanzas</span>
+          </NavLink>
         </div>
       </nav>
     </div>

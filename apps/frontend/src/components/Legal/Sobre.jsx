@@ -1,5 +1,6 @@
-import { FiTarget, FiShield, FiTrendingUp, FiZap, FiDatabase, FiUsers, FiCheckCircle } from 'react-icons/fi';
+import { FiTarget, FiShield, FiTrendingUp, FiZap, FiDatabase, FiUsers, FiCheckCircle, FiArrowRight } from 'react-icons/fi';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 
 export default function Sobre() {
   const jsonLd = {
@@ -11,82 +12,97 @@ export default function Sobre() {
   };
 
   return (
-    <main className="bg-white min-h-screen pt-32 pb-24">
+    <main className="bg-white min-h-screen pt-28 pb-20 antialiased font-sans text-zinc-900">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      {/* Hero */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center mb-24">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 border border-brand-100 text-brand-600 text-xs font-bold tracking-widest uppercase mb-6">
-          Nuestra Misión
-        </motion.div>
-        <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="text-5xl md:text-7xl font-black text-zinc-950 tracking-tighter leading-tight mb-8">
-          Devolverle el control a los <span className="text-brand-600">puntos de recogida.</span>
-        </motion.h1>
-        <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="text-xl text-zinc-500 font-medium leading-relaxed max-w-2xl mx-auto">
-          EasyTrack es una infraestructura digital creada por <strong>Blockhorn Studios OÜ</strong> para acabar con el caos físico, las pérdidas de dinero y el estrés en la gestión de paquetería local.
-        </motion.p>
+      {/* Hero Section */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center mb-20 sm:mb-24">
+        <div className="inline-flex items-center gap-2 text-xs font-semibold text-[#7C3AED] mb-4">
+          <span>Infraestructura para Puntos de Recogida</span>
+          <span>·</span>
+          <span>Desarrollado en la UE</span>
+        </div>
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-zinc-950 tracking-tight leading-tight text-balance mb-6">
+          Devolver el control a los <span className="text-[#7C3AED]">puntos de recogida.</span>
+        </h1>
+        <p className="text-lg sm:text-xl text-zinc-600 font-normal leading-relaxed max-w-2xl mx-auto text-pretty">
+          EasyTrack es una plataforma de software desarrollada por <strong>Blockhorn Studios OÜ</strong> para erradicar el caos físico, las colas en mostrador y las pérdidas de tiempo en la gestión de paquetería local.
+        </p>
       </div>
 
       {/* Grid Valores */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-32">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-24 sm:mb-32">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[
-            { icon: <FiTarget />, title: "Precisión Absoluta", desc: "Sustituimos la memoria humana por un mapeo exacto de coordenadas. Cero paquetes perdidos." },
-            { icon: <FiZap />, title: "Velocidad Operativa", desc: "Búsquedas indexadas al milisegundo. Optimizamos el proceso para que entregues en menos de 5 segundos." },
-            { icon: <FiShield />, title: "Seguridad por defecto", desc: "Arquitectura multi-tenant. Tus datos y los de tus clientes están completamente aislados y cifrados." },
-            { icon: <FiTrendingUp />, title: "Escalabilidad", desc: "Diseñado tanto para la papelería de barrio como para redes de franquicias con múltiples sedes." },
-            { icon: <FiDatabase />, title: "Datos Útiles", desc: "Sin métricas vanidosas. Solo datos reales de facturación, saturación y tiempos para que tomes decisiones." },
-            { icon: <FiUsers />, title: "Soporte Cercano", desc: "Detrás de la pantalla hay ingenieros reales. Atendemos problemas técnicos de forma directa y sin bots." }
+            { icon: <FiTarget className="w-5 h-5" />, title: "Precisión Absoluta", desc: "Sustituimos la memoria del operario por coordenadas exactas de balda y estante. Cero paquetes perdidos." },
+            { icon: <FiZap className="w-5 h-5" />, title: "Velocidad Operativa", desc: "Búsquedas instantáneas indexadas al milisegundo. Entregas en menos de 5 segundos por cliente." },
+            { icon: <FiShield className="w-5 h-5" />, title: "Seguridad y Aislamiento", desc: "Arquitectura multi-tenant con transacciones ACID en PostgreSQL y tokens de sesión HttpOnly inmunes a XSS." },
+            { icon: <FiTrendingUp className="w-5 h-5" />, title: "Escalabilidad Flexible", desc: "Adaptable tanto para un estanco familiar como para quioscos con más de 200 paquetes diarios." },
+            { icon: <FiDatabase className="w-5 h-5" />, title: "Métricas Reales", desc: "Sin métricas vanidosas. Datos reales de facturación estimada por agencia, saturación y tiempos de permanencia." },
+            { icon: <FiUsers className="w-5 h-5" />, title: "Soporte Directo", desc: "Equipo de ingeniería cercano. Atención directa y resolutiva sin intermediarios ni bots automáticos." }
           ].map((item, i) => (
-            <div key={i} className="bg-zinc-50 p-8 rounded-3xl border border-zinc-100 hover:border-brand-200 transition-colors">
-              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-brand-600 text-xl shadow-sm border border-zinc-100 mb-6">{item.icon}</div>
-              <h3 className="text-xl font-bold text-zinc-900 mb-3">{item.title}</h3>
-              <p className="text-zinc-500 font-medium leading-relaxed">{item.desc}</p>
+            <div key={i} className="bg-zinc-50 p-6 rounded-xl border border-zinc-200 hover:border-zinc-300 transition-colors">
+              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-[#7C3AED] shadow-sm border border-zinc-200 mb-4">
+                {item.icon}
+              </div>
+              <h3 className="text-base font-bold text-zinc-900 mb-2">{item.title}</h3>
+              <p className="text-sm text-zinc-600 font-normal leading-relaxed text-pretty">{item.desc}</p>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Roadmap / Trust */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-16 items-center">
-        <div>
-          <h2 className="text-3xl font-black text-zinc-950 mb-6">Hacia dónde vamos</h2>
-          <p className="text-zinc-500 mb-10 font-medium leading-relaxed">No construimos features por capricho. Escuchamos a los locales que manejan cientos de paquetes al día para desarrollar herramientas que ahorren tiempo físico.</p>
-          
-          <div className="space-y-8 relative before:absolute before:inset-0 before:ml-2.5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-brand-500 before:to-zinc-200">
-            <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-              <div className="flex items-center justify-center w-6 h-6 rounded-full border-4 border-white bg-brand-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10"></div>
-              <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
-                <span className="font-bold text-brand-600 text-sm">Fase 1 (Actual)</span>
-                <h4 className="font-bold text-zinc-900 text-lg mt-1 mb-2">Infraestructura Core</h4>
-                <p className="text-sm text-zinc-500">Mapeo visual, facturación y gestión multi-agencia.</p>
-              </div>
+      {/* Principios y Compromiso */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
+        <div className="space-y-6">
+          <div>
+            <div className="text-xs font-semibold text-[#7C3AED] mb-1">Filosofía de Producto</div>
+            <h2 className="text-2xl sm:text-3xl font-black text-zinc-950 tracking-tight">Hacia dónde vamos</h2>
+          </div>
+          <p className="text-zinc-600 font-normal leading-relaxed text-pretty">
+            No desarrollamos funciones superfluas. Cada iteración de EasyTrack nace del feedback directo de dependientes y autónomos que gestionan cientos de paquetes al día entre tabaco, prensa, papelería y cobros en caja.
+          </p>
+
+          <div className="space-y-4 pt-2">
+            <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-lg">
+              <div className="text-xs font-bold text-[#7C3AED] mb-1">Fase 1 · Producción 2026</div>
+              <div className="font-bold text-zinc-900 text-sm mb-1">Infraestructura Core y Zero-Supabase</div>
+              <p className="text-xs text-zinc-600">Base de datos dedicada PostgreSQL en Hetzner (Alemania), autenticación segura HttpOnly y control multi-agencia unificado.</p>
             </div>
-            <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
-              <div className="flex items-center justify-center w-6 h-6 rounded-full border-4 border-white bg-zinc-300 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10"></div>
-              <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-zinc-50 p-5 rounded-2xl border border-zinc-100">
-                <span className="font-bold text-zinc-500 text-sm">Fase 2 (Próximamente)</span>
-                <h4 className="font-bold text-zinc-900 text-lg mt-1 mb-2">Automatización Hardware</h4>
-                <p className="text-sm text-zinc-500">Integración nativa con impresoras térmicas e inventariado masivo.</p>
-              </div>
+            <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-lg">
+              <div className="text-xs font-bold text-zinc-500 mb-1">Fase 2 · En Desarrollo</div>
+              <div className="font-bold text-zinc-900 text-sm mb-1">Integración de Hardware de Mostrador</div>
+              <p className="text-xs text-zinc-600">Soporte directo para impresoras térmicas ESC/POS, lectores de código de barras USB/Bluetooth y avisos automáticos al cliente.</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-zinc-950 p-10 md:p-12 rounded-[3rem] text-white">
-          <h3 className="text-2xl font-bold mb-8">Nuestros Principios</h3>
-          <ul className="space-y-6">
-            {['Privacidad y aislamiento de datos por diseño.', 'Interfaces que no requieren manual de instrucciones.', 'Mantenimientos programados fuera de horario comercial.', 'Cero ventas de bases de datos a terceros.', 'Transparencia absoluta en precios y facturación.'].map((text, i) => (
-              <li key={i} className="flex gap-4 items-start">
-                <FiCheckCircle className="text-emerald-400 text-xl shrink-0 mt-0.5" />
-                <span className="font-medium text-zinc-300">{text}</span>
+        <div className="bg-zinc-950 p-8 sm:p-10 rounded-2xl text-white">
+          <h3 className="text-xl sm:text-2xl font-bold mb-6 tracking-tight">Nuestros Principios Inquebrantables</h3>
+          <ul className="space-y-4 text-sm">
+            {[
+              'Privacidad y aislamiento de datos por diseño con servidores dedicados en la UE.',
+              'Interfaces rápidas e intuitivas diseñadas para operar con una sola mano en móvil.',
+              'Cero venta ni cesión de bases de datos de clientes a agencias publicitarias.',
+              'Mantenimientos programados fuera del horario comercial del comercio minorista.',
+              'Precios transparentes y cancelación con un solo clic sin permanencias.'
+            ].map((text, i) => (
+              <li key={i} className="flex gap-3 items-start">
+                <FiCheckCircle className="text-emerald-400 w-4 h-4 shrink-0 mt-0.5" />
+                <span className="font-normal text-zinc-300 leading-snug">{text}</span>
               </li>
             ))}
           </ul>
-          <div className="mt-12 pt-8 border-t border-zinc-800">
-            <p className="text-sm text-zinc-500 mb-4">Requerimientos técnicos / DPA:</p>
-            <a href="mailto:info@easytrack.pro" className="inline-flex items-center justify-center bg-white text-zinc-950 px-6 py-3 rounded-xl font-bold hover:bg-zinc-200 transition-colors">
-              Contactar con ingeniería
+          <div className="mt-8 pt-6 border-t border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="text-xs text-zinc-400">
+              ¿Dudas técnicas o auditoría DPA?
+            </div>
+            <a
+              href="mailto:info@easytrack.pro"
+              className="inline-flex items-center gap-1.5 bg-white text-zinc-950 px-4 py-2 rounded-md font-semibold text-xs hover:bg-zinc-200 transition-colors shadow-sm active:scale-[0.97]"
+            >
+              <span>Contactar con ingeniería</span>
+              <FiArrowRight className="w-3.5 h-3.5" />
             </a>
           </div>
         </div>

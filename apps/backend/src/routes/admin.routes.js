@@ -4,9 +4,11 @@ const {
   getDashboardData, 
   getTenantStats, 
   updateReviewStatus, 
-  updateTenantLimits 
+  updateTenantLimits,
+  checkAdminStatus
 } = require('../controllers/admin.controller');
 
+router.get('/check', checkAdminStatus);
 router.get('/dashboard-data', getDashboardData);
 router.get('/tenant-stats/:tenantId', getTenantStats);
 router.patch('/review/:id', updateReviewStatus);

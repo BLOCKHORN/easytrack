@@ -1,16 +1,24 @@
 <!DOCTYPE html>
 <html lang="es" class="scroll-smooth">
   <head>
+    <script>
+      (function() {
+        var h = window.location.hostname;
+        if (h && (h.indexOf('vercel.app') !== -1 || h.indexOf('onrender.com') !== -1)) {
+          window.location.replace('https://easytrack.pro' + window.location.pathname + window.location.search + window.location.hash);
+        }
+      })();
+    </script>
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-KNNGNMRR');</script>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
     <title>EasyTrack | El software logístico para Puntos de Recogida</title>
     <meta name="description" content="Digitaliza tu local, organiza tus estanterías visualmente y localiza cualquier paquete en menos de 5 segundos. La infraestructura definitiva para puntos pack." />
-    <meta name="keywords" content="EasyTrack, gestión paquetería, software logística, puntos de recogida, Vinted, Amazon, GLS, Seur, control de stock" />
+    <meta name="keywords" content="EasyTrack, gestión paquetería, software logística, puntos de recogida, Vinted, Amazon, GLS, Seur, control de stock, puntos pack" />
     <meta name="author" content="Blockhorn Studios" />
     <meta name="robots" content="index, follow" />
     
@@ -24,16 +32,23 @@
     <link rel="manifest" href="/manifest.json?v=3" />
 
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_ES" />
+    <meta property="og:site_name" content="EasyTrack" />
     <meta property="og:url" content="https://easytrack.pro/" />
     <meta property="og:title" content="EasyTrack | Multiplica la rentabilidad de tu Punto de Recogida" />
     <meta property="og:description" content="Encuentra cualquier paquete al instante con nuestro sistema de ubicaciones inteligente. Cero pérdidas, cero colas." />
-    <meta property="og:image" content="https://easytrack.pro/og-image-teal.png" />
+    <meta property="og:image" content="https://easytrack.pro/og-image-teal.png?v=2" />
+    <meta property="og:image:secure_url" content="https://easytrack.pro/og-image-teal.png?v=2" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="EasyTrack - El software logístico para Puntos de Recogida" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://easytrack.pro/" />
     <meta name="twitter:title" content="EasyTrack | Infraestructura para Puntos de Recogida" />
     <meta name="twitter:description" content="Digitaliza la lógica física de tu local. Organiza entregas de GLS, Seur, Vinted y Amazon sin errores." />
-    <meta name="twitter:image" content="https://easytrack.pro/og-image-teal.png" />
+    <meta name="twitter:image" content="https://easytrack.pro/og-image-teal.png?v=2" />
 
     <meta name="theme-color" content="#09090b" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -44,27 +59,82 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" as="style" />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "EasyTrack",
-        "operatingSystem": "Web, Cloud-based",
-        "applicationCategory": "BusinessApplication",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "EUR",
-          "description": "Plan Freemium disponible. Plan Pro desde 29.90€ mensuales."
-        },
-        "description": "Software logístico para digitalizar puntos de recogida y automatizar la gestión de paquetes de múltiples agencias.",
-        "url": "https://easytrack.pro",
-        "publisher": {
-          "@type": "Organization",
-          "name": "Blockhorn Studios"
-        }
+        "@graph": [
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://easytrack.pro/#software",
+            "name": "EasyTrack",
+            "operatingSystem": "Web, Cloud-based, iOS, Android",
+            "applicationCategory": "BusinessApplication",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "EUR",
+              "description": "Plan Freemium disponible. Plan Pro desde 29.90€ mensuales."
+            },
+            "description": "Software logístico para digitalizar puntos de recogida y automatizar la gestión de paquetes de múltiples agencias.",
+            "url": "https://easytrack.pro",
+            "publisher": {
+              "@type": "Organization",
+              "@id": "https://easytrack.pro/#organization"
+            }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://easytrack.pro/#organization",
+            "name": "EasyTrack",
+            "legalName": "Blockhorn Studios",
+            "url": "https://easytrack.pro",
+            "logo": "https://easytrack.pro/favicon.png",
+            "contactPoint": {
+              "@type": "ContactPoint",
+              "contactType": "customer support",
+              "url": "https://easytrack.pro/contacto"
+            }
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://easytrack.pro/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "¿Qué es EasyTrack y para qué sirve?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "EasyTrack es una plataforma logística diseñada específicamente para estancos, papelerías y comercios que actúan como puntos de recogida (Pick-up/Drop-off). Permite mapear estanterías visuales, registrar entradas y salidas en segundos y controlar la rentabilidad de las comisiones."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "¿Cómo reduce el tiempo de búsqueda y entrega de paquetes?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Al registrar un paquete entrante, EasyTrack le asigna una balda y compartimento exacto. Al entregar, el dependiente solo escribe 3 letras del destinatario o escanea el código para ver en pantalla la balda exacta donde está guardado."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "¿Es compatible con múltiples agencias de transporte?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Sí. EasyTrack unifica en una sola vista paquetes de GLS, SEUR, Amazon, Vinted (Mondial Relay / InPost), Correos Express, Celeritas, DHL, TIPSa y Nacex."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "¿Cómo funciona la prueba gratuita?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "EasyTrack cuenta con un plan freemium para empezar inmediatamente sin tarjeta de crédito, con hasta 250 paquetes y acceso completo a la organización visual de estanterías."
+                }
+              }
+            ]
+          }
+        ]
       }
     </script>
 
@@ -86,7 +156,42 @@
   <body>
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KNNGNMRR"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <div id="root"></div>
+    
+    <div id="root">
+      <!-- Pre-renderizado semántico visible para crawlers e indexación sin JS -->
+      <header style="max-width:1200px;margin:0 auto;padding:24px 16px;display:flex;justify-content:space-between;align-items:center;">
+        <a href="/" style="font-weight:800;font-size:22px;text-decoration:none;color:#ffffff;letter-spacing:-0.03em;">easytrack<span style="color:#14b8a6;">.</span></a>
+        <nav>
+          <a href="/login" style="margin-right:16px;text-decoration:none;color:#a1a1aa;font-weight:500;font-size:14px;">Iniciar sesión</a>
+          <a href="/registro" style="padding:8px 16px;background:#ffffff;color:#09090b;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Empezar gratis</a>
+        </nav>
+      </header>
+      <main style="max-width:960px;margin:40px auto;padding:0 16px;text-align:center;">
+        <span style="display:inline-block;font-size:12px;font-weight:500;color:#2dd4bf;background:rgba(20,184,166,0.1);border:1px solid rgba(20,184,166,0.25);padding:4px 12px;border-radius:9999px;">Plataforma logística para puntos de recogida y comercios</span>
+        <h1 style="font-size:40px;font-weight:700;color:#ffffff;line-height:1.15;margin:24px 0 16px;letter-spacing:-0.03em;">Organiza tus paquetes en segundos. Sin perder un cliente en el mostrador.</h1>
+        <p style="font-size:18px;color:#a1a1aa;max-width:700px;margin:0 auto 32px;line-height:1.6;">
+          Asigna huecos físicos a cada bulto al escanearlo y encuéntralo al instante tecleando el nombre del cliente. Compatible con GLS, SEUR, Vinted y Punto Pack.
+        </p>
+        <div style="display:flex;justify-content:center;gap:12px;margin-bottom:48px;">
+          <a href="/registro" style="display:inline-block;padding:12px 24px;background:#ffffff;color:#09090b;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Empezar gratis</a>
+          <a href="/contacto" style="display:inline-block;padding:12px 24px;background:#18181b;color:#f4f4f5;border:1px solid #27272a;border-radius:8px;text-decoration:none;font-weight:500;font-size:14px;">Contactar soporte</a>
+        </div>
+        <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;text-align:left;margin-top:40px;">
+          <article style="border:1px solid #27272a;border-radius:12px;padding:24px;background:rgba(24,24,27,0.5);">
+            <h2 style="font-size:18px;font-weight:700;color:#ffffff;margin:0 0 8px;">Ubicaciones Reales</h2>
+            <p style="color:#a1a1aa;font-size:14px;line-height:1.5;margin:0;">Replica tus estanterías físicas exactamente como son (A1, B4, C2). El sistema calcula el hueco óptimo por ti.</p>
+          </article>
+          <article style="border:1px solid #27272a;border-radius:12px;padding:24px;background:rgba(24,24,27,0.5);">
+            <h2 style="font-size:18px;font-weight:700;color:#ffffff;margin:0 0 8px;">Búsqueda Ultrasónica</h2>
+            <p style="color:#a1a1aa;font-size:14px;line-height:1.5;margin:0;">Teclea el apellido del cliente y localiza la estantería exacta en menos de 3 segundos sin revolver cajas.</p>
+          </article>
+          <article style="border:1px solid #27272a;border-radius:12px;padding:24px;background:rgba(24,24,27,0.5);">
+            <h2 style="font-size:18px;font-weight:700;color:#ffffff;margin:0 0 8px;">Control de Ocupación</h2>
+            <p style="color:#a1a1aa;font-size:14px;line-height:1.5;margin:0;">Mapa visual de stock en tiempo real. Previene estantes saturados y distribuye el volumen entre múltiples agencias.</p>
+        </section>
+      </main>
+    </div>
+
     <script type="module" src="/src/main.jsx"></script>
     <noscript>Necesitas activar JavaScript para ejecutar la aplicación.</noscript>
   </body>

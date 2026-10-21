@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { supabase } from '../../utils/supabaseClient';
+import { apiFetch } from '../../utils/fetcher';
 
 const HARDCODED_REVIEWS = [
   {
@@ -50,20 +50,18 @@ export default function Testimonials() {
   useEffect(() => {
     async function loadReviews() {
       try {
-        const { data, error } = await supabase
-          .from('reviews')
-          .select(`rating, comentario, tenants ( nombre_empresa )`)
-          .eq('status', 'approved')
-          .order('created_at', { ascending: false })
-          .limit(6);
-
-        if (!error && data && data.length > 0) {
-          const combined = [...data];
-          if (combined.length < 6) {
-            const needed = 6 - combined.length;
-            combined.push(...HARDCODED_REVIEWS.slice(0, needed));
+        const res = await apiFetch('/api/reviews/public');
+        if (res.ok) {
+          const body = await res.json();
+          const data = body.reviews || [];
+          if (data && data.length > 0) {
+            const combined = [...data];
+            if (combined.length < 6) {
+              const needed = 6 - combined.length;
+              combined.push(...HARDCODED_REVIEWS.slice(0, needed));
+            }
+            setReviews(combined);
           }
-          setReviews(combined);
         }
       } catch (err) {
         console.error(err);
@@ -87,19 +85,19 @@ export default function Testimonials() {
   };
 
   return (
-    <section id="testimonios" className="relative bg-slate-50 pt-32 md:pt-40 pb-24 px-4 sm:px-6 lg:px-8 overflow-hidden">
+    <section id="testimonios" className="relative bg-slate-50 pt-20 sm:pt-28 md:pt-40 pb-16 sm:pb-24 px-4 sm:px-6 lg:px-8 overflow-hidden">
       <div className="max-w-7xl mx-auto relative">
-        <div className="text-center mb-16">
+        <div className="text-center mb-12 sm:mb-16">
           <motion.h2 
             initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-            className="text-4xl md:text-6xl font-black text-zinc-950 tracking-tighter mb-4"
+            className="text-3xl sm:text-4xl md:text-6xl font-black text-zinc-950 tracking-tighter mb-3 sm:mb-4 text-balance"
           >
             Resultados reales en <br/><span className="text-brand-500">negocios reales.</span>
           </motion.h2>
-          <p className="text-lg text-zinc-500 font-medium">Dejaron de buscar paquetes y empezaron a rentabilizar su tiempo.</p>
+          <p className="text-base sm:text-lg text-zinc-500 font-medium text-pretty">Dejaron de buscar paquetes y empezaron a rentabilizar su tiempo.</p>
         </div>
         
-        <div className="relative mb-24 group">
+        <div className="relative mb-16 sm:mb-24 group">
           <button 
             onClick={() => scroll('left')}
             className="absolute -left-4 md:-left-12 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-white border border-zinc-200 rounded-full items-center justify-center text-zinc-400 hover:text-brand-500 hover:border-brand-500 shadow-xl transition-all hidden md:flex"
@@ -109,20 +107,20 @@ export default function Testimonials() {
 
           <div 
             ref={scrollRef}
-            className="flex gap-6 md:gap-8 overflow-x-auto snap-x snap-mandatory pb-12 pt-4 px-4 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+            className="flex gap-4 sm:gap-6 md:gap-8 overflow-x-auto snap-x snap-mandatory pb-8 sm:pb-12 pt-4 px-2 sm:px-4 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
           >
             {reviews.map((rev, i) => (
               <motion.div 
                 key={i} 
                 initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
                 transition={{ delay: i * 0.05 }}
-                className="snap-center shrink-0 w-[85vw] sm:w-[400px] bg-white p-8 md:p-10 rounded-[2rem] border border-zinc-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)] flex flex-col justify-between transition-all"
+                className="snap-center shrink-0 w-[85vw] max-w-[380px] sm:w-[400px] bg-white p-6 sm:p-8 md:p-10 rounded-[2rem] border border-zinc-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)] flex flex-col justify-between transition-all"
               >
                 <div>
-                  <div className="flex gap-1 mb-6">
+                  <div className="flex gap-1 mb-5 sm:mb-6">
                     {[...Array(rev.rating)].map((_, idx) => <IconStar key={idx} />)}
                   </div>
-                  <p className="text-lg text-zinc-700 font-medium leading-relaxed mb-8 italic">"{rev.comentario}"</p>
+                  <p className="text-base sm:text-lg text-zinc-700 font-medium leading-relaxed mb-6 sm:mb-8 italic">"{rev.comentario}"</p>
                 </div>
                 <div className="flex items-center gap-4 border-t border-zinc-100 pt-6">
                   <div className="w-12 h-12 bg-zinc-950 text-brand-500 rounded-full flex items-center justify-center font-black text-sm shadow-lg shrink-0">

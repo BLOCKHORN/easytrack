@@ -82,7 +82,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-[#09090b]/90 backdrop-blur-xl border-b border-zinc-800/50 py-3' : 'bg-transparent py-5'}`}>
+    <nav className={`fixed top-0 w-full z-50 transition-[background-color,border-color,padding] duration-200 antialiased ${scrolled || mobileOpen ? 'bg-[#09090b] border-b border-zinc-800/80 py-3' : 'bg-transparent py-5'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-10">
@@ -102,7 +102,7 @@ export default function Navbar() {
                   <div className="w-24 h-10 bg-zinc-800/50 animate-pulse rounded-xl"></div>
                 ) : (
                   <div className="flex items-center gap-3">
-                    <button onClick={goDashboard} className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-black rounded-xl transition-colors active:scale-95">
+                    <button onClick={goDashboard} className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-xs sm:text-sm font-semibold rounded-lg transition-colors active:scale-[0.97] duration-100 ease-out">
                       Ir al panel
                     </button>
                     
@@ -127,7 +127,7 @@ export default function Navbar() {
                             initial={{ opacity: 0, y: 8, scale: 0.96 }} 
                             animate={{ opacity: 1, y: 0, scale: 1 }} 
                             exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                            transition={{ duration: 0.15, ease: "easeOut" }}
+                            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                             className="absolute right-0 mt-3 w-64 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden z-50 origin-top-right"
                           >
                             <div className="px-5 py-4 border-b border-zinc-900 bg-zinc-900/20">
@@ -162,8 +162,8 @@ export default function Navbar() {
                 )
               ) : (
                 <div className="flex items-center gap-4">
-                  <button onClick={openLogin} className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Iniciar Sesión</button>
-                  <button onClick={() => navigate('/registro')} className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-black rounded-xl transition-colors active:scale-95">
+                  <button onClick={openLogin} className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Iniciar sesión</button>
+                  <button onClick={() => navigate('/registro')} className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-black rounded-xl transition-all shadow-lg shadow-brand-500/20 active:scale-95">
                     Empezar gratis
                   </button>
                 </div>
@@ -171,7 +171,12 @@ export default function Navbar() {
           </div>
 
           <div className="md:hidden flex items-center">
-            <button onClick={() => setMobileOpen(!mobileOpen)} className="p-2 text-zinc-400 hover:text-white transition-colors">
+            <button 
+              type="button"
+              aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
+              onClick={() => setMobileOpen(prev => !prev)} 
+              className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800/60 active:scale-[0.96] transition-[transform,colors] duration-100 ease-out"
+            >
               {mobileOpen ? <IconClose /> : <IconMenu />}
             </button>
           </div>
@@ -181,15 +186,14 @@ export default function Navbar() {
       <AnimatePresence>
         {mobileOpen && (
           <motion.div 
-            initial={{ opacity: 0, height: 0 }} 
-            animate={{ opacity: 1, height: 'auto' }} 
-            exit={{ opacity: 0, height: 0 }} 
-            className="md:hidden bg-zinc-950 border-b border-zinc-800 overflow-hidden shadow-2xl"
+            initial={{ opacity: 0, y: -6 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            exit={{ opacity: 0, y: -6 }} 
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="md:hidden bg-[#09090b] border-b border-zinc-800/80 shadow-2xl"
           >
-            <div className="px-6 pt-2 pb-8">
-              {checking || tenantLoading ? (
-                <div className="w-full h-32 bg-zinc-900 animate-pulse rounded-xl mt-4"></div>
-              ) : isLoggedIn ? (
+            <div className="px-6 pt-2 pb-8 max-h-[calc(100vh-5rem)] overflow-y-auto">
+              {isLoggedIn ? (
                 <div className="flex flex-col gap-2 mt-4">
                   <div className="flex items-center gap-4 px-4 py-3 mb-2 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
                     <Avatar email={userEmail} url={avatarUrl} />
@@ -199,31 +203,31 @@ export default function Navbar() {
                     </div>
                   </div>
                   
-                  <button onClick={goDashboard} className="w-full text-left px-4 py-3.5 text-base font-bold text-white hover:bg-zinc-900 rounded-xl transition-colors flex items-center gap-3">
+                  <button onClick={goDashboard} className="w-full text-left px-4 py-3.5 text-base font-bold text-white hover:bg-zinc-900 rounded-xl transition-colors flex items-center gap-3 active:scale-[0.98]">
                     <IconDashboard /> Ir al Panel
                   </button>
                   
-                  <button onClick={goConfig} className="w-full text-left px-4 py-3.5 text-base font-bold text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl transition-colors flex items-center gap-3">
+                  <button onClick={goConfig} className="w-full text-left px-4 py-3.5 text-base font-bold text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl transition-colors flex items-center gap-3 active:scale-[0.98]">
                     <IconSettings /> Configuración
                   </button>
 
                   <div className="h-px bg-zinc-800/50 my-2" />
 
                   {navLinks.map((link) => (
-                    <a key={link.name} href={link.path} onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 text-sm font-bold text-zinc-500 hover:text-white hover:bg-zinc-900 rounded-xl transition-colors">
+                    <a key={link.name} href={link.path} onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 text-sm font-bold text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl transition-colors">
                       {link.name}
                     </a>
                   ))}
 
                   <div className="h-px bg-zinc-800/50 my-2" />
                   
-                  <button onClick={() => { setMobileOpen(false); handleLogout(); }} className="w-full text-left px-4 py-3.5 text-base font-bold text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors flex items-center gap-3">
+                  <button onClick={() => { setMobileOpen(false); handleLogout(); }} className="w-full text-left px-4 py-3.5 text-base font-bold text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors flex items-center gap-3 active:scale-[0.98]">
                     <IconLogout /> Cerrar sesión
                   </button>
 
                   {isAdmin && (
                     <div className="mt-2 pt-2 border-t border-zinc-900">
-                      <button onClick={() => { setMobileOpen(false); navigate('/admin/dashboard'); }} className="w-full text-left px-4 py-2 text-xs font-bold text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-2">
+                      <button onClick={() => { setMobileOpen(false); navigate('/admin/dashboard'); }} className="w-full text-left px-4 py-2 text-xs font-bold text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-2 active:scale-[0.98]">
                         <IconAdminRoot /> Administración del sistema
                       </button>
                     </div>
@@ -233,22 +237,26 @@ export default function Navbar() {
                 <div className="flex flex-col">
                   <div className="flex flex-col gap-1 py-4">
                     {navLinks.map((link) => (
-                      <a key={link.name} href={link.path} onClick={() => setMobileOpen(false)} className="block px-2 py-3 text-lg font-bold text-zinc-300 hover:text-white transition-colors">
+                      <a key={link.name} href={link.path} onClick={() => setMobileOpen(false)} className="block px-3 py-3 text-base font-bold text-zinc-300 hover:text-white hover:bg-zinc-900/60 rounded-xl transition-colors">
                         {link.name}
                       </a>
                     ))}
                   </div>
                   
-                  <div className="h-px bg-zinc-800/50 mb-6 mt-2" />
+                  <div className="h-px bg-zinc-800/50 mb-5 mt-1" />
                   
-                  <div className="flex flex-col gap-3">
-                    <button onClick={() => { setMobileOpen(false); navigate('/registro'); }} className="w-full py-4 bg-brand-500 hover:bg-brand-600 text-white text-base font-black rounded-xl flex justify-center items-center transition-colors active:scale-95">
-                      Empezar gratis
-                    </button>
-                    <button onClick={() => { setMobileOpen(false); openLogin(); }} className="w-full py-3 mt-2 text-sm text-zinc-400 font-bold hover:text-white transition-colors">
-                      Ya tengo cuenta. Iniciar sesión
-                    </button>
-                  </div>
+                  {checking ? (
+                    <div className="w-full h-12 bg-zinc-900 animate-pulse rounded-xl" />
+                  ) : (
+                    <div className="flex flex-col gap-2.5">
+                      <button onClick={() => { setMobileOpen(false); navigate('/registro'); }} className="w-full py-3.5 bg-brand-500 hover:bg-brand-600 text-white text-base font-black rounded-xl flex justify-center items-center transition-colors active:scale-[0.96] duration-100 ease-out">
+                        Empezar gratis
+                      </button>
+                      <button onClick={() => { setMobileOpen(false); openLogin(); }} className="w-full py-3 text-sm text-zinc-400 font-bold hover:text-white transition-colors active:scale-[0.98]">
+                        Ya tengo cuenta. Iniciar sesión
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

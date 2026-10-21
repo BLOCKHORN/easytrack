@@ -1,6 +1,6 @@
-'use strict';
+import { apiFetch } from '../utils/fetcher';
 
-const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
 const PROD_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 const API_URL = isLocal ? '' : PROD_URL;
 
@@ -13,10 +13,10 @@ export function buildAreaApiBase(pathname) {
 }
 
 async function authFetch(url, token, opts = {}) {
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     ...opts,
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       Accept: 'application/json',
       'Content-Type': 'application/json',
       ...(opts.headers || {})

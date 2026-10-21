@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '../../utils/supabaseClient';
 import { getTenantIdOrThrow } from '../../utils/tenant';
 import { importPreview, importCommit } from '../../services/importacionService';
 import { cargarCarriers } from '../../services/configuracionService';
@@ -31,10 +30,8 @@ export default function ImportWizard({ onDone, onToast }) {
   useEffect(() => {
     (async () => {
       const tId = await getTenantIdOrThrow();
-      const { data: { session } } = await supabase.auth.getSession();
-      const tk = session?.access_token || '';
       setTenantId(tId);
-      setToken(tk);
+      setToken('');
 
       try {
         const list = await cargarCarriers({ tenantId: tId });

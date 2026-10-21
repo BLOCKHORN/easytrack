@@ -101,27 +101,27 @@ export default function ContrastSection() {
   };
 
   return (
-    <section className="py-24 bg-white overflow-hidden font-sans">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-black text-zinc-950 tracking-tight mb-4 text-balance">
+    <section className="py-16 sm:py-24 bg-white overflow-hidden font-sans">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-12 sm:mb-16">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-zinc-950 tracking-tight mb-3 sm:mb-4 text-balance">
             El cambio es <span className="text-brand-500">radical</span>
           </h2>
-          <p className="text-zinc-500 font-bold text-lg">De la pesadilla logística al control absoluto.</p>
+          <p className="text-zinc-500 font-bold text-base sm:text-lg text-pretty">De la pesadilla logística al control absoluto.</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 items-stretch">
           
           {/* LADO A: EL CAOS */}
           <div 
             ref={containerRef}
             onMouseMove={handleMouseMove}
             onMouseLeave={() => { mouseX.set(-1000); mouseY.set(-1000); }}
-            className="relative bg-zinc-50 rounded-[2.5rem] p-8 md:p-12 overflow-hidden border border-zinc-200 min-h-[550px] flex flex-col"
+            className="relative bg-zinc-50 rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-8 md:p-12 overflow-hidden border border-zinc-200 min-h-[460px] sm:min-h-[550px] flex flex-col"
           >
             <div className="relative z-30 pointer-events-none">
-              <span className="inline-block px-4 py-1 bg-red-100 text-red-600 rounded-full text-[10px] font-black uppercase tracking-wider mb-4">Sin EasyTrack</span>
-              <h3 className="text-3xl font-black text-zinc-950 mb-6 leading-tight">El caos que te quita <br/>el sueño (y el dinero)</h3>
+              <span className="inline-block px-3.5 py-1 bg-red-100 text-red-600 rounded-full text-[10px] font-black uppercase tracking-wider mb-3 sm:mb-4">Sin EasyTrack</span>
+              <h3 className="text-2xl sm:text-3xl font-black text-zinc-950 mb-4 sm:mb-6 leading-tight">El caos que te quita <br/>el sueño (y el dinero)</h3>
             </div>
               
             <div className="absolute inset-0 z-10 pointer-events-none">
@@ -131,28 +131,28 @@ export default function ContrastSection() {
             </div>
 
             <div className="mt-auto relative z-30 pointer-events-none">
-              <ul className="space-y-4">
-                <li className="flex items-start gap-3 text-zinc-600 font-bold leading-tight"><div className="mt-0.5 shrink-0"><IconX /></div> Clientes esperando minutos en mostrador</li>
-                <li className="flex items-start gap-3 text-zinc-600 font-bold leading-tight"><div className="mt-0.5 shrink-0"><IconX /></div> Cajas perdidas bajo pilas de otras cajas</li>
-                <li className="flex items-start gap-3 text-zinc-600 font-bold leading-tight"><div className="mt-0.5 shrink-0"><IconX /></div> Estrés constante del personal</li>
+              <ul className="space-y-3 sm:space-y-4">
+                <li className="flex items-start gap-3 text-zinc-600 font-bold text-sm sm:text-base leading-tight"><div className="mt-0.5 shrink-0"><IconX /></div> Clientes esperando minutos en mostrador</li>
+                <li className="flex items-start gap-3 text-zinc-600 font-bold text-sm sm:text-base leading-tight"><div className="mt-0.5 shrink-0"><IconX /></div> Cajas perdidas bajo pilas de otras cajas</li>
+                <li className="flex items-start gap-3 text-zinc-600 font-bold text-sm sm:text-base leading-tight"><div className="mt-0.5 shrink-0"><IconX /></div> Estrés constante del personal</li>
               </ul>
             </div>
           </div>
 
           {/* LADO B: EASYTRACK */}
-          <div className="relative bg-zinc-950 rounded-[2.5rem] p-8 md:p-12 overflow-hidden shadow-2xl flex flex-col">
+          <div className="relative bg-zinc-950 rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-8 md:p-12 overflow-hidden shadow-2xl flex flex-col">
             <div className="absolute top-0 right-0 w-80 h-80 bg-brand-500/10 blur-[100px] rounded-full pointer-events-none" />
             
             <div className="relative z-10">
-              <span className="inline-block px-4 py-1 bg-brand-500/20 text-brand-400 rounded-full text-[10px] font-black uppercase tracking-wider mb-4">Con EasyTrack</span>
-              <h3 className="text-3xl font-black text-white mb-6 leading-tight">Orden quirúrgico <br/>y paz mental</h3>
+              <span className="inline-block px-3.5 py-1 bg-brand-500/20 text-brand-400 rounded-full text-[10px] font-black uppercase tracking-wider mb-3 sm:mb-4">Con EasyTrack</span>
+              <h3 className="text-2xl sm:text-3xl font-black text-white mb-4 sm:mb-6 leading-tight">Orden quirúrgico <br/>y paz mental</h3>
 
-              <div className="relative h-64 grid grid-cols-4 gap-4 items-center content-center p-6 bg-zinc-900/40 rounded-3xl border border-zinc-800 shadow-2xl overflow-hidden">
+              <div className="relative h-56 sm:h-64 grid grid-cols-4 gap-2 sm:gap-4 items-center content-center p-3.5 sm:p-6 bg-zinc-900/40 rounded-2xl sm:rounded-3xl border border-zinc-800 shadow-2xl overflow-hidden">
                 {[...Array(12)].map((_, i) => (
                   <motion.div
                     key={i}
                     whileHover={{ scale: 1.05, backgroundColor: "rgba(20, 184, 166, 0.15)", borderColor: "#14b8a6" }}
-                    className="h-10 md:h-12 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-center text-[10px] font-black text-zinc-600 transition-colors"
+                    className="h-10 md:h-12 bg-zinc-900 border border-zinc-800 rounded-lg sm:rounded-xl flex items-center justify-center text-[10px] font-black text-zinc-600 transition-colors"
                   >
                     B{i + 1}
                   </motion.div>
@@ -164,10 +164,10 @@ export default function ContrastSection() {
                 />
               </div>
 
-              <ul className="space-y-4 mt-10">
-                <li className="flex items-start gap-3 text-zinc-300 font-bold leading-tight"><div className="mt-0.5 shrink-0"><IconCheck /></div> Localización instantánea por estante</li>
-                <li className="flex items-start gap-3 text-zinc-300 font-bold leading-tight"><div className="mt-0.5 shrink-0"><IconCheck /></div> 90% menos de tiempo de entrega</li>
-                <li className="flex items-start gap-3 text-zinc-300 font-bold leading-tight"><div className="mt-0.5 shrink-0"><IconCheck /></div> Personal contento y clientes felices</li>
+              <ul className="space-y-3 sm:space-y-4 mt-8 sm:mt-10">
+                <li className="flex items-start gap-3 text-zinc-300 font-bold text-sm sm:text-base leading-tight"><div className="mt-0.5 shrink-0"><IconCheck /></div> Localización instantánea por estante</li>
+                <li className="flex items-start gap-3 text-zinc-300 font-bold text-sm sm:text-base leading-tight"><div className="mt-0.5 shrink-0"><IconCheck /></div> 90% menos de tiempo de entrega</li>
+                <li className="flex items-start gap-3 text-zinc-300 font-bold text-sm sm:text-base leading-tight"><div className="mt-0.5 shrink-0"><IconCheck /></div> Personal contento y clientes felices</li>
               </ul>
             </div>
           </div>

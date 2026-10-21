@@ -1,6 +1,16 @@
 const { supabaseAdmin } = require('../utils/supabaseClient');
+const { isDirectPg, query } = require('../utils/db');
 
 const checkAdmin = async (userId) => {
+  if (!userId) return false;
+  if (isDirectPg()) {
+    try {
+      const { rows } = await query('SELECT 1 FROM public.superadmins WHERE user_id = $1 LIMIT 1', [userId]);
+      return rows.length > 0;
+    } catch (e) {
+      console.error('[checkAdmin directPg error]', e);
+    }
+  }
   const { data } = await supabaseAdmin
     .from('superadmins')
     .select('user_id')
@@ -9,12 +19,53 @@ const checkAdmin = async (userId) => {
   return !!data;
 };
 
+exports.checkAdminStatus = async (req, res) => {
+  try {
+    const isAdmin = await checkAdmin(req.user?.id);
+    return res.json({ ok: true, isAdmin });
+  } catch (err) {
+    return res.json({ ok: true, isAdmin: false });
+  }
+};
+
 exports.getDashboardData = async (req, res) => {
   try {
     if (!(await checkAdmin(req.user.id))) return res.status(403).json({ ok: false, error: 'Acceso denegado.' });
 
     const { timeRange = 'all' } = req.query;
-    // Versión Restaurada y Verificada: Usando admin_get_all_tenants
+
+    if (isDirectPg()) {
+      const [tenantsRes, globalStatsRes, reviewsRes, stripeIdsRes] = await Promise.all([
+        query('SELECT * FROM public.admin_get_all_tenants()'),
+        query('SELECT * FROM public.admin_get_global_carrier_stats($1)', [timeRange]),
+        query(`
+          SELECT r.id, r.rating, r.comentario, r.status, r.created_at, json_build_object('nombre_empresa', t.nombre_empresa) as tenants
+          FROM public.reviews r
+          LEFT JOIN public.tenants t ON t.id = r.tenant_id
+          ORDER BY r.created_at DESC
+        `),
+        query('SELECT id, stripe_customer_id FROM public.tenants')
+      ]);
+
+      const stripeMap = (stripeIdsRes.rows || []).reduce((acc, curr) => {
+        acc[curr.id] = curr.stripe_customer_id;
+        return acc;
+      }, {});
+
+      const tenantsWithStripe = (tenantsRes.rows || []).map(t => ({
+        ...t,
+        stripe_customer_id: stripeMap[t.id] || null
+      }));
+
+      return res.json({ 
+        ok: true, 
+        tenants: tenantsWithStripe,
+        globalStats: globalStatsRes.rows || [],
+        reviews: reviewsRes.rows || []
+      });
+    }
+
+    // Versión Supabase
     const [tenantsRes, globalStatsRes, reviewsRes, stripeIdsRes] = await Promise.all([
       supabaseAdmin.rpc('admin_get_all_tenants'),
       supabaseAdmin.rpc('admin_get_global_carrier_stats', { p_time_range: timeRange }),
@@ -60,6 +111,11 @@ exports.getTenantStats = async (req, res) => {
     const { tenantId } = req.params;
     const { timeRange = 'all' } = req.query;
 
+    if (isDirectPg()) {
+      const { rows } = await query('SELECT * FROM public.admin_get_tenant_stats($1, $2)', [tenantId, timeRange]);
+      return res.json({ ok: true, stats: rows || [] });
+    }
+
     const { data, error } = await supabaseAdmin.rpc('admin_get_tenant_stats', {
       p_tenant_id: tenantId,
       p_time_range: timeRange
@@ -79,6 +135,11 @@ exports.updateReviewStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
+    if (isDirectPg()) {
+      await query('UPDATE public.reviews SET status = $1 WHERE id = $2', [status, id]);
+      return res.json({ ok: true });
+    }
+
     const { error } = await supabaseAdmin.from('reviews').update({ status }).eq('id', id);
     if (error) throw error;
 
@@ -94,6 +155,11 @@ exports.updateTenantLimits = async (req, res) => {
     
     const { id } = req.params;
     const { trial_quota, is_ai_active } = req.body;
+
+    if (isDirectPg()) {
+      await query('UPDATE public.tenants SET trial_quota = $1, is_ai_active = $2 WHERE id = $3', [trial_quota, is_ai_active, id]);
+      return res.json({ ok: true });
+    }
 
     const { error } = await supabaseAdmin.from('tenants').update({ trial_quota, is_ai_active }).eq('id', id);
     if (error) throw error;

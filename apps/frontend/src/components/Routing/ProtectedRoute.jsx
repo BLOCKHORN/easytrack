@@ -1,56 +1,64 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { supabase } from '../../utils/supabaseClient';
-import { useTenant } from '../../context/TenantContext';
+import { useAuth } from '../../context/AuthContext';
 
 export default function ProtectedRoute({ children }) {
   const { tenantSlug } = useParams();
-  const { tenant, loading: tenantLoading } = useTenant();
+  const { user, tenant, isInitializing } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
-    if (tenantLoading) return;
+    if (isInitializing) return;
 
-    if (!tenant) {
+    if (!user || !tenant) {
       navigate('/', { replace: true });
       return;
     }
 
-    let stop = false;
+    const needsPassword = user?.user_metadata?.needs_password;
+    if (needsPassword) {
+      const qp = new URLSearchParams({ next: location.pathname + location.search });
+      navigate(`/crear-password?${qp.toString()}`, { replace: true });
+      return;
+    }
 
-    // Vigila si necesita crear contraseña (absorbido de usePasswordFirstGuard)
-    (async () => {
-      try {
-        const { data: u } = await supabase.auth.getUser();
-        const needsPassword = u?.user?.user_metadata?.needs_password;
-        
-        if (needsPassword) {
-          const qp = new URLSearchParams({ next: location.pathname + location.search });
-          if (!stop) {
-            navigate(`/crear-password?${qp.toString()}`, { replace: true });
-            return;
-          }
-        }
-        if (!stop) setCheckingAuth(false);
-      } catch {
-        if (!stop) setCheckingAuth(false);
-      }
-    })();
-
-    // Mantiene la URL limpia
+    // Mantiene la URL limpia con el slug del negocio
     if (!tenantSlug || tenantSlug !== tenant.slug) {
       const currentPath = location.pathname;
       const tail = tenantSlug ? currentPath.replace(`/${tenantSlug}`, '') : currentPath;
       const cleanTail = tail === '/dashboard' || tail === '/' ? '/dashboard' : tail;
-      if (!stop) navigate(`/${tenant.slug}${cleanTail}`, { replace: true });
+      navigate(`/${tenant.slug}${cleanTail}`, { replace: true });
     }
+  }, [user, tenant, isInitializing, tenantSlug, navigate, location]);
 
-    return () => { stop = true; };
-  }, [tenant, tenantLoading, tenantSlug, navigate, location]);
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-[#09090b] text-white flex antialiased">
+        <aside className="hidden md:flex w-64 border-r border-zinc-800/80 p-6 flex-col justify-between">
+          <div className="space-y-6">
+            <div className="h-8 w-32 bg-zinc-900 animate-pulse rounded-lg" />
+            <div className="space-y-2 mt-8">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-10 bg-zinc-900/60 animate-pulse rounded-xl" />
+              ))}
+            </div>
+          </div>
+        </aside>
+        <main className="flex-1 p-6 md:p-10 max-w-7xl">
+          <div className="h-8 w-48 bg-zinc-900/80 animate-pulse rounded-lg mb-8" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-28 bg-zinc-900/50 animate-pulse rounded-2xl border border-zinc-800/50" />
+            ))}
+          </div>
+          <div className="h-64 bg-zinc-900/40 animate-pulse rounded-2xl border border-zinc-800/50" />
+        </main>
+      </div>
+    );
+  }
 
-  if (tenantLoading || !tenant || checkingAuth || (tenantSlug && tenantSlug !== tenant.slug)) return null;
+  if (!user || !tenant || (tenantSlug && tenantSlug !== tenant.slug)) return null;
 
   return children;
 }

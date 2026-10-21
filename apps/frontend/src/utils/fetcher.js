@@ -1,6 +1,4 @@
-import { supabase } from './supabaseClient';
-
-const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
 const PROD_URL = (import.meta.env?.VITE_API_URL || '').trim().replace(/\/$/, '');
 
 export const API_BASE = isLocal ? '' : PROD_URL;
@@ -23,29 +21,67 @@ function ensureJsonHeaders(init, headers) {
   }
 }
 
+let refreshPromise = null;
+
+async function silentRefresh() {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(apiPath('/api/auth/refresh'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Accept: 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return !!data?.ok;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
 export async function apiFetch(url, init = {}) {
   const headers = {
     Accept: 'application/json',
     ...(init.headers || {}),
   };
 
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token && !headers.Authorization && !headers.authorization) {
-      headers.Authorization = `Bearer ${session.access_token}`;
-    }
-  } catch (err) {}
-
   ensureJsonHeaders(init, headers);
   
   const finalUrl = apiPath(url);
 
-  const res = await fetch(finalUrl, {
+  let res = await fetch(finalUrl, {
     credentials: 'include',
     ...init,
     headers,
   });
 
+  // Interceptor de expiración transparente (HTTP 401 -> silent refresh y reintento)
+  if (
+    res.status === 401 &&
+    !url.includes('/api/auth/login') &&
+    !url.includes('/api/auth/refresh') &&
+    !url.includes('/api/auth/me') &&
+    !url.includes('/api/auth/logout')
+  ) {
+    const refreshed = await silentRefresh();
+    if (refreshed) {
+      // Reintentar la petición original con la nueva cookie ya establecida
+      res = await fetch(finalUrl, {
+        credentials: 'include',
+        ...init,
+        headers,
+      });
+    }
+  }
+
+  // Interceptor de suscripción requerida (HTTP 402)
   if (res.status === 402) {
     let payload = null;
     try { payload = await res.clone().json(); } catch (e) {}

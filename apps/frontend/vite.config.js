@@ -34,5 +34,21 @@ export default defineConfig(({ mode }) => {
         '/api/billing': { target: BACKEND, changeOrigin: true },
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+                return 'vendor-react';
+              }
+              if (id.includes('framer-motion') || id.includes('motion-dom')) {
+                return 'vendor-motion';
+              }
+            }
+          },
+        },
+      },
+    },
   };
 });

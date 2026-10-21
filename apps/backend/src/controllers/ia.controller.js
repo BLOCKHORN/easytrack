@@ -3,6 +3,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const supa = require('../utils/supabaseClient');
 const supabase = supa.supabase || supa.default || supa;
+const { isDirectPg, query } = require('../utils/db');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -99,13 +100,17 @@ exports.escanearEtiqueta = async (req, res) => {
         const pTokens = usage?.promptTokenCount || 0;
         const cTokens = usage?.candidatesTokenCount || 0;
 
-        await supabase.rpc('increment_ai_usage', {
-          p_tenant_id: tenant_id,
-          p_prompt_tokens: pTokens,
-          p_completion_tokens: cTokens
-        });
+        if (isDirectPg()) {
+          await query('SELECT public.increment_ai_usage($1, $2, $3)', [tenant_id, pTokens, cTokens]);
+        } else {
+          await supabase.rpc('increment_ai_usage', {
+            p_tenant_id: tenant_id,
+            p_prompt_tokens: pTokens,
+            p_completion_tokens: cTokens
+          });
+        }
       } catch (usageError) {
-        console.error(usageError);
+        console.error('[increment_ai_usage Error]', usageError);
       }
     }
 

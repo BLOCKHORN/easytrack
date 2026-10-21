@@ -16,6 +16,14 @@ Disallow: /portal
 Disallow: /dashboard/
 Disallow: /admin/
 Disallow: /*/dashboard/
+Disallow: /panel/
+Disallow: /configuracion/
+Disallow: /*/configuracion/
+
+# Bloquear endpoints de API y Webhooks
+Disallow: /api/
+Disallow: /*/api/
+Disallow: /webhooks/
 
 # Ubicación del mapa del sitio
 Sitemap: https://easytrack.pro/sitemap.xml

@@ -1,31 +1,17 @@
 // src/services/configuracionService.js
-import { supabase } from '../utils/supabaseClient';
-
-const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
-const PROD_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
-const API_BASE = isLocal ? '' : PROD_URL;
-const API_URL  = `${API_BASE}/api`;
+import { apiFetch } from '../utils/fetcher';
 
 /**
- * Guardar empresas de transporte del tenant (vía backend).
- * Si no pasas `token`, lo obtenemos automáticamente de Supabase.
+ * Guardar empresas de transporte del tenant (vía backend con cookies/apiFetch).
  */
 export async function guardarCarriers(carriersPayload, token, { sync = true } = {}) {
-  let auth = token;
-  if (!auth) {
-    try {
-      const { data: sdata } = await supabase.auth.getSession();
-      auth = sdata?.session?.access_token || null;
-    } catch {}
-  }
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}/ubicaciones/carriers`, {
+  const res = await apiFetch('/api/ubicaciones/carriers', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(auth ? { Authorization: `Bearer ${auth}` } : {}),
-    },
-    body: JSON.stringify({ carriers: carriersPayload, sync }),
+    headers,
+    body: { carriers: carriersPayload, sync },
   });
 
   const out = await res.json().catch(() => ({}));
@@ -33,19 +19,9 @@ export async function guardarCarriers(carriersPayload, token, { sync = true } = 
   return out;
 }
 
-export async function cargarCarriers({ tenantId }) {
+export async function cargarCarriers() {
   try {
-    const { data: sdata } = await supabase.auth.getSession();
-    const token = sdata?.session?.access_token || null;
-    
-    const res = await fetch(`${API_URL}/ubicaciones/carriers`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      }
-    });
-
+    const res = await apiFetch('/api/ubicaciones/carriers');
     if (!res.ok) throw new Error('Error al cargar empresas configuradas');
     const out = await res.json();
     return out.empresas || [];

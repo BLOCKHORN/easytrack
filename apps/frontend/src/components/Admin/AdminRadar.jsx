@@ -1,7 +1,7 @@
 'use strict';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../../utils/supabaseClient';
+import { apiFetch } from '../../utils/fetcher';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const IconTerminal = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>;
@@ -117,18 +117,9 @@ export default function AdminRadar() {
 
       setStatusMsg(`ESCANEANDO CÓDIGO POSTAL ${cp}...`);
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
-      const PROD_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-      const API_URL = isLocal ? "" : PROD_URL;
-
-      const res = await fetch(`${API_URL}/api/admin/radar/scan`, {
+      const res = await apiFetch('/api/admin/radar/scan', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ codigo_postal: cp, poblacion: city, lat, lon: lng })
+        body: { codigo_postal: cp, poblacion: city, lat, lon: lng }
       });
 
       const data = await res.json();

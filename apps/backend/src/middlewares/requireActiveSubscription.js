@@ -3,11 +3,24 @@
 const { fetchSubscriptionForTenant, resolveTenantId } = require('../utils/subscription');
 const { supabaseAdmin } = require('../utils/supabaseClient');
 const { computeEntitlements } = require('../utils/entitlements');
+const { isDirectPg, query } = require('../utils/db');
 
 async function getTenantById(id) {
+  if (isDirectPg()) {
+    try {
+      const { rows } = await query(
+        'SELECT id, slug, nombre_empresa, email, plan_id, trial_quota, trial_used, soft_blocked, stripe_customer_id, fecha_creacion FROM public.tenants WHERE id = $1 LIMIT 1',
+        [id]
+      );
+      return rows[0] || null;
+    } catch (e) {
+      console.error('[requireActiveSubscription getTenantById directPg error]', e);
+    }
+  }
+
   const { data, error } = await supabaseAdmin
     .from('tenants')
-    .select('id, slug, nombre_empresa, email, trial_active, trial_quota, trial_used, soft_blocked, fecha_creacion')
+    .select('id, slug, nombre_empresa, email, plan_id, trial_quota, trial_used, soft_blocked, stripe_customer_id, fecha_creacion')
     .eq('id', id)
     .maybeSingle();
   if (error) throw error;

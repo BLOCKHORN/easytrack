@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../../utils/supabaseClient';
 import { openBillingPortal } from '../../services/billingService';
 
 export default function PortalBridge() {
@@ -8,9 +7,6 @@ export default function PortalBridge() {
   const launchPortal = async () => {
     try {
       setErr('');
-      const { data: sdata } = await supabase.auth.getSession();
-      if (!sdata?.session) throw new Error('Debes iniciar sesión para acceder al portal.');
-
       const url = await openBillingPortal();
       if (!url) throw new Error('No se pudo establecer conexión con el sistema de facturación.');
       

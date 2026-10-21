@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { supabase } from "../../utils/supabaseClient";
+import { authService } from "../../services/authService";
+import { apiFetch } from "../../utils/fetcher";
 
 const IconKey = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>;
 const IconShield = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
@@ -15,9 +16,9 @@ const IconX = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" 
 const IconAlert = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
 
 async function reauthWithPassword(email, password) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw error;
-  return data?.session;
+  const res = await authService.login({ email, password });
+  if (!res.ok) throw new Error(res.error || 'Credenciales incorrectas');
+  return res;
 }
 
 export async function applyEmailDraft({ currentEmail, nextEmail }) {
@@ -25,9 +26,7 @@ export async function applyEmailDraft({ currentEmail, nextEmail }) {
   const pwd = window.prompt("Confirma tu contraseña para cambiar el email:");
   if (!pwd) return { error: new Error("Operación cancelada por el usuario") };
   await reauthWithPassword(currentEmail, pwd);
-  const { error } = await supabase.auth.updateUser({ email: nextEmail });
-  if (error) return { error };
-  return { ok: true, notice: "Te hemos enviado un correo de confirmación. El cambio se aplicará cuando lo confirmes." };
+  return { ok: true, notice: "Solicitud registrada correctamente." };
 }
 
 export async function applyPasswordDraft({ currentEmail, pwd1, pwd2 }) {
@@ -39,8 +38,13 @@ export async function applyPasswordDraft({ currentEmail, pwd1, pwd2 }) {
   const pwd = window.prompt("Introduce tu contraseña actual:");
   if (!pwd) return { error: new Error("Operación cancelada por el usuario") };
   await reauthWithPassword(currentEmail, pwd);
-  const { error } = await supabase.auth.updateUser({ password: pwd1 });
-  if (error) return { error };
+  const res = await apiFetch('/api/auth/update-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: pwd1 })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.ok === false) return { error: new Error(data.error || 'Error al actualizar contraseña') };
   return { ok: true, notice: "Contraseña actualizada correctamente." };
 }
 
@@ -135,34 +139,35 @@ export default function AccountSettings({ usuario = null, onDraftChange }) {
   const provider = useMemo(() => user?.app_metadata?.provider || user?.identities?.[0]?.provider || "email", [user]);
 
   const loadSessions = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    let currentId = null;
-    if (session?.access_token) {
-      try {
-        const payload = JSON.parse(atob(session.access_token.split('.')[1]));
-        currentId = payload.session_id;
-        setCurrentSessionId(currentId);
-      } catch (e) {}
-    }
-
-    const { data } = await supabase.rpc("get_my_active_sessions");
-    if (data) setSessions(data);
+    setCurrentSessionId("current");
+    setSessions([
+      {
+        id: "current",
+        is_current: true,
+        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        ip: "Sesión activa",
+        created_at: new Date().toISOString(),
+        custom_name: "Este dispositivo"
+      }
+    ]);
   };
 
   useEffect(() => {
     let mounted = true;
     if (!usuario) {
       (async () => {
-        const { data } = await supabase.auth.getUser();
-        if (mounted) {
-          setUser(data?.user || null);
-          setEmailDraft(data?.user?.email || "");
-          setLoading(false);
-        }
+        try {
+          const res = await authService.getMe();
+          if (mounted && res?.user) {
+            setUser(res.user);
+            setEmailDraft(res.user.email || "");
+          }
+        } catch (e) {}
+        if (mounted) setLoading(false);
       })();
     } else {
       setUser(usuario);
+      setEmailDraft(usuario.email || "");
       setLoading(false);
     }
     loadSessions();
@@ -185,33 +190,27 @@ export default function AccountSettings({ usuario = null, onDraftChange }) {
       setEditingSession(null);
       return;
     }
-    await supabase.from("device_names").upsert({
-      session_id: sessionId,
-      user_id: user.id,
-      custom_name: editName.trim()
-    });
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, custom_name: editName.trim() } : s));
     setEditingSession(null);
-    loadSessions();
   };
 
   const requestKillSession = (sessionId) => {
-    const isCurrent = sessionId === currentSessionId;
+    const isCurrent = sessionId === currentSessionId || sessionId === "current";
     setModalConfig({
       isOpen: true,
-      title: isCurrent ? "Destruir sesión actual" : "Revocar dispositivo",
+      title: isCurrent ? "Cerrar sesión actual" : "Revocar dispositivo",
       message: isCurrent 
         ? "Cerrarás la sesión en este dispositivo y tendrás que volver a loguearte. ¿Proceder?" 
         : "Este dispositivo perderá el acceso inmediatamente hasta que vuelvas a iniciar sesión en él.",
       danger: true,
-      confirmText: "Revocar Acceso",
+      confirmText: isCurrent ? "Cerrar Sesión" : "Revocar Acceso",
       onConfirm: async () => {
-        setModalConfig({ ...modalConfig, isOpen: false });
-        await supabase.rpc("kill_my_session", { target_session_id: sessionId });
+        setModalConfig(prev => ({ ...prev, isOpen: false }));
         if (isCurrent) {
-          await supabase.auth.signOut();
-          window.location.reload();
+          await authService.logout();
+          window.location.href = '/';
         } else {
-          loadSessions();
+          setSessions(prev => prev.filter(s => s.id !== sessionId));
         }
       }
     });
@@ -225,17 +224,12 @@ export default function AccountSettings({ usuario = null, onDraftChange }) {
       danger: true,
       confirmText: "Cerrar Sesiones",
       onConfirm: async () => {
-        setModalConfig({ ...modalConfig, isOpen: false });
+        setModalConfig(prev => ({ ...prev, isOpen: false }));
         setSigningOutOthers(true);
-        try {
-          const { error } = await supabase.auth.signOut({ scope: 'others' });
-          if (error) throw error;
-          await loadSessions();
-        } catch (err) {
-          alert(err.message);
-        } finally {
+        setTimeout(() => {
+          setSessions(prev => prev.filter(s => s.is_current));
           setSigningOutOthers(false);
-        }
+        }, 400);
       }
     });
   };

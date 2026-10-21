@@ -1,10 +1,6 @@
 'use strict';
 
-import { supabase } from './supabaseClient';
-
-const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
-const PROD_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
-const API = isLocal ? '' : PROD_URL;
+import { apiFetch } from './fetcher';
 
 export function getTenantSlugFromPath() {
   try {
@@ -16,12 +12,7 @@ export function getTenantSlugFromPath() {
 }
 
 export async function getTenantData() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error('NO_SESSION');
-
-  const r = await fetch(`${API}/api/tenants/me`, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
+  const r = await apiFetch('/api/tenants/me');
 
   if (r.status === 402) {
     const e = new Error('SUBSCRIPTION_INACTIVE');

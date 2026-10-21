@@ -1,8 +1,7 @@
 'use strict';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '../../utils/supabaseClient';
-import { getTenantData } from '../../utils/tenant';
+import { apiFetch } from '../../utils/fetcher';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const IconStar = ({ filled, onClick, onHover }) => (
@@ -24,7 +23,6 @@ const IconAward = () => (
 
 export default function ReviewBanner() {
   const [visible, setVisible] = useState(false);
-  const [tenantId, setTenantId] = useState(null);
   const [step, setStep] = useState('stars'); 
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -34,28 +32,13 @@ export default function ReviewBanner() {
   useEffect(() => {
     const checkEligibility = async () => {
       try {
-        const { tenant } = await getTenantData();
-        setTenantId(tenant.id);
-
-        const { data: existingReview } = await supabase
-          .from('reviews')
-          .select('id')
-          .eq('tenant_id', tenant.id)
-          .maybeSingle();
-
-        if (existingReview) return; 
-
-        // LÓGICA NUEVA: 250 Paquetes ENTREGADOS
-        const { count } = await supabase
-          .from('packages')
-          .select('*', { count: 'exact', head: true })
-          .eq('tenant_id', tenant.id)
-          .eq('entregado', true); // Solo los completados
-
-        if (count >= 250) setVisible(true);
-
+        const res = await apiFetch('/api/reviews/eligibility');
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.eligible) setVisible(true);
+        }
       } catch (err) {
-        console.error(err);
+        console.error('[ReviewBanner Eligibility error]', err);
       }
     };
     checkEligibility();
@@ -70,17 +53,22 @@ export default function ReviewBanner() {
     if (!comment.trim() || rating === 0) return;
     setSubmitting(true);
     
-    const { error } = await supabase.from('reviews').insert([{
-      tenant_id: tenantId,
-      rating: rating,
-      comentario: comment.trim(),
-      status: 'pending' 
-    }]);
+    try {
+      const res = await apiFetch('/api/reviews', {
+        method: 'POST',
+        body: {
+          rating: rating,
+          comentario: comment.trim()
+        }
+      });
 
-    if (!error) {
-      setStep('thanks');
-      setTimeout(() => setVisible(false), 4000);
-    } else {
+      if (res.ok) {
+        setStep('thanks');
+        setTimeout(() => setVisible(false), 4000);
+      } else {
+        setSubmitting(false);
+      }
+    } catch {
       setSubmitting(false);
     }
   };

@@ -20,9 +20,10 @@ const FOOTER_LINKS = {
     { to: '/contacto', label: 'Contacto' },
   ],
   legal: [
-    { to: '/legal/privacidad', label: 'Privacidad' },
-    { to: '/legal/terminos', label: 'Términos' },
-    { to: '/legal/cookies', label: 'Cookies' },
+    { to: '/legal/terminos', label: 'Términos del Servicio' },
+    { to: '/legal/privacidad', label: 'Política de Privacidad' },
+    { to: '/legal/cookies', label: 'Política de Cookies' },
+    { to: '/legal/aviso-legal', label: 'Aviso Legal' },
   ]
 };
 
@@ -31,33 +32,33 @@ export default function Footer() {
   const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   return (
-    <footer className="relative bg-zinc-950 border-t border-zinc-900 pt-24 pb-12 overflow-hidden font-sans">
+    <footer className="relative bg-zinc-950 border-t border-zinc-900 pt-16 sm:pt-24 pb-12 overflow-hidden font-sans">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[300px] bg-[radial-gradient(ellipse_at_top,rgba(20,184,166,0.05)_0%,transparent_60%)] pointer-events-none" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-12 lg:gap-8 mb-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-8 mb-14 sm:mb-20">
           
           <div className="lg:col-span-5 flex flex-col gap-6">
             <Link to="/" className="inline-flex items-center group outline-none">
               <StaticLogo />
             </Link>
             
-            <p className="text-zinc-400 text-sm font-medium leading-relaxed max-w-sm">
+            <p className="text-zinc-400 text-sm font-medium leading-relaxed max-w-sm text-pretty">
               La infraestructura logística definitiva para transformar el caos de tu punto de recogida en ingresos escalables y controlados.
             </p>
             
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <span className="relative flex h-1.5 w-1.5">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+                <span className="relative flex h-1.5 w-1.5 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                 </span>
-                <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-[0.2em]">
-                  Status Operacional: 99.9% <span className="text-zinc-800 mx-2">|</span> Latencia: 24ms
+                <span className="text-[9px] sm:text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-wider sm:tracking-[0.2em]">
+                  Status Operacional: 99.9% <span className="text-zinc-800 mx-1.5 sm:mx-2">|</span> Latencia: 24ms
                 </span>
               </div>
 
-              <div className="text-[10px] font-mono text-zinc-600 uppercase tracking-[0.25em] flex items-center gap-2">
+              <div className="text-[9px] sm:text-[10px] font-mono text-zinc-600 uppercase tracking-wider sm:tracking-[0.25em] flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <span className="text-zinc-400 font-black">Release v1.2.4-BETA</span>
                 <span className="text-zinc-800">/</span>
                 <span className="text-zinc-500">Continuous Deployment Cycle</span>

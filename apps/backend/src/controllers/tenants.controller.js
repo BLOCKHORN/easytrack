@@ -1,6 +1,7 @@
 'use strict';
 
 const { supabaseAdmin } = require('../utils/supabaseClient');
+const { isDirectPg, query } = require('../utils/db');
 const { computeEntitlements } = require('../utils/entitlements');
 const { fetchSubscriptionForTenant } = require('../utils/subscription');
 const { slugifyBase, uniqueSlug } = require('../utils/slug');
@@ -45,6 +46,10 @@ async function resolveTenantId(req) {
   if (direct) return direct;
   const email = String(req.user?.email || '').toLowerCase().trim();
   if (!email) return null;
+  if (isDirectPg()) {
+    const { rows } = await query('SELECT id FROM public.tenants WHERE lower(email) = lower($1) ORDER BY fecha_creacion DESC LIMIT 1', [email]);
+    return rows[0]?.id || null;
+  }
   const { data, error } = await supabaseAdmin.from('tenants').select('id').ilike('email', email).maybeSingle();
   if (error) throw error;
   return data?.id || null;
@@ -53,10 +58,43 @@ async function resolveTenantId(req) {
 exports.obtenerTenantMe = async (req, res) => {
   try {
     const slugQ = req.query?.slug || null;
-    console.log('obtenerTenantMe: User', req.user?.email, 'SlugQ', slugQ);
+    const email = String(req.user?.email || '').toLowerCase().trim();
+    if (!email && !req.user?.id) {
+      return res.status(401).json({ ok: false, error: 'UNAUTHENTICATED' });
+    }
+
+    if (isDirectPg()) {
+      let t = null;
+      if (req.tenant?.id) {
+        const { rows } = await query(`SELECT ${TENANT_FIELDS} FROM public.tenants WHERE id = $1 LIMIT 1`, [req.tenant.id]);
+        t = rows[0] || null;
+      }
+      if (!t && slugQ) {
+        const { rows } = await query(`SELECT ${TENANT_FIELDS} FROM public.tenants WHERE slug = $1 LIMIT 1`, [slugQ]);
+        t = rows[0] || null;
+      }
+      if (!t && req.user?.id) {
+        const { rows } = await query(`
+          SELECT t.id, t.slug, t.nombre_empresa, t.email, t.trial_quota, t.trial_used, t.soft_blocked, t.plan_id, t.requested_plan, t.is_ai_active, t.ai_trial_ends_at, t.ai_trial_used, t.fecha_creacion
+          FROM public.memberships m
+          JOIN public.tenants t ON t.id = m.tenant_id
+          WHERE m.user_id = $1
+          LIMIT 1
+        `, [req.user.id]);
+        t = rows[0] || null;
+      }
+      if (!t && email) {
+        const { rows } = await query(`SELECT ${TENANT_FIELDS} FROM public.tenants WHERE lower(email) = lower($1) ORDER BY fecha_creacion DESC LIMIT 1`, [email]);
+        t = rows[0] || null;
+      }
+      if (t) {
+        const subscription = await fetchSubscriptionForTenant(t.id);
+        const entitlements = computeEntitlements({ tenant: t, subscription });
+        return res.json({ ok: true, tenant: t, subscription, entitlements });
+      }
+    }
 
     if (req.tenant?.id) {
-      console.log('obtenerTenantMe: Tenant ya en req', req.tenant.slug);
       const { data: t, error: terr } = await supabaseAdmin
         .from('tenants')
         .select(TENANT_FIELDS)
@@ -70,9 +108,7 @@ exports.obtenerTenantMe = async (req, res) => {
       return res.json({ ok: true, tenant: t, subscription, entitlements });
     }
 
-    const email = String(req.user?.email || '').toLowerCase().trim();
     if (!email) {
-      console.log('obtenerTenantMe: No hay email en req.user');
       return res.status(401).json({ ok: false, error: 'UNAUTHENTICATED' });
     }
 
@@ -92,11 +128,9 @@ exports.obtenerTenantMe = async (req, res) => {
 
     const tenant = await ensureTenantByEmail(email);
     if (!tenant) {
-      console.log('obtenerTenantMe: No se pudo asegurar tenant para', email);
       return res.status(500).json({ ok: false, error: 'TENANT_PROVISION_FAILED' });
     }
 
-    console.log('obtenerTenantMe: Tenant encontrado/creado', tenant.slug);
     const subscription = await fetchSubscriptionForTenant(tenant.id);
     const entitlements = computeEntitlements({ tenant, subscription });
     return res.json({ ok: true, tenant, subscription, entitlements });
@@ -112,6 +146,12 @@ exports.actualizarTenantMe = async (req, res) => {
     if (!tenantId) return res.status(403).json({ ok: false, error: 'Tenant no resuelto' });
     const nombre = String(req.body?.nombre_empresa || '').trim();
     if (!nombre) return res.status(400).json({ ok: false, error: 'Nombre vacío' });
+
+    if (isDirectPg()) {
+      const { rows } = await query('UPDATE public.tenants SET nombre_empresa = $1 WHERE id = $2 RETURNING id, slug, nombre_empresa, email', [nombre, tenantId]);
+      return res.json({ ok: true, tenant: rows[0] });
+    }
+
     const { data, error } = await supabaseAdmin.from('tenants').update({ nombre_empresa: nombre }).eq('id', tenantId).select('id, slug, nombre_empresa, email').maybeSingle();
     if (error) throw error;
     return res.json({ ok: true, tenant: data });
@@ -125,6 +165,25 @@ exports.activarPruebaIA = async (req, res) => {
     const tenantId = await resolveTenantId(req);
     if (!tenantId) return res.status(403).json({ ok: false, error: 'Tenant no resuelto' });
     
+    if (isDirectPg()) {
+      const { rows } = await query('SELECT ai_trial_used, plan_id FROM public.tenants WHERE id = $1 LIMIT 1', [tenantId]);
+      const t = rows[0];
+      if (!t) return res.status(404).json({ ok: false, error: 'Tenant no encontrado' });
+      if (t.plan_id !== 'plus') return res.status(400).json({ ok: false, error: 'Solo el plan Plus tiene acceso a esta prueba.' });
+      if (t.ai_trial_used) return res.status(400).json({ ok: false, error: 'TRIAL_ALREADY_USED' });
+      
+      const endsAt = new Date();
+      endsAt.setDate(endsAt.getDate() + 7);
+      
+      const upd = await query(`
+        UPDATE public.tenants 
+        SET ai_trial_used = true, ai_trial_ends_at = $1, is_ai_active = true 
+        WHERE id = $2 
+        RETURNING ai_trial_ends_at
+      `, [endsAt.toISOString(), tenantId]);
+      return res.json({ ok: true, ai_trial_ends_at: upd.rows[0]?.ai_trial_ends_at });
+    }
+
     const { data: t, error: tErr } = await supabaseAdmin.from('tenants').select('ai_trial_used, plan_id').eq('id', tenantId).single();
     if (tErr || !t) return res.status(404).json({ ok: false, error: 'Tenant no encontrado' });
     if (t.plan_id !== 'plus') return res.status(400).json({ ok: false, error: 'Solo el plan Plus tiene acceso a esta prueba.' });

@@ -1,6 +1,4 @@
-'use strict';
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Hero from './Hero';
 import Benefits from './Benefits';
@@ -9,7 +7,8 @@ import ROI from './ROI';
 import Testimonials from './Testimonials';
 import Pricing from './Pricing';
 import ContrastSection from './ContrastSection';
-import InteractiveAudit from './InteractiveAudit';
+
+const InteractiveAudit = lazy(() => import('./InteractiveAudit'));
 
 export default function LandingPage() {
   const location = useLocation();
@@ -36,7 +35,11 @@ export default function LandingPage() {
   if (isChecking) return null;
 
   if (showAudit) {
-    return <InteractiveAudit onComplete={handleAuditComplete} />;
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center" />}>
+        <InteractiveAudit onComplete={handleAuditComplete} />
+      </Suspense>
+    );
   }
 
   return (

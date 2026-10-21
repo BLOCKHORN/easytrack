@@ -2,6 +2,7 @@
 'use strict';
 
 const { supabase } = require('../utils/supabaseClient');
+const { isDirectPg, query } = require('../utils/db');
 
 /* ========= Helpers de parsing ========= */
 
@@ -116,6 +117,86 @@ async function commit(req, res) {
       confidence: Number.isFinite(r.confidence) ? r.confidence : 0,
       status: (r.confidence >= autoConfirmIfGte) ? 'confirmado' : 'pendiente'
     }));
+
+    if (isDirectPg()) {
+      const staged = [];
+      for (const r of stageRows) {
+        const { rows: inserted } = await query(
+          `INSERT INTO public.import_buffer (tenant_id, source, raw_text, detected_nombre, detected_empresa, detected_ubicacion, confidence, status, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+           RETURNING *`,
+          [r.tenant_id, r.source, r.raw_text, r.detected_nombre, r.detected_empresa, r.detected_ubicacion, r.confidence, r.status]
+        );
+        if (inserted[0]) staged.push(inserted[0]);
+      }
+
+      const confirmables = staged.filter(r => r.status === 'confirmado');
+      if (confirmables.length === 0) {
+        return res.json({ ok: true, staged: staged.length, created: 0, pending: staged.length });
+      }
+
+      const [ubiRes, empRes] = await Promise.all([
+        query('SELECT id, label FROM public.ubicaciones WHERE tenant_id = $1 AND activo = true', [tenantId]),
+        query('SELECT id, nombre, activo FROM public.empresas_transporte_tenant WHERE tenant_id = $1', [tenantId])
+      ]);
+
+      const ubiByLabel = new Map((ubiRes.rows || []).map(u => [String(u.label || '').toUpperCase(), u.id]));
+      const empByName = new Map((empRes.rows || []).map(e => [String(e.nombre || '').toLowerCase(), e]));
+
+      let created = 0;
+      for (const r of confirmables) {
+        const nombre = (r.detected_nombre || '').trim();
+        const empresaTxt = (r.detected_empresa || '').trim().toLowerCase();
+        const ubiLabel = String(r.detected_ubicacion || '').trim().toUpperCase();
+
+        if (!nombre || !ubiLabel) continue;
+        const ubicacion_id = ubiByLabel.get(ubiLabel);
+        if (!ubicacion_id) continue;
+
+        let empresa_id = null;
+        let empresa_transporte = null;
+        if (empresaTxt) {
+          if (empByName.has(empresaTxt)) {
+            const emp = empByName.get(empresaTxt);
+            empresa_id = emp?.id || null;
+            empresa_transporte = emp?.nombre || empresaTxt;
+          } else {
+            const { rows: newEmpRows } = await query(
+              `INSERT INTO public.empresas_transporte_tenant (tenant_id, nombre, ingreso_por_entrega, activo)
+               VALUES ($1, $2, 0, true)
+               ON CONFLICT (tenant_id, nombre) DO UPDATE SET activo = true
+               RETURNING id, nombre`,
+              [tenantId, empresaTxt]
+            );
+            const newEmp = newEmpRows[0];
+            if (newEmp) {
+              empresa_id = newEmp.id;
+              empresa_transporte = newEmp.nombre;
+              empByName.set(empresaTxt, newEmp);
+            } else {
+              empresa_transporte = empresaTxt;
+            }
+          }
+        }
+
+        const insPkg = await query(
+          `INSERT INTO public.packages (
+             tenant_id, nombre_cliente, empresa_transporte, empresa_id,
+             ubicacion_id, ubicacion_label, entregado, ingreso_generado, fecha_llegada, created_at, updated_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, false, 0, NOW(), NOW(), NOW())
+           RETURNING id`,
+          [tenantId, nombre.toUpperCase(), empresa_transporte, empresa_id, ubicacion_id, ubiLabel]
+        );
+        if (insPkg.rows.length) created++;
+      }
+
+      return res.json({
+        ok: true,
+        staged: staged.length,
+        created,
+        pending: staged.length - confirmables.length,
+      });
+    }
 
     const { data: staged, error: stageErr } = await supabase
       .from('import_buffer')
@@ -242,6 +323,15 @@ async function listStaging(req, res) {
     if (!tenantId) return res.status(400).json({ ok: false, error: 'Tenant no resuelto.' });
 
     const status = String(req.query.status || 'pendiente');
+
+    if (isDirectPg()) {
+      const { rows } = await query(
+        'SELECT * FROM public.import_buffer WHERE tenant_id = $1 AND status = $2 ORDER BY created_at DESC LIMIT 500',
+        [tenantId, status]
+      );
+      return res.json({ ok: true, rows: rows || [] });
+    }
+
     const { data, error } = await supabase
       .from('import_buffer')
       .select('*')
@@ -268,6 +358,26 @@ async function bulkConfirm(req, res) {
     const { ids = [] } = req.body || {};
     if (!tenantId || !ids.length) {
       return res.status(400).json({ ok: false, error: 'tenant y ids son obligatorios.' });
+    }
+
+    if (isDirectPg()) {
+      const { rows: staged } = await query(
+        'UPDATE public.import_buffer SET status = $1 WHERE tenant_id = $2 AND id = ANY($3::uuid[]) RETURNING *',
+        ['confirmado', tenantId, ids]
+      );
+      req.body = {
+        tenantId,
+        rows: staged.map(s => ({
+          source: s.source,
+          raw_text: s.raw_text,
+          detected_nombre: s.detected_nombre,
+          detected_empresa: s.detected_empresa,
+          detected_ubicacion: s.detected_ubicacion,
+          confidence: s.confidence
+        })),
+        autoConfirmIfGte: 0
+      };
+      return commit(req, res);
     }
 
     // 1) marcar confirmados

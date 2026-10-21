@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "../../utils/supabaseClient";
+import { apiFetch } from "../../utils/fetcher";
 import {
   eliminarPaqueteBackend,
   entregarPaqueteBackend,
@@ -10,7 +10,7 @@ import { getTenantIdOrThrow } from "../../utils/tenant";
 import BuscarPaqueteSkeleton from "./BuscarPaqueteSkeleton";
 import { getCarrierLogo, getInitials, ImageFallback } from '../UI/CarrierLogo';
 
-const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
 const PROD_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 const API_BASE = isLocal ? '' : PROD_URL;
 
@@ -300,15 +300,10 @@ export default function BuscarPaquete() {
     if (isSyncing.current || retryQueue.current.size === 0) return;
     isSyncing.current = true;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        isSyncing.current = false;
-        return;
-      }
       while (retryQueue.current.size > 0) {
         const id = Array.from(retryQueue.current)[0];
         try {
-          await entregarPaqueteBackend(id, session.access_token);
+          await entregarPaqueteBackend(id);
           retryQueue.current.delete(id);
           localStorage.setItem(QUEUE_KEY, JSON.stringify(Array.from(retryQueue.current)));
         } catch (e) {
@@ -323,24 +318,28 @@ export default function BuscarPaquete() {
 
   const loadGlobalData = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
       const tId = await getTenantIdOrThrow();
       setTenantId(tId);
 
-      const headers = { Authorization: `Bearer ${token}` };
-
-      const resKPI = await fetch(`${API_BASE}/api/paquetes/count`, { headers });
+      const resKPI = await apiFetch('/api/paquetes/count');
       if (resKPI.ok) {
         const dataKPI = await resKPI.json();
         setKpiGlobal({ total: dataKPI.total || 0, entregados: dataKPI.entregados || 0, pendientes: dataKPI.pendientes || 0 });
       }
 
-      const { data: empresas } = await supabase.from("empresas_transporte_tenant").select("nombre").eq("tenant_id", tId);
-      setCompanias((empresas || []).map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b)));
+      const resCarriers = await apiFetch('/api/ubicaciones/carriers');
+      if (resCarriers.ok) {
+        const dataCarriers = await resCarriers.json();
+        const carriersList = dataCarriers?.carriers || dataCarriers || [];
+        setCompanias(carriersList.map(e => e?.nombre).filter(Boolean).sort((a,b)=>a.localeCompare(b)));
+      }
 
-      const { data: uRows } = await supabase.from("ubicaciones").select("id,label").eq("tenant_id", tId);
-      setUbicaciones((uRows || []).map(r => ({ id: r.id, label: String(r.label || "").toUpperCase() })));
+      const resUbis = await apiFetch('/api/ubicaciones/estructura');
+      if (resUbis.ok) {
+        const dataUbis = await resUbis.json();
+        const ubiList = dataUbis?.ubicaciones || dataUbis || [];
+        setUbicaciones(ubiList.map(r => ({ id: r.id, label: String(r.label || "").toUpperCase() })));
+      }
     } catch (e) {}
   };
 
@@ -349,9 +348,6 @@ export default function BuscarPaquete() {
     if (!isBackgroundSync) setCargando(true);
     
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const headers = { Authorization: `Bearer ${token}` };
       const searchFuzzy = busqueda.trim().replace(/\s+/g, '%');
 
       const params = new URLSearchParams({
@@ -366,8 +362,8 @@ export default function BuscarPaquete() {
       });
 
       const [resPkgs, resCount] = await Promise.all([
-        fetch(`${API_BASE}/api/paquetes?${params}`, { headers }),
-        fetch(`${API_BASE}/api/paquetes/count?${params}`, { headers })
+        apiFetch(`/api/paquetes?${params}`),
+        apiFetch(`/api/paquetes/count?${params}`)
       ]);
 
       if (resPkgs.ok && resCount.ok) {
@@ -497,8 +493,7 @@ export default function BuscarPaquete() {
 
   const handleUndoEntregar = async (pkg) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      await editarPaqueteBackend({ ...pkg, entregado: false, fecha_entregado: null }, session.access_token);
+      await editarPaqueteBackend({ ...pkg, entregado: false, fecha_entregado: null });
       
       setPaquetes(prev => {
         if (estadoFiltro === "entregado") return prev.filter(p => p.id !== pkg.id);
@@ -544,8 +539,7 @@ export default function BuscarPaquete() {
     setConfirmState({ open: false, payload: null });
     if (!payload) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      await eliminarPaqueteBackend(payload.id, session.access_token);
+      await eliminarPaqueteBackend(payload.id);
       setSelectedIds(prev => { const n = new Set(prev); n.delete(payload.id); return n; });
       removeFromRadar(payload.id);
       checkRadar();
@@ -562,8 +556,7 @@ export default function BuscarPaquete() {
     if (ids.length === 0) return;
     setConfirmBulk(false);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      await Promise.all(ids.map(id => eliminarPaqueteBackend(id, session.access_token)));
+      await Promise.all(ids.map(id => eliminarPaqueteBackend(id)));
       clearSelection();
       ids.forEach(removeFromRadar);
       checkRadar();
@@ -579,7 +572,6 @@ export default function BuscarPaquete() {
     if (!paqueteEditando) return;
     setLoadingEdit(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const newLabel = String(paqueteEditando.ubicacion_label || "").toUpperCase().trim();
       const ubiRow = ubicaciones.find(u => u.label === newLabel) || null;
       
@@ -591,7 +583,7 @@ export default function BuscarPaquete() {
         ubicacion_label: newLabel || null,
       };
 
-      const actualizado = await editarPaqueteBackend(payload, session.access_token);
+      const actualizado = await editarPaqueteBackend(payload);
       setPaquetes(prev => prev.map(p => p.id === payload.id ? {
         ...p,
         nombre_cliente: actualizado?.nombre_cliente ?? payload.nombre_cliente,
@@ -637,34 +629,34 @@ export default function BuscarPaquete() {
         )}
       </AnimatePresence>
 
-      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 pb-6 border-b border-zinc-200">
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-3 sm:gap-6 pb-3 sm:pb-6 border-b border-zinc-200/80">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-black text-zinc-950 tracking-tight flex items-center gap-3">
+          <h1 className="text-xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight flex items-center gap-2 sm:gap-3">
              <IconSearch /> Localizador
           </h1>
-          <p className="text-sm sm:text-base font-bold text-zinc-600 mt-1">Encuentra y gestiona el histórico de paquetes.</p>
+          <p className="text-xs sm:text-sm font-medium text-zinc-500 mt-0.5">Encuentra y gestiona el histórico de paquetes.</p>
         </div>
         
-        <div className="grid grid-cols-2 md:flex md:flex-nowrap gap-3">
-          <div className="bg-white px-4 py-3 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-center flex-1">
-            <span className="text-[10px] sm:text-xs font-black text-zinc-500 uppercase tracking-widest">Total</span>
-            <span className="text-2xl sm:text-3xl font-black text-zinc-950 mt-1">{kpiGlobal.total}</span>
+        <div className="grid grid-cols-4 gap-1.5 sm:gap-3 w-full xl:w-auto">
+          <div className="bg-white px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border border-zinc-200/80 shadow-sm flex flex-col justify-center">
+            <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Total</span>
+            <span className="text-base sm:text-3xl font-extrabold tabular-nums text-zinc-950 mt-0.5">{kpiGlobal.total}</span>
           </div>
-          <div className="bg-white px-4 py-3 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-center flex-1">
-            <span className="text-[10px] sm:text-xs font-black text-zinc-500 uppercase tracking-widest">Pendientes</span>
-            <span className="text-2xl sm:text-3xl font-black text-zinc-950 mt-1">{kpiGlobal.pendientes}</span>
+          <div className="bg-white px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border border-zinc-200/80 shadow-sm flex flex-col justify-center">
+            <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Pend.</span>
+            <span className="text-base sm:text-3xl font-extrabold tabular-nums text-zinc-950 mt-0.5">{kpiGlobal.pendientes}</span>
           </div>
-          <div className="bg-white px-4 py-3 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-center flex-1">
-            <span className="text-[10px] sm:text-xs font-black text-zinc-500 uppercase tracking-widest">Entregados</span>
-            <span className="text-2xl sm:text-3xl font-black text-zinc-950 mt-1">{kpiGlobal.entregados}</span>
+          <div className="bg-white px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border border-zinc-200/80 shadow-sm flex flex-col justify-center">
+            <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Entreg.</span>
+            <span className="text-base sm:text-3xl font-extrabold tabular-nums text-emerald-600 mt-0.5">{kpiGlobal.entregados}</span>
           </div>
-          <div className="bg-white px-4 py-3 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-center flex-1 w-full md:w-48">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-[10px] sm:text-xs font-black text-zinc-500 uppercase tracking-widest">Progreso</span>
-              <span className="text-xs sm:text-sm font-black text-[#14B07E]">{progresoKPI}%</span>
+          <div className="bg-white px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border border-zinc-200/80 shadow-sm flex flex-col justify-center">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Éxito</span>
+              <span className="text-xs font-bold text-emerald-600 tabular-nums">{progresoKPI}%</span>
             </div>
-            <div className="w-full bg-zinc-100 rounded-full h-2">
-              <div className="bg-[#14B07E] h-2 rounded-full" style={{ width: `${progresoKPI}%` }}></div>
+            <div className="w-full bg-zinc-100 rounded-full h-1.5">
+              <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${progresoKPI}%` }}></div>
             </div>
           </div>
         </div>
@@ -672,32 +664,32 @@ export default function BuscarPaquete() {
 
       <AnimatePresence>
         {olvidos.length > 0 && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-6 overflow-hidden">
-            <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-zinc-100 text-zinc-900 flex items-center justify-center shrink-0 border border-zinc-200 shadow-sm">
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-4 overflow-hidden">
+            <div className="bg-white border border-zinc-200/80 rounded-xl p-3.5 sm:p-4 shadow-sm relative overflow-hidden">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-zinc-100 text-zinc-900 flex items-center justify-center shrink-0 border border-zinc-200">
                   <IconInfo />
                 </div>
                 <div>
-                  <h3 className="text-base sm:text-lg font-black text-zinc-950 tracking-tight">Cierre Pendiente</h3>
-                  <p className="text-sm font-bold text-zinc-500">Buscaste estos paquetes recientemente. ¿Completaste la entrega?</p>
+                  <h3 className="text-sm font-bold text-zinc-950 tracking-tight">Cierre Pendiente</h3>
+                  <p className="text-xs font-normal text-zinc-500">¿Completaste la entrega de estos paquetes?</p>
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {olvidos.map(o => (
-                  <div key={o.id} className="flex flex-col gap-3 bg-zinc-50 p-4 rounded-xl border border-zinc-200 hover:border-zinc-300 transition-colors shadow-sm">
+                  <div key={o.id} className="flex flex-col gap-2 bg-zinc-50 p-2.5 sm:p-3 rounded-lg border border-zinc-200/80">
                      <div className="min-w-0">
-                       <p className="font-black text-zinc-900 text-base truncate">{o.nombre}</p>
-                       <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest mt-0.5">
-                         Ubicación <span className="text-zinc-950 px-1.5 py-0.5 bg-white border border-zinc-200 rounded-md ml-1">{o.ubi}</span>
+                       <p className="font-bold text-zinc-900 text-sm truncate">{o.nombre}</p>
+                       <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mt-0.5">
+                         Ubicación <span className="text-zinc-950 px-1 py-0.5 bg-white border border-zinc-200 rounded font-mono ml-1">{o.ubi}</span>
                        </p>
                      </div>
-                     <div className="flex items-center gap-2 pt-1 border-t border-zinc-200/60 mt-1">
-                       <button onClick={() => { removeFromRadar(o.id); checkRadar(); }} className="flex-1 py-2 text-zinc-500 hover:text-zinc-950 hover:bg-zinc-200/50 text-xs font-black rounded-lg transition-colors">
+                     <div className="flex items-center gap-2 pt-1 border-t border-zinc-200/60">
+                       <button onClick={() => { removeFromRadar(o.id); checkRadar(); }} className="flex-1 py-1.5 text-zinc-500 hover:text-zinc-950 text-xs font-semibold rounded-lg transition-colors min-h-[36px]">
                          Descartar
                        </button>
-                       <button onClick={() => { marcarEntregado(o.id); }} className="flex-1 py-2 bg-[#14B07E] hover:bg-[#129A6E] text-white text-xs font-black rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm active:scale-95">
+                       <button onClick={() => { marcarEntregado(o.id); }} className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[36px] active:scale-[0.97]">
                          <IconCheck /> Confirmar
                        </button>
                      </div>
@@ -709,39 +701,39 @@ export default function BuscarPaquete() {
         )}
       </AnimatePresence>
 
-      <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm flex flex-col xl:flex-row gap-4 justify-between items-center">
-        <div className="relative w-full xl:w-96 flex-shrink-0">
-          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-zinc-400"><IconSearch /></div>
-          <input type="text" placeholder="Buscar por nombre..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="w-full pl-12 pr-10 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:border-[#14B07E] outline-none font-black text-base sm:text-lg text-zinc-950 transition-colors placeholder:font-bold" />
+      <div className="bg-white p-2.5 sm:p-4 rounded-xl border border-zinc-200/80 shadow-sm flex flex-col xl:flex-row gap-2.5 sm:gap-4 justify-between items-center">
+        <div className="relative w-full xl:w-80 flex-shrink-0">
+          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-zinc-400"><IconSearch /></div>
+          <input type="text" placeholder="Buscar por nombre..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="w-full pl-9 pr-8 py-2 sm:py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:border-brand-500 outline-none font-bold text-sm sm:text-base text-zinc-950 transition-colors" />
           {busqueda && (
-            <button onClick={() => setBusqueda("")} className="absolute inset-y-0 right-3 flex items-center justify-center text-zinc-400 hover:text-zinc-900">
+            <button onClick={() => setBusqueda("")} className="absolute inset-y-0 right-2.5 flex items-center justify-center text-zinc-400 hover:text-zinc-900">
               <IconTimes />
             </button>
           )}
         </div>
         
-        <div className="grid grid-cols-2 lg:flex lg:flex-row gap-3 w-full xl:w-auto">
-          <select value={estadoFiltro} onChange={e => setEstadoFiltro(e.target.value)} className="px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm sm:text-base font-black text-zinc-800 outline-none focus:border-[#14B07E] truncate cursor-pointer">
+        <div className="grid grid-cols-2 sm:flex sm:flex-row gap-1.5 sm:gap-2 w-full xl:w-auto">
+          <select value={estadoFiltro} onChange={e => setEstadoFiltro(e.target.value)} className="px-2.5 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-xs sm:text-sm font-bold text-zinc-800 outline-none focus:border-brand-500 truncate cursor-pointer">
             <option value="pendiente">Pendientes</option>
             <option value="entregado">Entregados</option>
             <option value="todos">Todos</option>
           </select>
-          <select value={companiaFiltro} onChange={e => setCompaniaFiltro(e.target.value)} className="px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm sm:text-base font-black text-zinc-800 outline-none focus:border-[#14B07E] truncate cursor-pointer">
-            {companiasFiltradas.map(c => <option key={c} value={c}>{c === 'todos' ? 'Cualquier Compañia' : c}</option>)}
+          <select value={companiaFiltro} onChange={e => setCompaniaFiltro(e.target.value)} className="px-2.5 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-xs sm:text-sm font-bold text-zinc-800 outline-none focus:border-brand-500 truncate cursor-pointer">
+            {companiasFiltradas.map(c => <option key={c} value={c}>{c === 'todos' ? 'Compañía' : c}</option>)}
           </select>
-          <select value={ubicacionFiltro} onChange={e => setUbicacionFiltro(e.target.value)} className="px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm sm:text-base font-black text-zinc-800 outline-none focus:border-[#14B07E] truncate cursor-pointer">
-            {ubicacionesFiltradas.map(u => <option key={u} value={u}>{u === 'todas' ? 'Todas las Ubicaciones' : u}</option>)}
+          <select value={ubicacionFiltro} onChange={e => setUbicacionFiltro(e.target.value)} className="px-2.5 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-xs sm:text-sm font-bold text-zinc-800 outline-none focus:border-brand-500 truncate cursor-pointer">
+            {ubicacionesFiltradas.map(u => <option key={u} value={u}>{u === 'todas' ? 'Ubicación' : u}</option>)}
           </select>
           
           <button 
             onClick={() => setRecientesFiltro(!recientesFiltro)} 
-            className={`px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border text-sm sm:text-base font-black transition-all flex items-center justify-center gap-2 ${recientesFiltro ? 'bg-brand-500 text-white border-brand-500 shadow-md shadow-brand-100' : 'bg-white text-zinc-800 border-zinc-200 hover:bg-zinc-50'}`}
+            className={`px-2.5 py-2 rounded-lg border text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${recientesFiltro ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'}`}
             title="Actividad reciente"
           >
-            <IconClock /> <span className="hidden sm:inline">Recientes</span>
+            <IconClock /> <span className="inline">Recientes</span>
           </button>
-          <button onClick={toggleRevealGlobal} className={`px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border text-sm sm:text-base font-black transition-colors flex items-center justify-center gap-2 ${revealAll ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-800 border-zinc-200 hover:bg-zinc-50'}`}>
-            {revealAll ? <IconEyeSlash /> : <IconEye />} <span className="hidden sm:inline">{revealAll ? 'Ocultar' : 'Mostrar'}</span>
+          <button onClick={toggleRevealGlobal} className={`px-2.5 py-2 rounded-lg border text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-1.5 ${revealAll ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'}`}>
+            {revealAll ? <IconEyeSlash /> : <IconEye />} <span>{revealAll ? 'Ocultar' : 'Ver'}</span>
           </button>
         </div>
       </div>
@@ -749,10 +741,10 @@ export default function BuscarPaquete() {
       {cargando ? (
         <BuscarPaqueteSkeleton />
       ) : (
-        <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-zinc-200/80 rounded-xl shadow-sm overflow-hidden">
           <div className="block lg:hidden divide-y divide-zinc-100">
             {paquetes.length === 0 ? (
-            <div className="py-12 text-center text-zinc-500 font-bold text-sm sm:text-base">No hay paquetes que coincidan.</div>
+            <div className="py-8 text-center text-zinc-400 font-medium text-xs sm:text-sm">No hay paquetes que coincidan.</div>
           ) : (
             <AnimatePresence>
               {paquetes.map(p => {
@@ -763,69 +755,69 @@ export default function BuscarPaquete() {
                 return (
                   <motion.div 
                     layout
-                    initial={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                    initial={{ opacity: 1 }}
+                    exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
                     key={p.id} 
-                    className={`p-4 sm:p-5 flex flex-col gap-3 transition-colors ${checked ? 'bg-[#14B07E]/5' : 'bg-white hover:bg-zinc-50'}`}
+                    className={`p-3 sm:p-4 flex flex-col gap-2.5 transition-colors ${checked ? 'bg-brand-500/5' : 'bg-white hover:bg-zinc-50/60'}`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 overflow-hidden pt-1 w-full">
-                        <button onClick={() => toggleSelectOne(p.id)} className={`shrink-0 w-6 h-6 rounded flex items-center justify-center border-2 transition-colors ${checked ? 'bg-[#14B07E] border-[#14B07E] text-white' : 'bg-white border-zinc-300'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 overflow-hidden flex-1 min-w-0">
+                        <button onClick={() => toggleSelectOne(p.id)} className={`shrink-0 w-5 h-5 rounded flex items-center justify-center border transition-colors ${checked ? 'bg-zinc-900 border-zinc-900 text-white' : 'bg-white border-zinc-300'}`}>
                           {checked && <IconCheck />}
                         </button>
-                        <div className={`font-black text-base text-zinc-950 break-words transition-all w-full ${revealed ? '' : 'blur-[5px] select-none'}`}>
+                        <div className={`font-bold text-sm sm:text-base text-zinc-950 truncate transition-all ${revealed ? '' : 'blur-[5px] select-none'}`}>
                           {busqueda ? highlightExact(p.nombre_cliente, busqueda) : p.nombre_cliente}
                         </div>
                       </div>
-                      <div className="shrink-0 flex items-center justify-center min-w-[3.5rem] px-3 py-1.5 bg-zinc-100 border border-zinc-200 text-zinc-900 text-lg font-black rounded-lg">
+                      <div className="shrink-0 flex items-center justify-center px-2 py-0.5 bg-zinc-900 text-white text-xs sm:text-sm font-mono font-bold rounded">
                         {p.ubicacion_label || "—"}
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-zinc-600 pl-9">
+                    <div className="flex items-center gap-2 text-[11px] font-medium text-zinc-500 pl-7">
                       <ImageFallback 
                         src={getCarrierLogo(p.compania)}
                         fallbackText={getInitials(p.compania)}
-                        containerClassName="w-4 h-4 shrink-0"
+                        containerClassName="w-3.5 h-3.5 shrink-0"
                         imgClassName="max-w-full max-h-full object-contain"
-                        fallbackClassName="bg-zinc-100 rounded text-[8px] font-black text-zinc-400"
+                        fallbackClassName="bg-zinc-100 rounded text-[7px] font-bold text-zinc-400"
                       />
                       <span>{p.compania || "—"}</span>
-                      <span className="text-zinc-300">•</span>
+                      <span className="text-zinc-300">·</span>
                       <span>{formatearFechaLocal(p.fecha_llegada)}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-2 mt-2 border-t border-zinc-100 pt-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => {setRevealAll(false); setRevealedSet(prev => {const n=new Set(prev); n.has(p.id)?n.delete(p.id):n.add(p.id); return n;})}} className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors">
+                    <div className="flex items-center justify-between gap-2 border-t border-zinc-100 pt-2 pl-7">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => {setRevealAll(false); setRevealedSet(prev => {const n=new Set(prev); n.has(p.id)?n.delete(p.id):n.add(p.id); return n;})}} className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded transition-colors" title="Ver/Ocultar">
                           {revealed ? <IconEyeSlash /> : <IconEye />}
                         </button>
-                        <button onClick={() => {setPaqueteEditando(p); setMostrarModal(true);}} className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors">
+                        <button onClick={() => {setPaqueteEditando(p); setMostrarModal(true);}} className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded transition-colors" title="Editar">
                           <IconEdit />
                         </button>
-                        <button onClick={() => setConfirmState({ open: true, payload: p })} className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        <button onClick={() => setConfirmState({ open: true, payload: p })} className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors" title="Eliminar">
                           <IconTrash />
                         </button>
                       </div>
-                      <div className="flex justify-end w-full">
+                      <div>
                         {p.entregado ? (
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-black text-brand-600 bg-brand-50 border border-brand-100">
-                              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                               Entregado
                             </span>
                             {p.fecha_entregado && (
-                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">
+                              <span className="text-[10px] font-medium text-zinc-400">
                                 {formatRelativeTime(p.fecha_entregado)}
                               </span>
                             )}
                           </div>
                         ) : (
-                          <button onClick={() => marcarEntregado(p.id)} disabled={isDelivering} className="px-4 py-2 bg-[#14B07E] hover:bg-[#129A6E] text-white text-sm font-black rounded-lg flex items-center justify-center gap-2 transition-transform active:scale-95 w-full min-w-[120px]">
+                          <button onClick={() => marcarEntregado(p.id)} disabled={isDelivering} className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-transform active:scale-[0.97] min-h-[36px] min-w-[100px]">
                             {isDelivering ? (
-                              <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="flex items-center gap-2">
+                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-1.5">
                                 <IconLoader /> <span className="opacity-90">Cerrando</span>
                               </motion.div>
                             ) : (
-                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2">
+                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-1">
                                 <IconCheck /> Entregar
                               </motion.div>
                             )}

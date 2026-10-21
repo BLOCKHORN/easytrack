@@ -7,7 +7,7 @@ import {
 } from "recharts";
 import AnadirPaquete from "./AnadirPaquete";
 import DashboardSkeleton from "./DashboardSkeleton";
-import { supabase } from "../../utils/supabaseClient";
+import { apiFetch } from "../../utils/fetcher";
 import PlanBadge from '../../components/Billing/PlanBadge';
 import { getCarrierLogo, getInitials, ImageFallback } from '../UI/CarrierLogo';
 import { getPinStatus } from "../../services/pinService";
@@ -41,7 +41,7 @@ export default function Dashboard(props) {
   const paquetesHash = useMemo(() => paquetes.map(p => `${p.id}-${p.entregado}`).join('|'), [paquetes]);
 
   const apiBase = useMemo(() => {
-    const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+    const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
     const API_URL = isLocal ? "" : (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
     const segs = location.pathname.split("/").filter(Boolean);
     if (segs.length >= 2 && (segs[1] === "dashboard" || segs[1] === "area-personal")) return `${API_URL}/${segs[0]}/api/dashboard`;
@@ -64,25 +64,23 @@ export default function Dashboard(props) {
     let cancel = false;
     (async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
         const [nRes, rRes, actRes, finRes, tcRes, pinS] = await Promise.all([
-          fetch(`${apiBase}/negocio`, { headers: { Authorization: `Bearer ${session.access_token}` } }),
-          fetch(`${apiBase}/resumen`, { headers: { Authorization: `Bearer ${session.access_token}` } }),
-          supabase.from('packages').select('*').order('updated_at', { ascending: false }).limit(6),
-          fetch(`${apiBase.replace('dashboard', 'area-personal')}/resumen`, { headers: { Authorization: `Bearer ${session.access_token}` } }).catch(() => null),
-          fetch(`${apiBase.replace('dashboard', 'area-personal')}/top-clientes`, { headers: { Authorization: `Bearer ${session.access_token}` } }).catch(() => null),
+          apiFetch(`${apiBase}/negocio`),
+          apiFetch(`${apiBase}/resumen`),
+          apiFetch(`${apiBase.replace('dashboard', 'paquetes')}/recientes`).then(r => r.json()).then(d => ({ data: d?.paquetes || [] })).catch(() => ({ data: [] })),
+          apiFetch(`${apiBase.replace('dashboard', 'area-personal')}/resumen`).catch(() => null),
+          apiFetch(`${apiBase.replace('dashboard', 'area-personal')}/top-clientes`).catch(() => null),
           getPinStatus(tenantSlug).catch(() => ({ enabled: false }))
         ]);
 
-        const n = await nRes.json();
-        const r = await rRes.json();
-        const f = finRes ? await finRes.json() : null;
-        const tc = tcRes ? await tcRes.json() : null;
+        const n = nRes?.ok ? await nRes.json().catch(() => ({})) : {};
+        const r = rRes?.ok ? await rRes.json().catch(() => ({})) : {};
+        const f = finRes?.ok ? await finRes.json().catch(() => null) : null;
+        const tc = tcRes?.ok ? await tcRes.json().catch(() => null) : null;
 
         if (cancel) return;
 
-        setPinEnabled(!!pinS.enabled);
+        setPinEnabled(!!pinS?.enabled);
         setSessionUnlocked(sessionStorage.getItem(`et_pin_${tenantSlug}`) === "unlocked");
 
         const newRes = {
@@ -96,13 +94,26 @@ export default function Dashboard(props) {
           diario: r.diario || []
         };
 
-        setNegocio(n?.negocio || n); setEntitlements(n?.entitlements || null); setResumen(newRes); setSlug(n?.negocio?.slug || n?.slug);
-        if (!actRes.error) setActividad(actRes.data);
+        setNegocio(n?.negocio || n); 
+        setEntitlements(n?.entitlements || null); 
+        setResumen(newRes); 
+        setSlug(n?.negocio?.slug || n?.slug);
+        if (!actRes?.error && actRes?.data) setActividad(actRes.data);
         if (tc?.topClientes) setTopClientes(tc.topClientes);
 
-        __DASHBOARD_CACHE = { loaded: true, negocio: n?.negocio || n, entitlements: n?.entitlements, slug: n?.negocio?.slug || n?.slug, resumen: newRes, actividad: actRes.data || [] };
-        setCargando(false);
-      } catch (e) { setCargando(false); }
+        __DASHBOARD_CACHE = { 
+          loaded: true, 
+          negocio: n?.negocio || n, 
+          entitlements: n?.entitlements, 
+          slug: n?.negocio?.slug || n?.slug, 
+          resumen: newRes, 
+          actividad: actRes?.data || [] 
+        };
+      } catch (e) {
+        console.error("Error en Dashboard:", e);
+      } finally {
+        if (!cancel) setCargando(false);
+      }
     })();
     return () => { cancel = true; };
   }, [apiBase, paquetesHash, tenantSlug]);
@@ -129,7 +140,12 @@ export default function Dashboard(props) {
         almacenActual: Math.max(0, prev.almacenActual - 1),
         entregadosHoy: prev.entregadosHoy + 1
       }));
-      await supabase.from('packages').update({ entregado: true, fecha_entregado: new Date().toISOString() }).eq('id', id);
+      await apiFetch(`${apiBase.replace('dashboard', 'paquetes')}/entregar/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       if (actualizarPaquetes) actualizarPaquetes();
     } catch (e) {
       console.error(e);
@@ -149,91 +165,93 @@ export default function Dashboard(props) {
   const isFinanceLocked = pinEnabled && !sessionUnlocked;
 
   return (
-    <div className="pb-16 max-w-7xl mx-auto px-4 sm:px-8 font-sans text-zinc-950">
+    <div className="pb-16 max-w-7xl mx-auto px-2 sm:px-8 font-sans text-zinc-950">
       
       {/* 1. HEADER: BRAND ONLY */}
-      <header className="py-6 flex items-center justify-between gap-6 border-b border-zinc-100 mb-8">
-        <div className="flex items-center gap-4">
-           <h1 className="text-2xl md:text-3xl font-[1000] tracking-tight text-zinc-950 leading-none uppercase">
+      <header className="py-3 sm:py-6 flex items-center justify-between gap-4 border-b border-zinc-100 mb-4 sm:mb-8">
+        <div className="flex items-center gap-3">
+           <h1 className="text-xl sm:text-3xl font-[1000] tracking-tight text-zinc-950 leading-none uppercase">
              {negocio?.nombre || negocio?.nombre_empresa || "Tu Negocio"}
            </h1>
            <PlanBadge />
         </div>
-        <button onClick={() => setMostrarModal(true)} className="bg-zinc-950 hover:bg-brand-600 text-white px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-lg flex items-center gap-2">
-          <IconPlus /> Registrar Paquete
+        <button onClick={() => setMostrarModal(true)} className="bg-zinc-950 hover:bg-brand-600 text-white px-4 sm:px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-transform active:scale-[0.97] shadow-sm flex items-center gap-2 min-h-[40px]">
+          <IconPlus /> <span className="hidden sm:inline">Registrar Paquete</span><span className="sm:hidden">Añadir</span>
         </button>
       </header>
 
-      {/* 2. TACTICAL ROWS: 3 HARMONIOUS BANDS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-zinc-950">
+      {/* 2. TACTICAL ROWS: 3 COMPACT BANDS ON MOBILE */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-8 text-zinc-950">
          {/* ROW 1: STOCK */}
-         <div className="bg-white border border-zinc-100 rounded-3xl p-6 shadow-sm flex flex-col justify-center">
-            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4">Inventario</p>
-            <div className="flex items-baseline gap-4">
-               <span className="text-4xl font-[1000] tracking-tighter tabular-nums">{resumen.almacenActual}</span>
-               <div className="text-[9px] font-black text-zinc-300 uppercase leading-none">Paquetes<br/>en stock</div>
+         <div className="bg-white border border-zinc-200/80 rounded-xl sm:rounded-2xl p-2.5 sm:p-6 shadow-sm flex flex-col justify-center">
+            <p className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 sm:mb-4">Stock</p>
+            <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4">
+               <span className="text-xl sm:text-4xl font-[1000] tracking-tighter tabular-nums leading-none">{resumen.almacenActual}</span>
+               <div className="text-[8px] sm:text-[9px] font-bold text-zinc-400 uppercase leading-tight sm:leading-none">en almacén</div>
             </div>
          </div>
 
          {/* ROW 2: FLOW */}
-         <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-6 shadow-sm flex flex-col justify-center">
-            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4">Flujo Diario</p>
-            <div className="flex justify-between items-center gap-8 tabular-nums font-[1000]">
-               <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black text-zinc-400 uppercase">IN</span>
-                  <span className="text-2xl text-zinc-950">+{resumen.recibidosHoy}</span>
+         <div className="bg-zinc-50 border border-zinc-200/80 rounded-xl sm:rounded-2xl p-2.5 sm:p-6 shadow-sm flex flex-col justify-center">
+            <p className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 sm:mb-4">Flujo Hoy</p>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-8 tabular-nums font-[1000]">
+               <div className="flex items-center gap-1 sm:gap-2">
+                  <span className="text-[8px] sm:text-[9px] font-bold text-zinc-400 uppercase">IN</span>
+                  <span className="text-xs sm:text-2xl text-zinc-950 leading-none">+{resumen.recibidosHoy}</span>
                </div>
-               <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black text-zinc-400 uppercase">OUT</span>
-                  <span className="text-2xl text-emerald-600">-{resumen.entregadosHoy}</span>
+               <div className="flex items-center gap-1 sm:gap-2">
+                  <span className="text-[8px] sm:text-[9px] font-bold text-zinc-400 uppercase">OUT</span>
+                  <span className="text-xs sm:text-2xl text-emerald-600 leading-none">-{resumen.entregadosHoy}</span>
                </div>
             </div>
          </div>
 
          {/* ROW 3: CASH (PROTECTED) */}
-         <div className="bg-white border border-zinc-100 rounded-3xl p-6 shadow-sm flex flex-col justify-center">
-            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4">Caja de Hoy</p>
-            <div className="h-10 flex items-center">
+         <div className="bg-white border border-zinc-200/80 rounded-xl sm:rounded-2xl p-2.5 sm:p-6 shadow-sm flex flex-col justify-center">
+            <p className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 sm:mb-4">Caja Hoy</p>
+            <div className="h-6 sm:h-10 flex items-center">
                <LockedValue isLocked={isFinanceLocked}>
-                  <span className="text-3xl font-[1000] tracking-tighter text-emerald-600 tabular-nums leading-none">{formatEUR(resumen.ingresoHoy)}</span>
+                  <span className="text-xs sm:text-3xl font-[1000] tracking-tighter text-emerald-600 tabular-nums leading-none">{formatEUR(resumen.ingresoHoy)}</span>
                </LockedValue>
             </div>
          </div>
       </div>
 
       {/* 3. OPERATIONAL GRID: DENSE */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch mb-6">
-        <div className="lg:col-span-8 bg-white border border-zinc-100 rounded-3xl p-8 shadow-sm flex flex-col h-[350px]">
-           <div className="flex items-center justify-between mb-8">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-400">Actividad Operativa (14d)</h3>
-              <div className="flex gap-4">
-                 <div className="flex items-center gap-1.5 text-[9px] font-black text-zinc-500 uppercase"><span className="w-1.5 h-1.5 rounded-full bg-brand-500" /> In</div>
-                 <div className="flex items-center gap-1.5 text-[9px] font-black text-zinc-500 uppercase"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Out</div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-6 items-stretch mb-4 sm:mb-6">
+        <div className="lg:col-span-8 bg-white border border-zinc-200/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-8 shadow-sm flex flex-col h-[220px] sm:h-[350px]">
+           <div className="flex items-center justify-between mb-3 sm:mb-8">
+              <h3 className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-zinc-400">Actividad Operativa (14d)</h3>
+              <div className="flex gap-3 sm:gap-4">
+                 <div className="flex items-center gap-1.5 text-[9px] font-bold text-zinc-500 uppercase"><span className="w-1.5 h-1.5 rounded-full bg-brand-500" /> In</div>
+                 <div className="flex items-center gap-1.5 text-[9px] font-bold text-zinc-500 uppercase"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Out</div>
               </div>
            </div>
-           <div className="flex-1 -ml-10">
-             <ResponsiveContainer>
-               <BarChart data={chartData}>
+           <div className="flex-1 w-full min-h-0">
+             <ResponsiveContainer width="100%" height="100%">
+               <BarChart data={chartData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                  <CartesianGrid strokeDasharray="8 8" vertical={false} stroke="#f4f4f7" />
                  <XAxis dataKey="date" hide />
                  <YAxis hide />
-                 <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.05)', padding: '10px' }} />
-                 <Bar dataKey="in" fill="#14b8a6" radius={[4, 4, 0, 0]} animationDuration={800} />
-                 <Bar dataKey="out" fill="#10b981" radius={[4, 4, 0, 0]} animationDuration={800} />
+                 <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e4e4e7', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', padding: '8px' }} />
+                 <Bar dataKey="in" fill="#7C3AED" radius={[3, 3, 0, 0]} animationDuration={500} />
+                 <Bar dataKey="out" fill="#10b981" radius={[3, 3, 0, 0]} animationDuration={500} />
                </BarChart>
              </ResponsiveContainer>
            </div>
         </div>
 
-        <div className="lg:col-span-4 bg-zinc-950 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden flex flex-col h-[350px]">
-           <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-600 mb-8 text-center">Operaciones</h3>
-           <div className="flex-1 space-y-5 overflow-y-auto pr-2 custom-scrollbar relative z-10">
-              {actividad.map(pkg => (
-                <div key={pkg.id} className="flex gap-4 group">
-                  <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${pkg.entregado ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-brand-500 shadow-[0_0_10px_rgba(20,184,166,0.4)]'}`} />
-                  <div className="min-w-0">
-                     <p className="text-[11px] font-[1000] uppercase tracking-tight group-hover:text-brand-400 transition-colors truncate leading-none mb-1">{pkg.nombre_cliente}</p>
-                     <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest leading-none">{pkg.empresa_transporte} • {new Date(pkg.updated_at).toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit'})}</p>
+        <div className="lg:col-span-4 bg-zinc-950 rounded-xl sm:rounded-2xl p-4 sm:p-8 text-white shadow-md relative overflow-hidden flex flex-col h-[220px] sm:h-[350px]">
+           <h3 className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-3 sm:mb-8 text-center">Últimas Operaciones</h3>
+           <div className="flex-1 space-y-3 sm:space-y-4 overflow-y-auto pr-1 custom-scrollbar relative z-10">
+              {actividad.length === 0 ? (
+                <div className="py-8 text-center text-xs text-zinc-500 font-medium">Sin operaciones recientes.</div>
+              ) : actividad.map(pkg => (
+                <div key={pkg.id} className="flex gap-3 group items-center">
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${pkg.entregado ? 'bg-emerald-500' : 'bg-brand-500'}`} />
+                  <div className="min-w-0 flex-1">
+                     <p className="text-xs font-bold uppercase tracking-tight group-hover:text-brand-400 transition-colors truncate leading-tight">{pkg.nombre_cliente}</p>
+                     <p className="text-[9px] font-medium text-zinc-400 tracking-normal leading-tight">{pkg.empresa_transporte} · {new Date(pkg.updated_at).toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit'})}</p>
                   </div>
                 </div>
               ))}
@@ -242,20 +260,20 @@ export default function Dashboard(props) {
       </div>
 
       {/* 4. LOYALTY RANKING (NEW INTEGRATED BAND) */}
-      <div className="bg-white border border-zinc-100 rounded-3xl p-8 shadow-sm flex flex-col space-y-8 mb-6">
-         <div className="flex items-center justify-between border-b border-zinc-50 pb-6">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-400">Ranking de Fidelidad</h3>
-            <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Top 5 Clientes VIP</span>
+      <div className="bg-white border border-zinc-200/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 shadow-sm flex flex-col space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+         <div className="flex items-center justify-between border-b border-zinc-100 pb-2 sm:pb-3">
+            <h3 className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-zinc-400">Ranking Clientes VIP</h3>
+            <span className="text-[9px] font-bold text-brand-600 uppercase tracking-wider">Top 5</span>
          </div>
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
             {topClientes.slice(0, 5).map((c, i) => (
-              <div key={i} className={`flex items-center justify-between py-4 px-5 rounded-2xl ${i === 0 ? 'bg-amber-50 text-amber-900 border border-amber-100/50 shadow-sm' : i === 1 ? 'bg-indigo-50 text-indigo-900 border border-indigo-100/50' : i === 2 ? 'bg-emerald-50 text-emerald-900 border border-emerald-100/50' : 'bg-zinc-50 text-zinc-500 border border-zinc-100'}`}>
-                 <div className="flex items-center gap-3 min-w-0 text-zinc-950">
-                    <span className="text-[10px] font-black opacity-30 italic text-zinc-400">#{i+1}</span>
-                    <span className="text-xs font-[1000] uppercase truncate">{c.nombre_cliente}</span>
+              <div key={i} className={`flex items-center justify-between py-2 px-3 sm:py-3 sm:px-4 rounded-lg sm:rounded-xl border ${i === 0 ? 'bg-amber-50/60 text-amber-900 border-amber-200/60' : i === 1 ? 'bg-indigo-50/60 text-indigo-900 border-indigo-200/60' : i === 2 ? 'bg-emerald-50/60 text-emerald-900 border-emerald-200/60' : 'bg-zinc-50 text-zinc-600 border-zinc-200/80'}`}>
+                 <div className="flex items-center gap-2 min-w-0 text-zinc-950">
+                    <span className="text-[9px] font-black opacity-40 text-zinc-400">#{i+1}</span>
+                    <span className="text-xs font-bold uppercase truncate">{c.nombre_cliente}</span>
                  </div>
                  <LockedValue isLocked={isFinanceLocked}>
-                    <span className="text-xs font-[1000] tabular-nums text-zinc-950">{formatEUR(c.total_ingresos)}</span>
+                    <span className="text-xs font-bold tabular-nums text-zinc-950">{formatEUR(c.total_ingresos)}</span>
                  </LockedValue>
               </div>
             ))}
@@ -263,46 +281,46 @@ export default function Dashboard(props) {
       </div>
 
       {/* 5. AUDIT: MINIMAL FOOTER */}
-      <div className="bg-white border border-zinc-100 rounded-3xl p-8 shadow-sm text-zinc-950">
-         <div className="flex items-center justify-between mb-8">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-400">Auditoría</h3>
-            <select value={diasHuerfano} onChange={e => setDiasHuerfano(Number(e.target.value))} className="text-[10px] font-black uppercase tracking-widest text-zinc-500 bg-transparent outline-none cursor-pointer">
+      <div className="bg-white border border-zinc-200/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 shadow-sm text-zinc-950">
+         <div className="flex items-center justify-between mb-4">
+            <h3 className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-zinc-400">Auditoría de Retención</h3>
+            <select value={diasHuerfano} onChange={e => setDiasHuerfano(Number(e.target.value))} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 bg-transparent outline-none cursor-pointer">
                <option value={3}>+3 Días</option>
                <option value={7}>+7 Días</option>
             </select>
          </div>
-         <div className="flex flex-col gap-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+         <div className="flex flex-col gap-2.5 max-h-[350px] overflow-y-auto custom-scrollbar pr-1">
             {huerfanos.length === 0 ? (
-               <div className="py-12 text-center text-[10px] font-black text-zinc-300 uppercase tracking-widest italic">Stock saneado.</div>
+               <div className="py-8 text-center text-xs font-bold text-zinc-400 uppercase tracking-wider">Stock saneado.</div>
             ) : huerfanos.slice(0, 50).map(p => {
                const dias = calcularDias(p.fecha_llegada);
                const isCritical = dias >= 7;
                return (
-                 <div key={p.id} className="group bg-white border border-zinc-100 hover:border-zinc-200 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all">
-                   <div className="flex items-center gap-4">
-                     <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center p-1.5 shrink-0">
-                        <ImageFallback src={getCarrierLogo(p.empresa_transporte)} fallbackText={getInitials(p.empresa_transporte)} containerClassName="w-full h-full" imgClassName="max-w-full max-h-full object-contain filter grayscale group-hover:grayscale-0 transition-all" fallbackClassName="text-[8px] font-black text-zinc-300" />
+                 <div key={p.id} className="group bg-white border border-zinc-200/80 hover:border-zinc-300 rounded-xl p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition-colors">
+                   <div className="flex items-center gap-3">
+                     <div className="w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-center p-1 shrink-0">
+                        <ImageFallback src={getCarrierLogo(p.empresa_transporte)} fallbackText={getInitials(p.empresa_transporte)} containerClassName="w-full h-full" imgClassName="max-w-full max-h-full object-contain filter grayscale group-hover:grayscale-0 transition-all" fallbackClassName="text-[8px] font-bold text-zinc-400" />
                      </div>
                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-[1000] text-zinc-950 uppercase tracking-tight truncate pr-4">{p.nombre_cliente}</p>
-                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                           <span className="bg-zinc-900 text-white font-mono font-black text-[10px] px-2 py-0.5 rounded-md">{p.ubicacion_label}</span>
-                           <span className={`text-[10px] font-black flex items-center gap-1 ${isCritical ? 'text-rose-500' : 'text-zinc-500'}`}>
+                        <p className="text-xs sm:text-sm font-bold text-zinc-950 uppercase tracking-tight truncate pr-2">{p.nombre_cliente}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                           <span className="bg-zinc-900 text-white font-mono font-bold text-[10px] px-1.5 py-0.5 rounded">{p.ubicacion_label}</span>
+                           <span className={`text-[10px] font-semibold flex items-center gap-1 ${isCritical ? 'text-rose-600' : 'text-zinc-500'}`}>
                               <IconClock className="w-3 h-3" /> {dias} días
                            </span>
                         </div>
                      </div>
                    </div>
                    
-                   <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0 pt-3 md:pt-0 border-t border-zinc-50 md:border-0">
+                   <div className="flex items-center gap-2 w-full md:w-auto pt-2 md:pt-0 border-t border-zinc-100 md:border-0">
                      {p.telefono ? (
-                        <a href={`https://wa.me/34${p.telefono.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-sm">
+                        <a href={`https://wa.me/34${p.telefono.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-colors min-h-[40px] active:scale-[0.97]">
                            <IconPhone /> Avisar
                         </a>
                      ) : (
-                        <span className="flex-1 md:flex-none text-center text-[9px] font-black text-zinc-300 uppercase tracking-widest italic px-4 py-2.5 bg-zinc-50 rounded-xl">Sin Tel.</span>
+                        <span className="flex-1 md:flex-none text-center text-[10px] font-medium text-zinc-400 italic px-3 py-2 bg-zinc-50 rounded-lg">Sin Tel.</span>
                      )}
-                     <button onClick={() => handleEntregarHuerfano(p.id)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-100 text-zinc-600 hover:bg-zinc-950 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-sm">
+                     <button onClick={() => handleEntregarHuerfano(p.id)} className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3 py-2 bg-zinc-100 text-zinc-800 hover:bg-zinc-950 hover:text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-colors min-h-[40px] active:scale-[0.97]">
                         <IconCheck /> Entregar
                      </button>
                    </div>
@@ -314,14 +332,14 @@ export default function Dashboard(props) {
 
       <AnimatePresence>
         {mostrarModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/90 backdrop-blur-xl" onClick={() => setMostrarModal(false)} />
-            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white rounded-[3rem] shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden border border-zinc-200 text-zinc-950">
-              <div className="p-10 border-b border-zinc-100 flex items-center justify-between text-zinc-950">
-                <div><h3 className="text-2xl font-[1000] tracking-tight">Registro Manual</h3><p className="text-[10px] text-zinc-400 font-black uppercase tracking-widest mt-1">Entrada rápida</p></div>
-                <button onClick={() => setMostrarModal(false)} className="w-12 h-12 flex items-center justify-center bg-zinc-50 text-zinc-400 hover:text-zinc-950 rounded-2xl transition-all"><IconClose /></button>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-950/75" onClick={() => setMostrarModal(false)} />
+            <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.96, opacity: 0 }} className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col overflow-hidden border border-zinc-200 text-zinc-950">
+              <div className="p-4 sm:p-6 border-b border-zinc-100 flex items-center justify-between text-zinc-950">
+                <div><h3 className="text-lg sm:text-xl font-bold tracking-tight">Registro de Paquete</h3><p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mt-0.5">Entrada rápida</p></div>
+                <button onClick={() => setMostrarModal(false)} className="w-9 h-9 flex items-center justify-center bg-zinc-100 text-zinc-500 hover:text-zinc-950 rounded-lg transition-colors"><IconClose /></button>
               </div>
-              <div className="p-10 overflow-y-auto max-h-[75vh] custom-scrollbar text-zinc-950">
+              <div className="p-4 sm:p-6 overflow-y-auto max-h-[80vh] custom-scrollbar text-zinc-950">
                 <AnadirPaquete modoRapido paquetes={paquetes} actualizarPaquetes={actualizarPaquetes} />
               </div>
             </motion.div>

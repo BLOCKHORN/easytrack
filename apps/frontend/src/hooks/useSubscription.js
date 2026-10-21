@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../utils/supabaseClient';
-import { apiPath } from '../utils/fetcher';
+import { apiFetch } from '../utils/fetcher';
 
 export default function useSubscription() {
   const [state, setState] = useState({
@@ -15,14 +14,9 @@ export default function useSubscription() {
 
     async function fetchLimits() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) throw new Error('UNAUTHENTICATED');
-
-        const opts = { headers: { 'Authorization': `Bearer ${session.access_token}` } };
         const ts = Date.now();
-        
-        let res = await fetch(apiPath(`/api/limits/me?ts=${ts}`), opts);
-        if (!res.ok) res = await fetch(apiPath(`/api/tenants/me?ts=${ts}`), opts);
+        let res = await apiFetch(`/api/limits/me?ts=${ts}`);
+        if (!res.ok) res = await apiFetch(`/api/tenants/me?ts=${ts}`);
         if (!res.ok) throw new Error('FAILED_FETCH');
 
         const data = await res.json();
@@ -39,7 +33,6 @@ export default function useSubscription() {
     }
 
     fetchLimits();
-    
     return () => { isMounted = false; };
   }, []);
 

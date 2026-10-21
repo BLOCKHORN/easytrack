@@ -1,17 +1,32 @@
 'use strict';
 
 const { supabaseAdmin } = require('../utils/supabaseClient'); 
+const { isDirectPg, query } = require('../utils/db');
 
 exports.getPublicMetrics = async (req, res) => {
   try {
-    const { count: tenantsCount } = await supabaseAdmin
-      .from('tenants')
-      .select('*', { count: 'exact', head: true });
+    let tenantsCount = 0;
+    let deliveredCount = 0;
 
-    const { count: deliveredCount } = await supabaseAdmin
-      .from('packages')
-      .select('*', { count: 'exact', head: true })
-      .eq('entregado', true);
+    if (isDirectPg()) {
+      const [tRes, pRes] = await Promise.all([
+        query('SELECT count(*)::int as cnt FROM public.tenants'),
+        query('SELECT count(*)::int as cnt FROM public.packages WHERE entregado = true')
+      ]);
+      tenantsCount = tRes.rows[0]?.cnt || 0;
+      deliveredCount = pRes.rows[0]?.cnt || 0;
+    } else {
+      const { count: tc } = await supabaseAdmin
+        .from('tenants')
+        .select('*', { count: 'exact', head: true });
+      tenantsCount = tc || 0;
+
+      const { count: dc } = await supabaseAdmin
+        .from('packages')
+        .select('*', { count: 'exact', head: true })
+        .eq('entregado', true);
+      deliveredCount = dc || 0;
+    }
 
     const now = new Date();
     const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Madrid', hour: 'numeric', minute: 'numeric', hour12: false });

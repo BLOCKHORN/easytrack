@@ -1,73 +1,27 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../utils/supabaseClient';
+import { createContext, useContext } from 'react';
+import { useAuth } from './AuthContext';
 
 const TenantContext = createContext(null);
 
 export function TenantProvider({ children }) {
-  const [tenant, setTenant] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchTenant = async (session) => {
-    if (!session) {
-      setTenant(null);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
-      const PROD_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
-      const API_BASE = isLocal ? "" : PROD_URL;
-
-      const r = await fetch(`${API_BASE}/api/tenants/me`, {
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      });
-      
-      // Expulsión elegante: Limpiamos y redirigimos a login con parámetro
-      if (r.status === 401) {
-        try { await supabase.auth.signOut(); } catch(e) {}
-        localStorage.clear();
-        sessionStorage.clear();
-        setTenant(null);
-        window.location.href = '/login?reason=expired';
-        return;
-      }
-
-      if (!r.ok) {
-        setTenant(null);
-      } else {
-        const data = await r.json();
-        setTenant(data.tenant);
-      }
-    } catch (err) {
-      setTenant(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    let unsub;
-    
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      fetchTenant(session);
-    });
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_evt, session) => {
-      fetchTenant(session);
-    });
-
-    unsub = authListener?.subscription?.unsubscribe;
-    return () => unsub && unsub();
-  }, []);
+  const { tenant, isInitializing, setTenant } = useAuth();
 
   return (
-    <TenantContext.Provider value={{ tenant, loading }}>
+    <TenantContext.Provider value={{ tenant, loading: isInitializing, setTenant }}>
       {children}
     </TenantContext.Provider>
   );
 }
 
 export function useTenant() {
-  return useContext(TenantContext);
+  const ctx = useContext(TenantContext);
+  if (!ctx) {
+    try {
+      const auth = useAuth();
+      return { tenant: auth.tenant, loading: auth.isInitializing, setTenant: auth.setTenant };
+    } catch {
+      return { tenant: null, loading: false };
+    }
+  }
+  return ctx;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "../../utils/supabaseClient";
+import { apiFetch } from "../../utils/fetcher";
 import {
   ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip, AreaChart, Area,
 } from "recharts";
@@ -28,7 +28,7 @@ export default function AreaPersonal() {
   const navigate = useNavigate();
   const apiBase = useMemo(() => buildAreaApiBase(location.pathname), [location.pathname]);
   
-  const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+  const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
   const PROD_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   const API_ROOT = isLocal ? '' : PROD_URL;
   const configApiBase = tenantSlug ? `${API_ROOT}/${tenantSlug}/api/dashboard` : `${API_ROOT}/api/dashboard`;
@@ -44,8 +44,8 @@ export default function AreaPersonal() {
   const [yearFilter, setYearFilter] = useState("all");
   const [pinEnabled, setPinEnabled] = useState(false);
 
-  const fetchJson = async (url, headers) => {
-    const res = await fetch(url, { headers });
+  const fetchJson = async (url) => {
+    const res = await apiFetch(url, { headers: { Accept: "application/json" } });
     const ct = res.headers.get("content-type") || "";
     const data = ct.includes("application/json") ? await res.json() : await res.text();
     if (!res.ok) throw new Error((data && data.error) || `Error ${res.status}`);
@@ -55,17 +55,14 @@ export default function AreaPersonal() {
   const loadAllData = async () => {
     try {
       setLoading(true); setError(null);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("No hay sesión activa.");
-      const headers = { Authorization: `Bearer ${session.access_token}`, Accept: "application/json" };
 
       const [d1, d2, d3, d5, g, neg, pinS] = await Promise.all([
-        fetchJson(`${apiBase}/resumen`, headers).catch(e => ({ __error: e })),
-        fetchJson(`${apiBase}/mensual`, headers).catch(e => ({ __error: e })),
-        fetchJson(`${apiBase}/por-empresa`, headers).catch(e => ({ __error: e })),
-        fetchJson(`${apiBase}/diario`, headers).catch(e => ({ __error: e })),
-        getFinanceSettings(apiBase, session.access_token).catch(() => ({ settings: null })),
-        fetchJson(`${configApiBase}/negocio`, headers).catch(() => null),
+        fetchJson(`${apiBase}/resumen`).catch(e => ({ __error: e })),
+        fetchJson(`${apiBase}/mensual`).catch(e => ({ __error: e })),
+        fetchJson(`${apiBase}/por-empresa`).catch(e => ({ __error: e })),
+        fetchJson(`${apiBase}/diario`).catch(e => ({ __error: e })),
+        getFinanceSettings(apiBase, null).catch(() => ({ settings: null })),
+        fetchJson(`${configApiBase}/negocio`).catch(() => null),
         getPinStatus(tenantSlug).catch(() => ({ enabled: false }))
       ]);
       
@@ -78,7 +75,7 @@ export default function AreaPersonal() {
       setPorEmpresa(Array.isArray(d3?.porEmpresa) ? d3.porEmpresa : []);
       setPinEnabled(!!pinS.enabled);
 
-      const { snapshots: list = [] } = await getSnapshots(apiBase, session.access_token, {});
+      const { snapshots: list = [] } = await getSnapshots(apiBase, null, {});
       setSnapshots(list);
     } catch (e) { setError(e.message || "Error cargando datos"); } finally { setLoading(false); }
   };
@@ -126,33 +123,32 @@ export default function AreaPersonal() {
 
   const createSnapshotNow = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      await createSnapshot(apiBase, session.access_token);
+      await createSnapshot(apiBase, null);
       loadAllData();
     } catch (e) { alert(e.message); }
   };
 
   const KPIStrip = ({ label, val, sub, color = "text-zinc-950" }) => (
-    <div className="flex-1 min-w-[200px] p-6 bg-white border border-zinc-100 rounded-3xl shadow-sm flex flex-col justify-center transition-all hover:border-zinc-200">
-       <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">{label}</p>
-       <div className={`text-4xl font-[1000] tracking-tighter ${color} leading-none mb-1 tabular-nums`}>{val}</div>
-       {sub && <div className="mt-2">{sub}</div>}
+    <div className="p-3.5 sm:p-6 bg-white border border-zinc-200/80 rounded-xl sm:rounded-2xl shadow-sm flex flex-col justify-center transition-colors">
+       <p className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 sm:mb-2">{label}</p>
+       <div className={`text-2xl sm:text-4xl font-extrabold tracking-tight ${color} leading-none mb-1 tabular-nums`}>{val}</div>
+       {sub && <div className="mt-1">{sub}</div>}
     </div>
   );
 
   return (
     <PinGate tenantSlug={tenantSlug}>
-      <div className="pb-24 max-w-7xl mx-auto px-4 sm:px-8 font-sans text-zinc-950">
+      <div className="pb-20 max-w-7xl mx-auto px-2 sm:px-8 font-sans text-zinc-950">
         
         {/* HEADER & SECURITY BANNER */}
-        <header className="py-10 border-b border-zinc-100 mb-10 flex flex-col md:flex-row md:items-end justify-between gap-8">
-          <div className="space-y-4">
-             <h1 className="text-5xl md:text-7xl font-[1000] tracking-tighter leading-[0.85] text-zinc-950">
-               Balance <br/> <span className="text-zinc-300 italic font-[900]">Financiero</span>
+        <header className="py-3 sm:py-8 border-b border-zinc-100 mb-4 sm:mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 sm:gap-6">
+          <div className="space-y-3">
+             <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-zinc-950 leading-tight">
+               Balance <span className="text-zinc-400 font-medium italic">Financiero</span>
              </h1>
-             <div className="flex bg-zinc-100 p-1.5 rounded-2xl border border-zinc-200/60 w-fit shadow-inner">
-                <button onClick={() => setTab("actual")} className={`px-8 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${tab === 'actual' ? 'bg-white text-zinc-950 shadow-md' : 'text-zinc-500 hover:text-zinc-700'}`}>Actual</button>
-                <button onClick={() => setTab("historico")} className={`px-8 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${tab === 'historico' ? 'bg-white text-zinc-950 shadow-md' : 'text-zinc-500 hover:text-zinc-700'}`}>Auditorías</button>
+             <div className="flex bg-zinc-100 p-1 rounded-xl border border-zinc-200/60 w-fit">
+                <button onClick={() => setTab("actual")} className={`px-4 sm:px-6 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${tab === 'actual' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'}`}>Actual</button>
+                <button onClick={() => setTab("historico")} className={`px-4 sm:px-6 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${tab === 'historico' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'}`}>Auditorías</button>
              </div>
           </div>
 
@@ -160,95 +156,94 @@ export default function AreaPersonal() {
             <motion.div 
                onClick={() => navigate(tenantSlug ? `/${tenantSlug}/dashboard/configuracion` : '/dashboard/configuracion')} 
                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} 
-               className="p-6 bg-amber-50 rounded-[2rem] border border-amber-100 cursor-pointer hover:bg-amber-100 transition-all max-w-xs shadow-sm"
+               className="p-3 sm:p-4 bg-amber-50/80 rounded-xl border border-amber-200/70 cursor-pointer hover:bg-amber-100/70 transition-colors max-w-sm shadow-sm"
             >
-               <div className="flex items-center gap-3 text-amber-600 mb-2">
-                  <IconShield /><span className="text-[10px] font-black uppercase tracking-widest">Seguridad Recomendada</span>
+               <div className="flex items-center gap-2 text-amber-700 mb-1">
+                  <IconShield /><span className="text-[10px] font-bold uppercase tracking-wider">Seguridad Recomendada</span>
                </div>
-               <p className="text-xs font-bold text-amber-900 leading-tight">Configura un PIN para proteger tu caja frente a empleados y clientes.</p>
+               <p className="text-xs font-semibold text-amber-900 leading-tight">Configura un PIN para proteger la caja frente a terceros.</p>
             </motion.div>
           )}
         </header>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-32 space-y-6"><div className="w-12 h-12 border-4 border-zinc-100 border-t-brand-500 rounded-full animate-spin" /><p className="text-xs font-black text-zinc-400 uppercase tracking-widest animate-pulse">Sincronizando caja...</p></div>
+          <div className="flex flex-col items-center justify-center py-20 space-y-4"><div className="w-8 h-8 border-3 border-zinc-200 border-t-brand-600 rounded-full animate-spin" /><p className="text-xs font-bold text-zinc-400 uppercase tracking-wider animate-pulse">Sincronizando caja...</p></div>
         ) : (
           <AnimatePresence mode="wait">
             {tab === "actual" ? (
-              <motion.div key="actual" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-8">
+              <motion.div key="actual" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4 sm:space-y-6">
                 
                 {/* 3 TACTICAL ROWS OF FINANCE */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                   <KPIStrip label="Acumulado este Mes" val={formatEUR(d_ingresosMesActual)} sub={<div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex justify-between"><span>Día {today.getDate()} de {daysInMonth}</span><span>{daysLeft} d. restantes</span></div>} />
-                   <KPIStrip label="Proyección Cierre" val={formatEUR(d_proyeccionMes)} color="text-indigo-600" sub={<p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest italic">Basado en volumen actual</p>} />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
+                   <KPIStrip label="Acumulado este Mes" val={formatEUR(d_ingresosMesActual)} sub={<div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider flex justify-between"><span>Día {today.getDate()} de {daysInMonth}</span><span>{daysLeft} d. restantes</span></div>} />
+                   <KPIStrip label="Proyección Cierre" val={formatEUR(d_proyeccionMes)} color="text-indigo-600" sub={<p className="text-[9px] font-medium text-indigo-500 uppercase tracking-wider">Basado en volumen actual</p>} />
                    <KPIStrip label="Caja de Hoy" val={formatEUR(d_ingresoHoy)} color="text-emerald-600" sub={<Delta value={d_crecimientoHoy} label="vs ayer" />} />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-8 flex items-center justify-between">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                   <div className="bg-zinc-50 border border-zinc-200/80 rounded-xl sm:rounded-2xl p-4 sm:p-6 flex items-center justify-between">
                       <div>
-                         <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Capital en Estantes</p>
-                         <p className="text-3xl font-[1000] tabular-nums text-zinc-950">{formatEUR(resumen?.capital_retenido)}</p>
+                         <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Capital en Estantes</p>
+                         <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-zinc-950">{formatEUR(resumen?.capital_retenido)}</p>
                       </div>
                       <div className="text-right">
-                         <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Stock Vivo</p>
-                         <p className="text-xl font-[1000] text-zinc-400">{resumen?.almacenActual} paq.</p>
+                         <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Stock Vivo</p>
+                         <p className="text-lg sm:text-xl font-bold tabular-nums text-zinc-400">{resumen?.almacenActual} paq.</p>
                       </div>
                    </div>
-                   <div className="bg-white border border-zinc-100 rounded-3xl p-8 flex items-center justify-between shadow-sm">
+                   <div className="bg-white border border-zinc-200/80 rounded-xl sm:rounded-2xl p-4 sm:p-6 flex items-center justify-between shadow-sm">
                       <div>
-                         <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Ticket Medio / Pack</p>
-                         <p className="text-3xl font-[1000] tabular-nums text-zinc-950">{formatEUR(ticketMedioTotal)}</p>
+                         <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Ticket Medio / Pack</p>
+                         <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-zinc-950">{formatEUR(ticketMedioTotal)}</p>
                       </div>
                       <Delta value={powerIndex} label="vs red global" />
                    </div>
                 </div>
 
                 {/* VISUAL INTELLIGENCE */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-                   <div className="lg:col-span-8 bg-white border border-zinc-100 rounded-[2.5rem] p-10 shadow-sm space-y-10">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-6 items-stretch">
+                   <div className="lg:col-span-8 bg-white border border-zinc-200/80 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
                       <div className="flex items-center justify-between">
-                         <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-400">Tendencia Mensual</h3>
-                         <p className="text-2xl font-[1000] tabular-nums text-zinc-950">{formatEUR(Number(resumen?.total_ingresos || 0))}<span className="text-[10px] font-black text-zinc-300 uppercase ml-2 tracking-widest italic leading-none">Ganancia Histórica</span></p>
+                         <h3 className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Tendencia Mensual</h3>
+                         <p className="text-lg sm:text-2xl font-extrabold tabular-nums text-zinc-950">{formatEUR(Number(resumen?.total_ingresos || 0))}<span className="text-[9px] font-bold text-zinc-400 uppercase ml-2 tracking-wider">Histórico</span></p>
                       </div>
-                      <div className="h-[300px] w-full">
+                      <div className="h-[200px] sm:h-[280px] w-full">
                         <ResponsiveContainer>
                           <AreaChart data={mensualSrv}>
-                            <defs><linearGradient id="cI" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#14b8a6" stopOpacity={0.1}/><stop offset="95%" stopColor="#14b8a6" stopOpacity={0}/></linearGradient></defs>
+                            <defs><linearGradient id="cI" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#7C3AED" stopOpacity={0.15}/><stop offset="95%" stopColor="#7C3AED" stopOpacity={0}/></linearGradient></defs>
                             <CartesianGrid strokeDasharray="8 8" vertical={false} stroke="#f4f4f7" />
-                            <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 900 }} axisLine={false} tickLine={false} dy={20} />
+                            <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#71717a', fontWeight: 700 }} axisLine={false} tickLine={false} dy={10} />
                             <YAxis hide />
-                            <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.1)' }} />
-                            <Area type="monotone" dataKey="total_ingresos" stroke="#14b8a6" strokeWidth={5} fill="url(#cI)" animationDuration={1000} />
+                            <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e4e4e7', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', padding: '8px' }} />
+                            <Area type="monotone" dataKey="total_ingresos" stroke="#7C3AED" strokeWidth={3} fill="url(#cI)" animationDuration={600} />
                           </AreaChart>
                         </ResponsiveContainer>
                       </div>
                    </div>
-                   <div className="lg:col-span-4 bg-zinc-950 rounded-[2.5rem] p-10 text-white flex flex-col justify-center space-y-10 shadow-2xl relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-64 h-64 bg-brand-500/10 blur-[80px] rounded-full" />
-                      <div className="space-y-1 relative z-10">
-                         <p className="text-zinc-600 font-[1000] text-[10px] uppercase tracking-widest">Optimización</p>
-                         <h4 className="text-3xl font-[1000] tracking-tight leading-tight">Renta por Estante</h4>
+                   <div className="lg:col-span-4 bg-zinc-950 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white flex flex-col justify-center space-y-3 sm:space-y-4 shadow-md relative overflow-hidden">
+                      <div className="space-y-0.5 relative z-10">
+                         <p className="text-zinc-500 font-bold text-[10px] uppercase tracking-wider">Optimización</p>
+                         <h4 className="text-xl sm:text-2xl font-extrabold tracking-tight leading-tight">Renta por Estante</h4>
                       </div>
-                      <div className="space-y-6 relative z-10">
-                         <p className="text-4xl font-[1000] tabular-nums text-brand-400">{(d_ingresosMesActual / 25).toFixed(2)}€</p>
-                         <p className="text-xs font-bold text-zinc-400 leading-relaxed italic">Beneficio medio por balda física este mes. Rendimiento <span className="text-white">superior</span> al periodo anterior.</p>
+                      <div className="space-y-3 relative z-10">
+                         <p className="text-3xl sm:text-4xl font-extrabold tabular-nums text-brand-400">{(d_ingresosMesActual / 25).toFixed(2)}€</p>
+                         <p className="text-xs font-normal text-zinc-400 leading-relaxed">Beneficio medio por balda física este mes. Rendimiento superior al periodo anterior.</p>
                       </div>
                    </div>
                 </div>
 
                 {/* CARRIERS STRIP: AT COLOR */}
-                <div className="bg-white border border-zinc-100 rounded-[2.5rem] p-8 shadow-sm">
-                   <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-400 mb-8 text-center">Beneficio por Agencia</h3>
-                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                <div className="bg-white border border-zinc-200/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 shadow-sm">
+                   <h3 className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-4 text-center">Beneficio por Agencia</h3>
+                   <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-4">
                       {empresas.map((e, idx) => (
-                        <div key={idx} className="flex flex-col items-center text-center space-y-3 group cursor-help transition-all">
-                           <div className="w-12 h-12 bg-zinc-50 rounded-2xl flex items-center justify-center p-3 border border-zinc-100 group-hover:scale-110 group-hover:bg-white transition-all">
-                              <ImageFallback src={getCarrierLogo(e.empresa_transporte)} fallbackText={getInitials(e.empresa_transporte)} containerClassName="w-full h-full" imgClassName="max-w-full max-h-full object-contain transition-all" fallbackClassName="text-[10px] font-black text-zinc-300" />
+                        <div key={idx} className="flex flex-col items-center text-center space-y-2 group p-2 rounded-lg hover:bg-zinc-50 transition-colors">
+                           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-zinc-50 rounded-xl flex items-center justify-center p-2 border border-zinc-200/80 group-hover:bg-white transition-colors">
+                              <ImageFallback src={getCarrierLogo(e.empresa_transporte)} fallbackText={getInitials(e.empresa_transporte)} containerClassName="w-full h-full" imgClassName="max-w-full max-h-full object-contain transition-all" fallbackClassName="text-[9px] font-bold text-zinc-400" />
                            </div>
-                           <div className="space-y-1">
-                              <p className="text-xs font-[1000] tabular-nums text-zinc-950 leading-none">{formatEUR(e.total)}</p>
-                              <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest leading-none">{e.pct.toFixed(0)}% cuota</p>
+                           <div className="space-y-0.5">
+                              <p className="text-xs font-bold tabular-nums text-zinc-950 leading-none">{formatEUR(e.total)}</p>
+                              <p className="text-[8px] font-medium text-zinc-400 uppercase tracking-tight leading-none">{e.pct.toFixed(0)}% cuota</p>
                            </div>
                         </div>
                       ))}
@@ -257,25 +252,24 @@ export default function AreaPersonal() {
 
               </motion.div>
             ) : (
-              <motion.div key="historico" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
-                <div className="bg-zinc-950 p-12 rounded-[3rem] shadow-2xl text-white flex flex-col md:flex-row items-center justify-between gap-12 relative overflow-hidden">
-                   <div className="absolute top-0 right-0 w-96 h-96 bg-brand-500/10 blur-[120px] rounded-full pointer-events-none" />
-                   <div className="space-y-3 relative z-10">
-                      <h3 className="text-4xl font-[1000] tracking-tight text-white leading-none">Auditorías <br/> de Cierre</h3>
-                      <p className="text-zinc-500 font-bold text-lg">Historial sellado de ingresos y operaciones.</p>
+              <motion.div key="historico" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4 sm:space-y-6">
+                <div className="bg-zinc-950 p-6 sm:p-10 rounded-xl sm:rounded-2xl shadow-md text-white flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                   <div className="space-y-2 relative z-10 text-center md:text-left">
+                      <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white leading-tight">Auditorías de Cierre</h3>
+                      <p className="text-zinc-400 text-sm font-normal">Historial sellado de ingresos y operaciones.</p>
                    </div>
-                   <div className="flex gap-4 relative z-10">
-                      <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} className="pl-6 pr-12 py-4 bg-zinc-900 border border-zinc-800 rounded-2xl text-sm font-black text-white outline-none appearance-none focus:border-brand-500 transition-colors shadow-xl">
+                   <div className="flex flex-col sm:flex-row gap-3 relative z-10 w-full sm:w-auto">
+                      <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} className="px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold text-white outline-none focus:border-brand-500 transition-colors">
                         {yearsAvailable.map(y => <option key={y} value={y}>{y === "all" ? "Todos los años" : y}</option>)}
                       </select>
-                      <button onClick={createSnapshotNow} className="px-10 py-4 bg-brand-500 hover:bg-brand-400 text-white font-[1000] uppercase tracking-widest text-[10px] rounded-2xl transition-all shadow-xl active:scale-95">Realizar Cierre</button>
+                      <button onClick={createSnapshotNow} className="px-6 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-bold uppercase tracking-wider text-xs rounded-xl transition-transform active:scale-[0.97]">Realizar Cierre</button>
                    </div>
                 </div>
                 {!canView && (
-                   <div className="py-32 text-center bg-white rounded-[4rem] border-2 border-zinc-100 border-dashed space-y-6 shadow-inner">
-                      <div className="w-20 h-20 bg-zinc-50 rounded-3xl flex items-center justify-center text-zinc-300 mx-auto mb-6 shadow-inner"><IconHistory /></div>
-                      <h3 className="text-2xl font-[1000] text-zinc-950 tracking-tight uppercase">Historial Protegido</h3>
-                      <p className="text-zinc-500 font-bold max-w-sm mx-auto leading-relaxed text-zinc-400 italic">La generación de informes históricos es una función del <span className="text-brand-500 font-black">Plan PRO</span>.</p>
+                   <div className="py-16 text-center bg-white rounded-2xl border border-zinc-200 border-dashed space-y-4">
+                      <div className="w-12 h-12 bg-zinc-50 rounded-xl flex items-center justify-center text-zinc-400 mx-auto mb-2"><IconHistory /></div>
+                      <h3 className="text-lg font-bold text-zinc-950 tracking-tight">Historial Protegido</h3>
+                      <p className="text-zinc-500 text-xs max-w-sm mx-auto leading-relaxed">La generación de informes históricos es una función del <span className="text-brand-600 font-bold">Plan PRO</span>.</p>
                    </div>
                 )}
               </motion.div>

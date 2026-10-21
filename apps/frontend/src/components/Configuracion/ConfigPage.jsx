@@ -2,7 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../utils/supabaseClient';
+import { apiFetch } from '../../utils/fetcher';
+import { useAuth } from '../../context/AuthContext';
 import { getTenantData } from '../../utils/tenant';
 import Toast from '../../components/UI/Toast';
 
@@ -17,7 +18,7 @@ import ImportWizard from './ImportWizard';
 import { guardarCarriers } from '../../services/configuracionService';
 import { cargarUbicaciones, guardarUbicaciones } from '../../services/ubicacionesService';
 
-const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
 const PROD_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 const API_BASE = isLocal ? '' : PROD_URL;
 
@@ -34,9 +35,10 @@ const sanitizeUbicaciones = (num_rows = []) => num_rows.map((r, i) => ({
 
 export default function ConfigPage() {
   const navigate = useNavigate();
-  const [usuario, setUsuario] = useState(null);
-  const [tenant, setTenant] = useState(null);
-  const [nombre, setNombre] = useState('');
+  const { user: authUser, tenant: authTenant } = useAuth();
+  const [usuario, setUsuario] = useState(authUser);
+  const [tenant, setTenant] = useState(authTenant);
+  const [nombre, setNombre] = useState(authTenant?.nombre_empresa || '');
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
   
@@ -68,8 +70,7 @@ export default function ConfigPage() {
 
   const loadUbicacionesForTenant = async (tId) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const resp = await cargarUbicaciones(session?.access_token, tId);
+      const resp = await cargarUbicaciones(null, tId);
       const arr = Array.isArray(resp?.ubicaciones) ? resp.ubicaciones : [];
       
       // Default to 2x2 grid with 1 active slot if empty
@@ -92,31 +93,30 @@ export default function ConfigPage() {
   };
 
   const loadUsageData = async (tId) => {
-    const { data } = await supabase.from('packages').select('ubicacion_label').eq('tenant_id', tId).eq('entregado', false).not('ubicacion_label', 'is', null);
-    const map = {};
-    (data || []).forEach(r => { const c = String(r.ubicacion_label).toUpperCase(); map[c] = (map[c] || 0) + 1; });
-    setUsageByCodigo(map);
+    try {
+      const res = await apiFetch(`${API_BASE}/api/paquetes/ocupadas?tenant_id=${tId}`);
+      const json = await res.json();
+      const items = json?.data || [];
+      const map = {};
+      items.forEach(r => { const c = String(r.ubicacion_label).toUpperCase(); map[c] = (map[c] || 0) + 1; });
+      setUsageByCodigo(map);
+    } catch {
+      setUsageByCodigo({});
+    }
   };
 
-useEffect(() => {
+  useEffect(() => {
     (async () => {
       try {
-        const { data: { user }, error: userErr } = await supabase.auth.getUser();
-        if (userErr || !user) return setCargando(false);
-        setUsuario(user);
+        if (!authUser) return setCargando(false);
+        setUsuario(authUser);
 
-        const { tenant: ensuredTenant } = await getTenantData();
+        const ensuredTenant = authTenant || (await getTenantData()).tenant;
         setTenant(ensuredTenant);
         setNombre(ensuredTenant.nombre_empresa || '');
 
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
+        const respCarriers = await apiFetch(`${API_BASE}/api/ubicaciones/carriers`);
 
-        const respCarriers = await fetch(`${API_BASE}/api/ubicaciones/carriers`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        // SOLO SE LEE UNA VEZ EL JSON
         if (respCarriers.ok) {
           const jsonCarriers = await respCarriers.json();
           setEmpresas((jsonCarriers.empresas || []).map(e => ({ 
@@ -129,7 +129,6 @@ useEffect(() => {
           setEmpresasDisponibles([]);
         }
 
-        // Ahora sí llegará hasta aquí y cargará el lienzo de cajas
         await Promise.all([
           loadUbicacionesForTenant(ensuredTenant.id), 
           loadUsageData(ensuredTenant.id)
@@ -140,7 +139,7 @@ useEffect(() => {
         setCargando(false); 
       }
     })();
-  }, []);
+  }, [authUser, authTenant]);
 
   useEffect(() => {
     if (cargando) return;
@@ -165,13 +164,10 @@ useEffect(() => {
 
     setGuardando(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
       if (dirty) {
-        await fetch(`${API_BASE}/api/tenants/me`, {
+        await apiFetch(`${API_BASE}/api/tenants/me`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nombre_empresa: nombre.trim() })
         });
 
@@ -181,7 +177,7 @@ useEffect(() => {
           meta: { cols: ubiMeta.cols, num_rows: ubiMeta.num_rows },
           deletions: pendingDeletionsRef.current,
           forceDeletePackages: forceDeleteRef.current
-        }, token);
+        }, null);
 
         const carriersToSave = empresas.filter(e => String(e.nombre).trim() !== '').map(e => ({
           nombre: String(e.nombre).trim(),
@@ -190,7 +186,7 @@ useEffect(() => {
           activo: e.activo ?? true
         }));
         
-        await guardarCarriers(carriersToSave, token, { sync: true });
+        await guardarCarriers(carriersToSave, null, { sync: true });
       }
 
       if (accountDraft) {

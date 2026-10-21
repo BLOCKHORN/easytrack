@@ -1,7 +1,8 @@
 // src/services/ubicacionesService.js
 import { debugLog, isDebug } from '../utils/logger';
+import { apiFetch } from '../utils/fetcher';
 
-const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
 const PROD_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 const API = isLocal ? '' : PROD_URL;
 
@@ -55,17 +56,14 @@ function normalizePayloadAndToken(a, b, c, d) {
 }
 
 export async function cargarUbicaciones(token, tenantId) {
-  const baseUrl = API || window.location.origin;
-  const url = new URL(`${API}/api/ubicaciones`, baseUrl);
-  if (tenantId) url.searchParams.set('tenant_id', tenantId);
-  if (isDebug) url.searchParams.set('debug', '1');
+  const qp = new URLSearchParams();
+  if (tenantId) qp.set('tenant_id', tenantId);
+  if (isDebug) qp.set('debug', '1');
 
-  // Use the pathname + search for relative URLs so Vite proxy works correctly
-  const finalUrl = API ? url.toString() : `${url.pathname}${url.search}`;
-  
+  const finalUrl = `/api/ubicaciones?${qp.toString()}`;
   debugLog('[ubicacionesService.cargarUbicaciones] GET', finalUrl);
 
-  const r = await fetch(finalUrl, {
+  const r = await apiFetch(finalUrl, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 
@@ -106,16 +104,13 @@ export async function guardarUbicaciones(a, b, c, d) {
     forceDeletePackages: !!payload?.forceDeletePackages,
   };
 
-  const url = `${API}/api/ubicaciones${isDebug ? '?debug=1' : ''}`;
-  debugLog('[ubicacionesService.guardarUbicaciones] POST', url, body);
+  const finalUrl = `/api/ubicaciones${isDebug ? '?debug=1' : ''}`;
+  debugLog('[ubicacionesService.guardarUbicaciones] POST', finalUrl, body);
 
-  const r = await fetch(url, {
+  const r = await apiFetch(finalUrl, {
     method: 'POST',
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body,
   });
 
   const text = await r.text();
@@ -135,16 +130,13 @@ export async function guardarUbicaciones(a, b, c, d) {
 }
 
 export async function patchUbicacionesMeta(token, tenantId, meta) {
-  const url = `${API}/api/ubicaciones/meta${isDebug ? '?debug=1' : ''}`;
-  debugLog('[ubicacionesService.patchMeta] PATCH', url, { tenant_id: tenantId, meta });
+  const finalUrl = `/api/ubicaciones/meta${isDebug ? '?debug=1' : ''}`;
+  debugLog('[ubicacionesService.patchMeta] PATCH', finalUrl, { tenant_id: tenantId, meta });
 
-  const r = await fetch(url, {
+  const r = await apiFetch(finalUrl, {
     method: 'PATCH',
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ tenant_id: tenantId, meta }),
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: { tenant_id: tenantId, meta },
   });
 
   const text = await r.text();

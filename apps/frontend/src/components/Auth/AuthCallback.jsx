@@ -1,29 +1,35 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '../../utils/supabaseClient';
+import { useAuth } from '../../context/AuthContext';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { refreshSession } = useAuth();
 
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN') {
+    let active = true;
+
+    const syncSession = async () => {
+      try {
+        await refreshSession();
+      } catch {}
+
+      if (active) {
         const next = searchParams.get('next') || '/dashboard';
         navigate(next, { replace: true });
       }
-    });
-
-    return () => {
-      authListener?.subscription?.unsubscribe();
     };
-  }, [navigate, searchParams]);
+
+    syncSession();
+    return () => { active = false; };
+  }, [navigate, searchParams, refreshSession]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+    <div className="min-h-screen flex items-center justify-center bg-[#09090b]">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-zinc-400 font-bold animate-pulse uppercase tracking-[0.2em] text-xs">Sincronizando sesión...</p>
+        <div className="w-8 h-8 border-2 border-zinc-700 border-t-zinc-200 rounded-full animate-spin" />
+        <p className="text-zinc-400 font-medium tracking-tight text-xs">Sincronizando sesión...</p>
       </div>
     </div>
   );

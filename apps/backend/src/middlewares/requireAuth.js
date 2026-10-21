@@ -1,6 +1,7 @@
 'use strict';
 
 const { supabase, supabaseAuth } = require('../utils/supabaseClient');
+const { isDirectPg, query } = require('../utils/db');
 
 const attach = (req, { user, tenant }) => {
   if (user) req.user = user;
@@ -10,32 +11,16 @@ const attach = (req, { user, tenant }) => {
   }
 };
 
-const crypto = require('crypto');
+const { verifyToken } = require('../utils/token');
 
 function verifySupabaseTokenLocally(token) {
-  const secret = process.env.SUPABASE_JWT_SECRET;
-  if (!secret) return null;
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [headerB64, payloadB64, sigB64] = parts;
-    const expectedSig = crypto
-      .createHmac('sha256', secret)
-      .update(headerB64 + '.' + payloadB64)
-      .digest('base64url');
-    if (sigB64 !== expectedSig) return null;
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) return null;
-    if (!payload.sub) return null;
-    return {
-      id: payload.sub,
-      email: String(payload.email || '').trim().toLowerCase(),
-      user_metadata: payload.user_metadata || {}
-    };
-  } catch {
-    return null;
-  }
+  const payload = verifyToken(token);
+  if (!payload || !payload.sub) return null;
+  return {
+    id: payload.sub,
+    email: String(payload.email || '').trim().toLowerCase(),
+    user_metadata: payload.user_metadata || {}
+  };
 }
 
 async function resolveUser(req) {
@@ -43,18 +28,23 @@ async function resolveUser(req) {
     return { id: 'dev-bypass', email: 'dev@example.com' };
   }
   
-  const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
+  const token = req.cookies?.et_access_token || 
+    (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
   if (!token) return null;
 
-  // 1. Verificación instantánea criptográfica local (0ms, inmune a caídas de red o bloqueos de Render)
+  // 1. Verificación instantánea criptográfica local (0ms, nativo HMAC-SHA256)
   const localUser = verifySupabaseTokenLocally(token);
   if (localUser) return localUser;
 
-  // 2. Fallback supabaseAuth
+  // 2. Fallback supabaseAuth si aún hubiese tokens legados
   try {
     const { data, error } = await supabaseAuth.auth.getUser(token);
     if (!error && data?.user) {
-      return { id: data.user.id, email: String(data.user.email || '').trim().toLowerCase() };
+      return { 
+        id: data.user.id, 
+        email: String(data.user.email || '').trim().toLowerCase(),
+        user_metadata: data.user.user_metadata || {}
+      };
     }
   } catch {}
 
@@ -64,7 +54,51 @@ async function resolveUser(req) {
 async function resolveTenantForUser(userId, slug, email) {
   if (!userId) return null;
 
-  let query = supabase
+  if (isDirectPg()) {
+    try {
+      let sql = `
+        SELECT t.id, t.slug, t.email, t.nombre_empresa
+        FROM public.memberships m
+        JOIN public.tenants t ON t.id = m.tenant_id
+        WHERE m.user_id = $1
+      `;
+      const params = [userId];
+      if (slug) {
+        sql += ' AND t.slug = $2';
+        params.push(slug);
+      } else if (email) {
+        sql += ' AND lower(t.email) = lower($2)';
+        params.push(email);
+      }
+      sql += ' LIMIT 1';
+      const { rows } = await query(sql, params);
+      if (rows[0]) return rows[0];
+
+      if (email) {
+        let orphanSql = 'SELECT id, slug, email, nombre_empresa FROM public.tenants WHERE lower(email) = lower($1)';
+        const orphanParams = [email];
+        if (slug) {
+          orphanSql += ' AND slug = $2';
+          orphanParams.push(slug);
+        }
+        orphanSql += ' LIMIT 1';
+        const orphanRes = await query(orphanSql, orphanParams);
+        if (orphanRes.rows[0]) {
+          const orphan = orphanRes.rows[0];
+          await query(
+            'INSERT INTO public.memberships (user_id, tenant_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+            [userId, orphan.id, 'owner']
+          );
+          return orphan;
+        }
+      }
+      return null;
+    } catch (e) {
+      console.error('[requireAuth DirectPg error]', e);
+    }
+  }
+
+  let queryBuilder = supabase
     .from('memberships')
     .select(`
       tenant_id,
@@ -73,12 +107,12 @@ async function resolveTenantForUser(userId, slug, email) {
     .eq('user_id', userId);
 
   if (slug) {
-    query = query.eq('tenants.slug', slug);
+    queryBuilder = queryBuilder.eq('tenants.slug', slug);
   } else if (email) {
-    query = query.ilike('tenants.email', email);
+    queryBuilder = queryBuilder.ilike('tenants.email', email);
   }
 
-  const { data } = await query.limit(1).maybeSingle();
+  const { data } = await queryBuilder.limit(1).maybeSingle();
   if (data?.tenants) return data.tenants;
 
   if (email) {
@@ -125,7 +159,9 @@ async function tokenOnly(req, res, next) {
     const user = await resolveUser(req);
     if (!user) return res.status(401).json({ error: 'Token inválido o no proporcionado.' });
     
-    attach(req, { user });
+    const slug = req.params?.tenantSlug || req.params?.slug;
+    const tenant = await resolveTenantForUser(user.id, slug, user.email);
+    attach(req, { user, tenant });
     next();
   } catch (err) {
     res.status(500).json({ error: 'Error interno de autenticación.' });

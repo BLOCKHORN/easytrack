@@ -6,6 +6,7 @@ const cors = require('cors');
 const cron = require('node-cron');
 const Stripe = require('stripe');
 const { supabase } = require('./utils/supabaseClient');
+const { isDirectPg, query } = require('./utils/db');
 const { processCommissionsAutomated } = require('./controllers/partners.controller');
 
 const app = express();
@@ -31,6 +32,9 @@ const importRoutes = require('./routes/import.routes');
 const metricsRouter = require('./routes/metrics.routes');
 const iaRoutes = require('./routes/ia.routes');
 const radarRoutes = require('./routes/radar.routes');
+const cookieParser = require('cookie-parser');
+const reviewsRoutes = require('./routes/reviews.routes');
+const { router: pinRouter } = require('./routes/pin.routes');
 const adminRoutes = require('./routes/admin.routes');
 
 const envOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
@@ -79,15 +83,30 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
+// Redirección permanente (301/308) de cualquier tráfico procedente de dominios legados (Render / Vercel)
+app.use((req, res, next) => {
+  const host = (req.headers['x-forwarded-host'] || req.headers.host || '').toLowerCase();
+  if (host.includes('onrender.com') || host.includes('vercel.app')) {
+    if (req.path === '/health' && req.headers['user-agent']?.includes('Render')) {
+      return res.status(200).send('OK');
+    }
+    const statusCode = (req.method === 'GET' || req.method === 'HEAD') ? 301 : 308;
+    return res.redirect(statusCode, `https://easytrack.pro${req.originalUrl || req.url || '/'}`);
+  }
+  next();
+});
+
 app.get('/health', (req, res) => res.status(200).send('OK'));
 app.head('/health', (req, res) => res.status(200).end());
 app.get('/.well-known/health', (req, res) => res.status(200).send('OK'));
 app.head('/.well-known/health', (req, res) => res.status(200).end());
 
 app.use('/webhooks', webhooksRoutes);
+app.use('/api/webhooks', webhooksRoutes);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(cookieParser());
 
 // Logger de peticiones
 app.use((req, res, next) => {
@@ -101,6 +120,10 @@ app.use((req, res, next) => {
 
 app.use('/api/metrics', metricsRouter); 
 app.use('/api/auth', authRoutes);
+app.use('/api/reviews', reviewsRoutes);
+app.use('/api/pin', pinRouter);
+app.use('/api/tenants/:slug/pin', pinRouter);
+app.use('/:tenantSlug/api/pin', pinRouter);
 app.use('/api/billing', billingRoutes);
 app.use('/billing', billingRoutes);
 
@@ -155,13 +178,38 @@ cron.schedule('0 3 * * *', async () => {
 cron.schedule('0 4 * * *', async () => {
   if (!stripe) return;
   try {
-    const { data: pending } = await supabase
+    let pending = [];
+
+    if (isDirectPg()) {
+      const { rows } = await query(`
+        SELECT prc.id, prc.amount_cents, tr.referrer_tenant_id, t.stripe_customer_id
+        FROM public.pending_referral_credits prc
+        JOIN public.tenant_referrals tr ON tr.id = prc.referral_id
+        JOIN public.tenants t ON t.id = tr.referrer_tenant_id
+        WHERE prc.processed = false AND prc.release_at <= NOW()
+      `);
+      pending = rows;
+
+      for (const item of pending) {
+        if (item.stripe_customer_id) {
+          await stripe.customers.createBalanceTransaction(item.stripe_customer_id, {
+            amount: -item.amount_cents,
+            currency: 'eur',
+            description: `Crédito por referido activo (Ref: ${item.id})`
+          });
+          await query('UPDATE public.pending_referral_credits SET processed = true WHERE id = $1', [item.id]);
+        }
+      }
+      return;
+    }
+
+    const { data: supaPending } = await supabase
       .from('pending_referral_credits')
       .select('*, tenant_referrals(referrer_tenant_id)')
       .eq('processed', false)
       .lte('release_at', new Date().toISOString());
 
-    for (const item of (pending || [])) {
+    for (const item of (supaPending || [])) {
       const referrerId = item.tenant_referrals?.referrer_tenant_id;
       if (!referrerId) continue;
       
@@ -182,7 +230,7 @@ cron.schedule('0 4 * * *', async () => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, '127.0.0.1', () => {
   const required = [
     'SUPABASE_URL',
     'SUPABASE_SERVICE_ROLE_KEY',

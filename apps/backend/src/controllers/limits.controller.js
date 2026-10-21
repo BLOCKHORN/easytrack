@@ -3,6 +3,7 @@
 const { supabaseAdmin } = require('../utils/supabaseClient');
 const { resolveTenantId, fetchSubscriptionForTenant } = require('../utils/subscription');
 const { computeEntitlements } = require('../utils/entitlements');
+const { isDirectPg, query } = require('../utils/db');
 
 exports.getLimitsMe = async (req, res) => {
   try {
@@ -16,24 +17,44 @@ exports.getLimitsMe = async (req, res) => {
     if (!tenantId) {
       const email = String(req.user?.email || '').toLowerCase().trim();
       if (email) {
-        const { data: t } = await supabaseAdmin.from('tenants').select('id').eq('email', email).maybeSingle();
-        tenantId = t?.id || tenantId;
+        if (isDirectPg()) {
+          const { rows: tRows } = await query('SELECT id FROM public.tenants WHERE email ILIKE $1 LIMIT 1', [email]);
+          tenantId = tRows[0]?.id || tenantId;
+        } else {
+          const { data: t } = await supabaseAdmin.from('tenants').select('id').eq('email', email).maybeSingle();
+          tenantId = t?.id || tenantId;
+        }
       }
       if (!tenantId && req.user?.id) {
-        const { data: mem } = await supabaseAdmin.from('memberships').select('tenant_id').eq('user_id', req.user.id).limit(1).maybeSingle();
-        tenantId = mem?.tenant_id || tenantId;
+        if (isDirectPg()) {
+          const { rows: memRows } = await query('SELECT tenant_id FROM public.memberships WHERE user_id = $1 LIMIT 1', [req.user.id]);
+          tenantId = memRows[0]?.tenant_id || tenantId;
+        } else {
+          const { data: mem } = await supabaseAdmin.from('memberships').select('tenant_id').eq('user_id', req.user.id).limit(1).maybeSingle();
+          tenantId = mem?.tenant_id || tenantId;
+        }
       }
     }
 
     if (!tenantId) return res.status(404).json({ ok: false, error: 'TENANT_NOT_FOUND' });
 
-    const { data: tenant, error: tErr } = await supabaseAdmin
-      .from('tenants')
-      .select('id, slug, nombre_empresa, trial_quota, trial_used, soft_blocked, plan_id, requested_plan, is_ai_active, ai_trial_ends_at, ai_trial_used, fecha_creacion')
-      .eq('id', tenantId)
-      .maybeSingle();
-      
-    if (tErr) throw tErr;
+    let tenant = null;
+    if (isDirectPg()) {
+      const { rows: tRows } = await query(
+        'SELECT id, slug, nombre_empresa, trial_quota, trial_used, soft_blocked, plan_id, requested_plan, is_ai_active, ai_trial_ends_at, ai_trial_used, fecha_creacion FROM public.tenants WHERE id = $1 LIMIT 1',
+        [tenantId]
+      );
+      tenant = tRows[0] || null;
+    } else {
+      const { data: t, error: tErr } = await supabaseAdmin
+        .from('tenants')
+        .select('id, slug, nombre_empresa, trial_quota, trial_used, soft_blocked, plan_id, requested_plan, is_ai_active, ai_trial_ends_at, ai_trial_used, fecha_creacion')
+        .eq('id', tenantId)
+        .maybeSingle();
+      if (tErr) throw tErr;
+      tenant = t;
+    }
+
     if (!tenant) return res.status(404).json({ ok: false, error: 'TENANT_NOT_FOUND' });
 
     const sub = await fetchSubscriptionForTenant(tenant.id);

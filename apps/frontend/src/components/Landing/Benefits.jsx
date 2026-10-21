@@ -88,23 +88,23 @@ export default function Benefits() {
   };
 
   return (
-    <section id="features" className="relative pt-20 md:pt-32 pb-32 bg-slate-50 px-4 sm:px-6 lg:px-8 overflow-hidden">
+    <section id="features" className="relative pt-16 sm:pt-20 md:pt-32 pb-20 sm:pb-32 bg-slate-50 px-4 sm:px-6 lg:px-8 overflow-hidden">
       <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.03]">
         <div className="absolute left-1/4 top-0 bottom-0 w-[1px] bg-black" />
         <div className="absolute right-1/4 top-0 bottom-0 w-[1px] bg-black" />
       </div>
 
       <div className="max-w-7xl mx-auto relative z-10">
-        <div className="text-center max-w-4xl mx-auto mb-20 relative z-10">
+        <div className="text-center max-w-4xl mx-auto mb-14 sm:mb-20 relative z-10">
           <motion.h2 
             initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-            className="text-5xl md:text-7xl font-[900] text-zinc-950 mb-6 tracking-[-0.04em] leading-[1.1] py-2"
+            className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-[900] text-zinc-950 mb-4 sm:mb-6 tracking-[-0.04em] leading-[1.1] py-2 text-balance"
           >
             Digitalizamos la lógica física <br className="hidden md:block" /> de tu local
           </motion.h2>
           <motion.p 
             initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
-            className="text-xl text-zinc-500 leading-relaxed font-medium max-w-2xl mx-auto"
+            className="text-base sm:text-lg md:text-xl text-zinc-500 leading-relaxed font-medium max-w-2xl mx-auto text-pretty"
           >
             No necesitas cambiar tus estanterías. Solo necesitas orden quirúrgico.
           </motion.p>
@@ -115,27 +115,27 @@ export default function Benefits() {
           whileInView="show"
           viewport={{ once: true, margin: "-50px" }}
           transition={{ staggerChildren: 0.1 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-8"
+          className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8"
         >
-          <motion.div variants={item} className="bg-white rounded-[2rem] p-8 lg:p-10 border border-zinc-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col h-full group hover:border-zinc-300 hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)] transition-all">
+          <motion.div variants={item} className="bg-white rounded-[2rem] p-6 sm:p-8 lg:p-10 border border-zinc-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col h-full group hover:border-zinc-300 hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)] transition-all">
             <ShelvingVisual />
-            <h3 className="text-2xl font-[900] text-zinc-950 mb-3 tracking-tight">Ubicaciones Reales</h3>
+            <h3 className="text-xl sm:text-2xl font-[900] text-zinc-950 mb-2 sm:mb-3 tracking-tight">Ubicaciones Reales</h3>
             <p className="text-zinc-500 leading-relaxed font-medium text-sm md:text-base">
               Replica tus estanterías físicas exactamente como son (Ej: B1, B4). El sistema calcula el hueco óptimo por ti.
             </p>
           </motion.div>
 
-          <motion.div variants={item} className="bg-white rounded-[2rem] p-8 lg:p-10 border border-zinc-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col h-full group hover:border-zinc-300 hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)] transition-all">
+          <motion.div variants={item} className="bg-white rounded-[2rem] p-6 sm:p-8 lg:p-10 border border-zinc-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col h-full group hover:border-zinc-300 hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)] transition-all">
             <ScanningVisual />
-            <h3 className="text-2xl font-[900] text-zinc-950 mb-3 tracking-tight">Búsqueda Ultrasónica</h3>
+            <h3 className="text-xl sm:text-2xl font-[900] text-zinc-950 mb-2 sm:mb-3 tracking-tight">Búsqueda Ultrasónica</h3>
             <p className="text-zinc-500 leading-relaxed font-medium text-sm md:text-base">
               Teclea el nombre del cliente. La pantalla te dice el estante exacto donde mirar en al instante.
             </p>
           </motion.div>
 
-          <motion.div variants={item} className="bg-white rounded-[2rem] p-8 lg:p-10 border border-zinc-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col h-full group hover:border-zinc-300 hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)] transition-all">
+          <motion.div variants={item} className="bg-white rounded-[2rem] p-6 sm:p-8 lg:p-10 border border-zinc-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col h-full group hover:border-zinc-300 hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)] transition-all">
             <StockVisual />
-            <h3 className="text-2xl font-[900] text-zinc-950 mb-3 tracking-tight">Control de Ocupación</h3>
+            <h3 className="text-xl sm:text-2xl font-[900] text-zinc-950 mb-2 sm:mb-3 tracking-tight">Control de Ocupación</h3>
             <p className="text-zinc-500 leading-relaxed font-medium text-sm md:text-base">
               Mapa visual de stock en tiempo real. Evita estantes saturados y distribuye el peso de tu local sin esfuerzo.
             </p>

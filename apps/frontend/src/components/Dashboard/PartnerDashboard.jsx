@@ -1,7 +1,7 @@
 'use strict';
 
 import { useEffect, useState, useMemo } from 'react';
-import { supabase } from '../../utils/supabaseClient';
+import { apiFetch } from '../../utils/fetcher';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const IconUsers = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
@@ -16,7 +16,7 @@ const IconShield = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="n
 
 const formatEUR = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(n || 0);
 
-const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
 const PROD_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 const API_BASE = isLocal ? '' : PROD_URL;
 
@@ -34,12 +34,7 @@ export default function PartnerDashboard() {
   const fetchDashboard = async () => {
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const res = await fetch(`${API_BASE}/api/partners/me`, {
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      });
+      const res = await apiFetch('/api/partners/me');
       const data = await res.json();
       
       if (data.ok && data.isPartner) {
@@ -122,13 +117,8 @@ export default function PartnerDashboard() {
     
     setRequesting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${API_BASE}/api/partners/payout/request`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}` 
-        }
+      const res = await apiFetch('/api/partners/payout/request', {
+        method: 'POST'
       });
       const data = await res.json();
       

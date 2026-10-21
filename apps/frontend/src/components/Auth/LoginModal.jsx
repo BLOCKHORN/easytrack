@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "../../utils/supabaseClient";
+import { authService } from "../../services/authService";
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18">
@@ -32,21 +32,29 @@ export default function LoginModal({ onClose }) {
     setLoading(true);
     setError("");
 
-    const { data, error: authErr } = await supabase.auth.signInWithPassword({ email, password });
+    const authRes = await authService.login(email, password);
     
-    if (authErr) {
-      setError("Credenciales incorrectas.");
+    if (!authRes.ok) {
+      setError(authRes.error || "Credenciales incorrectas.");
       setLoading(false);
       return;
     }
 
+    if (authRes.tenant?.slug) {
+      onClose();
+      navigate(`/${authRes.tenant.slug}/dashboard`);
+      return;
+    }
+
+    const token = authRes.token || authRes.session?.access_token;
+
     try {
-      const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+      const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
       const API_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
       const API_BASE = isLocal ? '' : API_URL;
 
       const r = await fetch(`${API_BASE}/api/tenants/me`, {
-        headers: { Authorization: `Bearer ${data.session.access_token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
       if (r.ok) {
         const tData = await r.json();
@@ -62,11 +70,8 @@ export default function LoginModal({ onClose }) {
     navigate("/dashboard");
   };
 
-  const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` }
-    });
+  const handleGoogle = () => {
+    authService.loginWithGoogle('/dashboard');
   };
 
   const goToRecovery = () => {

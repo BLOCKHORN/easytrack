@@ -1,0 +1,80 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: easytrack-db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-easytrack_prod}
+      POSTGRES_USER: ${POSTGRES_USER:-easytrack_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-easytrack_secure_pass_2026}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "127.0.0.1:5433:5432"
+    networks:
+      - easytrack-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-easytrack_user} -d ${POSTGRES_DB:-easytrack_prod}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: easytrack-backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-easytrack_user}:${POSTGRES_PASSWORD:-easytrack_secure_pass_2026}@db:5432/${POSTGRES_DB:-easytrack_prod}
+      JWT_SECRET: ${JWT_SECRET:-${SUPABASE_JWT_SECRET}}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_PRICE_PRO_MONTHLY: ${STRIPE_PRICE_PRO_MONTHLY}
+      STRIPE_PRICE_PRO_ANNUAL: ${STRIPE_PRICE_PRO_ANNUAL}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8095}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8095}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM}
+      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO}
+    networks:
+      - easytrack-net
+    expose:
+      - "3000"
+
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+        VITE_SUPABASE_URL: ${SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    container_name: easytrack-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8095:80"
+    networks:
+      - easytrack-net
+
+volumes:
+  db_data:
+    name: easytrack_db_data
+
+networks:
+  easytrack-net:
+    name: easytrack-net

@@ -24,3 +24,15 @@ pnpm-debug.log*
 .idea/
 
 .vercel
+
+# Migration scripts, symlinks & scratch
+SILICONBYTE
+siliconbyte
+bar-gestion-bento
+*.sql
+*.log
+export_supabase_to_pg.js
+sync_supabase_missing.js
+verify_data_integrity.js
+test_proxies.js
+

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, useSpring, useTransform, AnimatePresence } from "framer-motion";
-import { supabase } from "../../utils/supabaseClient";
+import { useAuth } from "../../context/AuthContext";
 import { useTenant } from "../../context/TenantContext";
 
 const IconStar = () => (
@@ -39,10 +39,10 @@ const AnimatedNumber = ({ value }) => {
 export default function Hero() {
   const navigate = useNavigate();
   const { tenant, loading: tenantLoading } = useTenant();
+  const { isLoggedIn } = useAuth();
   const [index, setIndex] = useState(0);
   const [rawTenants, setRawTenants] = useState(0);
   const [rawPkgs, setRawPkgs] = useState(0);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -64,7 +64,6 @@ export default function Hero() {
 
   useEffect(() => {
     fetchMetrics();
-    supabase.auth.getSession().then(({ data }) => { if (data?.session) setIsLoggedIn(true); });
   }, []);
 
   useEffect(() => {
@@ -94,21 +93,33 @@ export default function Hero() {
   return (
     <section className="relative pt-20 pb-32 md:pt-24 md:pb-40 bg-[#09090b] overflow-hidden min-h-[90vh] flex items-center">
       <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:6rem_6rem]" />
+        <picture>
+          <source srcSet="/hero-bg.webp" type="image/webp" />
+          <img 
+            src="/hero-bg.jpg" 
+            alt="Infraestructura logística EasyTrack" 
+            className="absolute inset-0 w-full h-full object-cover object-center opacity-35 select-none scale-105 pointer-events-none"
+            loading="eager"
+            decoding="async"
+          />
+        </picture>
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_40%,rgba(9,9,11,0.45)_0%,rgba(9,9,11,0.85)_65%,#09090b_100%)] pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#09090b]/80 via-transparent to-[#09090b] pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:6rem_6rem] pointer-events-none" />
         <div 
             className="absolute inset-0 opacity-[0.03] pointer-events-none" 
             style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}
         />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-[radial-gradient(circle_at_50%_0%,rgba(20,184,166,0.08)_0%,transparent_70%)]" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-[radial-gradient(circle_at_50%_0%,rgba(20,184,166,0.08)_0%,transparent_70%)] pointer-events-none" />
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           
           <div className="flex flex-col items-center md:items-start text-center md:text-left">
-            <div className="flex flex-col md:flex-row items-center gap-2 mb-4 text-lg md:text-xl font-medium text-zinc-500 tracking-tight">
+            <div className="flex flex-col md:flex-row items-center gap-2 mb-4 text-base sm:text-lg md:text-xl font-medium text-zinc-500 tracking-tight">
               <span>No necesitas un</span>
-              <div className="relative h-7 overflow-hidden min-w-[200px] text-zinc-300 inline-block text-center md:text-left font-black">
+              <div className="relative h-7 overflow-hidden min-w-[180px] sm:min-w-[200px] max-w-full text-zinc-300 inline-block text-center md:text-left font-black">
                 <AnimatePresence mode="wait">
                   <motion.span
                     key={ROTATING_TEXTS[index]}
@@ -126,10 +137,10 @@ export default function Hero() {
 
             <motion.h1 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-              className="text-5xl md:text-7xl lg:text-[90px] font-[900] tracking-[-0.05em] text-white mb-4 leading-[0.85] flex flex-col items-center md:items-start"
+              className="text-4xl sm:text-6xl md:text-7xl lg:text-[90px] font-[900] tracking-[-0.05em] text-white mb-4 leading-[0.9] sm:leading-[0.85] flex flex-col items-center md:items-start text-balance"
             >
               Busca menos.
-              <span className="mt-2 flex flex-wrap items-center justify-center md:justify-start gap-x-4">
+              <span className="mt-1 sm:mt-2 flex flex-wrap items-center justify-center md:justify-start gap-x-3 sm:gap-x-4">
                 Encuentra 
                 <span className="relative inline-block px-3 py-1 z-10">
                   <span className="relative z-20 text-black">más.</span>
@@ -143,7 +154,7 @@ export default function Hero() {
             
             <motion.p 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-              className="text-base md:text-lg text-zinc-500 mb-8 max-w-lg font-medium leading-snug"
+              className="text-sm sm:text-base md:text-lg text-zinc-500 mb-8 max-w-lg font-medium leading-relaxed sm:leading-snug"
             >
               Digitalizamos la lógica física de tu local para que dejes de buscar paquetes y empieces a facturar más.
             </motion.p>
@@ -171,11 +182,11 @@ export default function Hero() {
 
             <button 
               onClick={scrollToTestimonials} 
-              className="flex flex-col sm:flex-row items-center gap-4 group hover:bg-white/[0.03] p-3 -ml-3 rounded-2xl transition-all"
+              className="flex items-center gap-3 sm:gap-4 group hover:bg-white/[0.03] p-2 sm:p-3 sm:-ml-3 rounded-2xl transition-all"
             >
-              <div className="flex -space-x-3">
+              <div className="flex -space-x-3 shrink-0">
                 {CLIENT_INITIALS.map((client, i) => (
-                  <div key={i} title={client.name} className="w-9 h-9 rounded-full border-2 border-[#09090b] bg-zinc-800 flex items-center justify-center text-[10px] font-black text-zinc-400 group-hover:text-brand-400 group-hover:border-zinc-700 transition-all">
+                  <div key={i} title={client.name} className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-[#09090b] bg-zinc-800 flex items-center justify-center text-[10px] font-black text-zinc-400 group-hover:text-brand-400 group-hover:border-zinc-700 transition-all">
                     {client.in}
                   </div>
                 ))}
@@ -187,8 +198,8 @@ export default function Hero() {
                   </div>
                   <span className="px-1.5 py-0.5 bg-brand-500/10 text-brand-400 text-[8px] font-black uppercase rounded border border-brand-500/20">Verificado</span>
                 </div>
-                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                  Confianza de +{rawTenants} negocios <span className="w-1 h-1 rounded-full bg-zinc-700" /> España
+                <p className="text-[9px] sm:text-[10px] font-black text-zinc-500 uppercase tracking-wider sm:tracking-widest flex items-center gap-1.5 sm:gap-2">
+                  Confianza de +{rawTenants} negocios <span className="w-1 h-1 rounded-full bg-zinc-700 shrink-0" /> España
                 </p>
               </div>
             </button>
@@ -200,20 +211,20 @@ export default function Hero() {
                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400">Red en tiempo real</span>
             </div>
 
-            <div className="flex flex-col lg:items-end group">
+            <div className="flex flex-col items-center lg:items-end group">
               <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.4em] mb-1 group-hover:text-brand-400 transition-colors">Puntos Pickup</span>
-              <div className="text-6xl md:text-8xl font-[900] text-white tracking-tighter tabular-nums leading-none">
+              <div className="text-5xl sm:text-6xl md:text-8xl font-[900] text-white tracking-tighter tabular-nums leading-none">
                 +<AnimatedNumber value={rawTenants} />
               </div>
-              <div className="w-full lg:w-40 h-[1px] bg-gradient-to-r lg:bg-gradient-to-l from-brand-500/50 to-transparent mt-2" />
+              <div className="w-32 lg:w-40 h-[1px] bg-gradient-to-r lg:bg-gradient-to-l from-brand-500/50 to-transparent mt-2" />
             </div>
 
-            <div className="flex flex-col lg:items-end group">
+            <div className="flex flex-col items-center lg:items-end group">
               <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.4em] mb-1 group-hover:text-brand-400 transition-colors">Paquetes Entregados</span>
-              <div className="text-6xl md:text-8xl font-[900] text-white tracking-tighter tabular-nums leading-none">
+              <div className="text-5xl sm:text-6xl md:text-8xl font-[900] text-white tracking-tighter tabular-nums leading-none">
                 +<AnimatedNumber value={rawPkgs} />
               </div>
-              <div className="w-full lg:w-56 h-[1px] bg-gradient-to-r lg:bg-gradient-to-l from-brand-500/50 to-transparent mt-2" />
+              <div className="w-40 lg:w-56 h-[1px] bg-gradient-to-r lg:bg-gradient-to-l from-brand-500/50 to-transparent mt-2" />
             </div>
           </div>
 
@@ -224,7 +235,7 @@ export default function Hero() {
         <svg 
           viewBox="0 0 1440 100" 
           preserveAspectRatio="none" 
-          className="w-full h-12 md:h-28 block translate-y-[1px]" 
+          className="w-full h-12 md:h-24 block translate-y-[1px]" 
         >
           <path 
             fill="#f8fafc"

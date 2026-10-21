@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, startTransition } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { supabase } from '../../utils/supabaseClient';
+import { apiFetch } from '../../utils/fetcher';
 import { getTenantIdOrThrow } from '../../utils/tenant';
 import { crearPaqueteBackend, obtenerPaquetesBackend } from '../../services/paquetesService';
 import { cargarUbicaciones } from '../../services/ubicacionesService';
@@ -124,35 +124,57 @@ function bestClientSuggestion(input, paquetesPendientes, threshold = 0.55) {
 const CameraScanner = ({ onCapture, onClose }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [cameraError, setCameraError] = useState(null);
 
   useEffect(() => {
     let localStream = null;
+    let cancelled = false;
 
     async function startCamera() {
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: 'environment', width: { ideal: 1024 } } 
-        });
-      } catch (err) {
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        setCameraError("Tu navegador no admite acceso directo a la cámara. Usa la cámara del móvil abajo.");
+        return;
+      }
+
+      const constraintAttempts = [
+        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } } },
+        { video: { facingMode: 'environment' } },
+        { video: { width: { ideal: 1024 } } },
+        { video: true }
+      ];
+
+      let stream = null;
+      for (const constraints of constraintAttempts) {
         try {
-          localStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { width: { ideal: 1024 } } 
-          });
-        } catch (fallbackErr) {
-          alert("No se pudo acceder a la cámara. Revisa los permisos del navegador.");
-          onClose();
-          return;
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          if (stream) break;
+        } catch {
+          // Probar siguiente intento
         }
       }
 
+      if (cancelled) {
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+
+      if (!stream) {
+        setCameraError("El navegador no pudo acceder a la cámara en vivo. Puedes pulsar abajo para tomar una foto directamente con tu móvil.");
+        return;
+      }
+
+      localStream = stream;
       if (videoRef.current) {
-        videoRef.current.srcObject = localStream;
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
       }
     }
 
     startCamera();
 
     return () => {
+      cancelled = true;
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
       }
@@ -163,7 +185,7 @@ const CameraScanner = ({ onCapture, onClose }) => {
         videoRef.current.srcObject = null;
       }
     };
-  }, [onClose]);
+  }, []);
 
   const capture = () => {
     const video = videoRef.current;
@@ -171,17 +193,17 @@ const CameraScanner = ({ onCapture, onClose }) => {
     if (!video || !canvas) return;
 
     const MAX_DIMENSION = 1024;
-    let width = video.videoWidth;
-    let height = video.videoHeight;
+    let width = video.videoWidth || 640;
+    let height = video.videoHeight || 480;
 
     if (width > height) {
       if (width > MAX_DIMENSION) {
-        height *= MAX_DIMENSION / width;
+        height = Math.round(height * (MAX_DIMENSION / width));
         width = MAX_DIMENSION;
       }
     } else {
       if (height > MAX_DIMENSION) {
-        width *= MAX_DIMENSION / height;
+        width = Math.round(width * (MAX_DIMENSION / height));
         height = MAX_DIMENSION;
       }
     }
@@ -191,42 +213,117 @@ const CameraScanner = ({ onCapture, onClose }) => {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, width, height);
     
-    // Mantenido a 0.5 para optimizar el consumo de tokens y ancho de banda
     const data = canvas.toDataURL('image/jpeg', 0.5); 
     onCapture(data);
   };
 
+  const handleNativePhoto = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = canvasRef.current || document.createElement('canvas');
+        const MAX_DIMENSION = 1024;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_DIMENSION) {
+            height = Math.round(height * (MAX_DIMENSION / width));
+            width = MAX_DIMENSION;
+          }
+        } else {
+          if (height > MAX_DIMENSION) {
+            width = Math.round(width * (MAX_DIMENSION / height));
+            height = MAX_DIMENSION;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const data = canvas.toDataURL('image/jpeg', 0.5);
+        onCapture(data);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="fixed inset-0 z-[200] bg-zinc-950 flex flex-col">
-      <div className="relative flex-1 flex items-center justify-center overflow-hidden">
-        <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
-        
-        {/* NUEVA UI A PRUEBA DE TONTOS: Forma de documento, sin "láser" de código de barras */}
-        <div className="relative w-[85%] max-w-sm aspect-[4/3] shadow-[0_0_0_9999px_rgba(0,0,0,0.75)] rounded-2xl flex flex-col items-center justify-center pointer-events-none">
-           <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-[#14B07E] rounded-tl-2xl" />
-           <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-[#14B07E] rounded-tr-2xl" />
-           <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-[#14B07E] rounded-bl-2xl" />
-           <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-[#14B07E] rounded-br-2xl" />
-        </div>
+      <input 
+        ref={fileInputRef} 
+        type="file" 
+        accept="image/*" 
+        capture="environment" 
+        className="hidden" 
+        onChange={handleNativePhoto} 
+      />
 
-        <div className="absolute bottom-6 sm:bottom-10 flex flex-col items-center gap-2.5 w-full px-6 text-center pointer-events-none">
-          <p className="text-white font-black text-sm sm:text-base uppercase tracking-wider bg-zinc-950/80 px-6 py-3 rounded-xl backdrop-blur-md shadow-lg border border-zinc-800">
-            Encuadra <span className="text-[#14B07E]">nombre y empresa</span>
-          </p>
-          <p className="text-zinc-300 font-bold text-xs bg-zinc-950/80 px-4 py-2 rounded-lg backdrop-blur-md border border-zinc-800">
-            Ignora el código de barras. La IA lee el texto.
-          </p>
-        </div>
+      <div className="relative flex-1 flex items-center justify-center overflow-hidden">
+        {cameraError ? (
+          <div className="p-6 max-w-sm text-center flex flex-col items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-brand-400">
+              <IconScan />
+            </div>
+            <div>
+              <h3 className="text-white text-base font-bold">Cámara no disponible en vivo</h3>
+              <p className="text-zinc-400 text-xs mt-1 leading-relaxed">{cameraError}</p>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => fileInputRef.current?.click()} 
+              className="w-full py-3 px-5 bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-transform active:scale-[0.97] shadow-lg flex items-center justify-center gap-2"
+            >
+              <IconScan /> Tomar Foto con el Móvil
+            </button>
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className="text-zinc-500 hover:text-zinc-300 text-xs font-semibold"
+            >
+              Volver al formulario
+            </button>
+          </div>
+        ) : (
+          <>
+            <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
+            
+            <div className="relative w-[85%] max-w-sm aspect-[4/3] shadow-[0_0_0_9999px_rgba(0,0,0,0.75)] rounded-2xl flex flex-col items-center justify-center pointer-events-none">
+               <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-brand-500 rounded-tl-2xl" />
+               <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-brand-500 rounded-tr-2xl" />
+               <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-brand-500 rounded-bl-2xl" />
+               <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-brand-500 rounded-br-2xl" />
+            </div>
+
+            <div className="absolute bottom-6 sm:bottom-10 flex flex-col items-center gap-2 w-full px-6 text-center pointer-events-none">
+              <p className="text-white font-bold text-xs sm:text-sm uppercase tracking-wider bg-zinc-950/80 px-4 py-2 rounded-xl shadow-lg border border-zinc-800">
+                Encuadra <span className="text-brand-400">nombre y empresa</span>
+              </p>
+              <p className="text-zinc-400 font-medium text-[11px] bg-zinc-950/80 px-3 py-1 rounded-lg border border-zinc-800">
+                La IA detecta automáticamente los datos del paquete.
+              </p>
+            </div>
+          </>
+        )}
       </div>
       
       <canvas ref={canvasRef} className="hidden" />
-      <div className="bg-zinc-950 p-6 sm:p-8 flex items-center justify-between pb-8 sm:pb-12 border-t border-zinc-800 relative z-10">
-        <button onClick={onClose} className="text-zinc-400 font-bold text-sm hover:text-white transition-colors">CANCELAR</button>
-        <button onClick={capture} className="w-16 h-16 bg-white rounded-full border-4 border-zinc-800 active:scale-90 transition-transform flex items-center justify-center">
-           <div className="w-12 h-12 rounded-full border border-zinc-950" />
-        </button>
-        <div className="w-16" />
-      </div>
+
+      {!cameraError && (
+        <div className="bg-zinc-950 p-4 sm:p-6 flex items-center justify-between pb-8 sm:pb-10 border-t border-zinc-900 relative z-10">
+          <button onClick={onClose} className="text-zinc-400 font-bold text-xs uppercase tracking-wider hover:text-white transition-colors px-3 py-2">Cancelar</button>
+          <button onClick={capture} className="w-16 h-16 bg-white rounded-full border-4 border-zinc-800 active:scale-90 transition-transform flex items-center justify-center" aria-label="Capturar">
+             <div className="w-12 h-12 rounded-full border border-zinc-950 bg-white" />
+          </button>
+          <button onClick={() => fileInputRef.current?.click()} className="text-zinc-400 font-bold text-xs uppercase tracking-wider hover:text-white transition-colors px-3 py-2">Galería</button>
+        </div>
+      )}
     </div>
   );
 };
@@ -328,9 +425,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
     (async () => {
       try {
         const tid = await getTenantIdOrThrow();
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
+        const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
         const PROD_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
         const API_URL = isLocal ? "" : PROD_URL;
 
@@ -340,10 +435,10 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         } catch(e) {}
 
         const [limitsRes, carriersRes, ubiData, pkgsData] = await Promise.all([
-          fetch(`${API_URL}/api/limits/me`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({})),
-          fetch(`${API_URL}/api/ubicaciones/carriers`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({ empresas: [] })),
-          cargarUbicaciones(token, tid).catch(() => ({})),
-          (!propsPaquetes || propsPaquetes.length === 0) ? obtenerPaquetesBackend(token, { estado: 'pendiente', all: 1 }).catch(() => []) : Promise.resolve(null)
+          apiFetch(`${API_URL}/api/limits/me`).then(r => r.json()).catch(() => ({})),
+          apiFetch(`${API_URL}/api/ubicaciones/carriers`).then(r => r.json()).catch(() => ({ empresas: [] })),
+          cargarUbicaciones(null, tid).catch(() => ({})),
+          (!propsPaquetes || propsPaquetes.length === 0) ? obtenerPaquetesBackend(null, { estado: 'pendiente', all: 1 }).catch(() => []) : Promise.resolve(null)
         ]);
 
         if (cancel) return;
@@ -415,11 +510,11 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
     if (activatingTrial) return;
     setActivatingTrial(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
-      const res = await fetch(`${API_URL}/api/tenants/me/ai-trial`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` }
+      const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
+      const PROD_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+      const API_URL = isLocal ? "" : PROD_URL;
+      const res = await apiFetch(`${API_URL}/api/tenants/me/ai-trial`, {
+        method: 'POST'
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error al activar prueba');
@@ -581,15 +676,16 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
     setShowCamera(false);
     
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
+      const isLocal = /^(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ngrok-free\.dev|.*\.devtunnels\.ms|.*easytrack\.pro|.*easytrack\.es)$/.test(window.location.hostname);
+      const PROD_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+      const API_URL = isLocal ? "" : PROD_URL;
       
       const isMulti = activeTab === 'multi';
       const companiaFija = (isMulti && batchSameCompany && batchCompany) ? batchCompany : null;
 
-      const res = await fetch(`${API_URL}/api/ia/scan-label`, {
+      const res = await apiFetch(`${API_URL}/api/ia/scan-label`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           imageBase64: base64Image, 
           tenant_id: tenant.id,
@@ -704,9 +800,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
 
     try {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token || !tenant?.id) throw new Error('Faltan datos.');
+      if (!tenant?.id) throw new Error('Faltan datos.');
 
       const upperCliente = toUpperVis(cliente.trim());
       if (!upperCliente) throw new Error('Falta nombre.');
@@ -733,7 +827,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         ...(slotSel.id ? { ubicacion_id: slotSel.id } : {}),
       };
       
-      const res = await crearPaqueteBackend(payload, token);
+      const res = await crearPaqueteBackend(payload, null);
       
       const newPkg = res?.paquete || {
         id: Date.now(),
@@ -786,8 +880,6 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
 
     try {
       setMultiSaving(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
       
       let commonSlot = slotSel || getMostEmptySlot();
 
@@ -807,7 +899,7 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
         const res = await crearPaqueteBackend({
           tenant_id: tenant.id, nombre_cliente: names[i], empresa_transporte: companiesForRows[i],
           ubicacion_label: commonSlot.label, ...(commonSlot.id ? { ubicacion_id: commonSlot.id } : {})
-        }, token);
+        }, null);
         nuevosPaquetes.push(res?.paquete || {
           id: Date.now() + i,
           nombre_cliente: names[i],
@@ -1029,31 +1121,27 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
           </div>
         )}
 
-        <div className="py-4 my-4 border-y border-zinc-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <div className="py-3 my-3 border-y border-zinc-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           
           {/* PANEL DE ENRUTAMIENTO (Routing Summary) */}
-          <div className="flex flex-col sm:flex-row items-stretch w-full md:w-auto bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="grid grid-cols-2 sm:flex sm:flex-row items-stretch w-full md:w-auto bg-white border border-zinc-200/80 rounded-xl shadow-sm overflow-hidden divide-x divide-zinc-100">
             
-            <div className={`flex flex-col justify-center px-5 py-3.5 border-b sm:border-b-0 sm:border-r border-zinc-200 transition-colors w-full sm:w-40 ${suggestionPulse ? 'bg-[#14B07E]/5' : 'bg-zinc-50'}`}>
-              <span className="text-[9px] sm:text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                {suggestionPulse ? <IconSparkles className="w-3 h-3 text-[#14B07E]" /> : null}
+            <div className={`flex flex-col justify-center px-4 py-2.5 transition-colors sm:w-36 ${suggestionPulse ? 'bg-brand-500/5' : 'bg-zinc-50'}`}>
+              <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                {suggestionPulse ? <IconSparkles className="w-3 h-3 text-brand-600" /> : null}
                 IA Sugiere
               </span>
-              <span className={`text-2xl sm:text-3xl font-black tracking-tight ${suggestionPulse ? 'text-zinc-900' : 'text-zinc-400'}`}>
+              <span className={`text-xl sm:text-2xl font-black tracking-tight ${suggestionPulse ? 'text-zinc-900' : 'text-zinc-400'}`}>
                 {suggestedLabel || '—'}
               </span>
             </div>
 
-            <div className="hidden sm:flex items-center justify-center px-4 bg-zinc-50 text-zinc-300">
-               <IconArrowRight />
-            </div>
-
-            <div className={`flex flex-col justify-center px-5 py-3.5 transition-colors w-full sm:w-48 ${selectedPulse ? 'bg-[#14B07E] text-white shadow-inner' : 'bg-white text-zinc-900'}`}>
-              <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest mb-1 flex items-center gap-1.5 ${selectedPulse ? 'text-white/80' : 'text-zinc-400'}`}>
+            <div className={`flex flex-col justify-center px-4 py-2.5 transition-colors sm:w-40 ${selectedPulse ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-900'}`}>
+              <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-wider mb-0.5 flex items-center gap-1 ${selectedPulse ? 'text-zinc-300' : 'text-zinc-400'}`}>
                 {selectedPulse ? <IconCheckCircle className="w-3 h-3" /> : null}
-                Destino Final
+                Destino
               </span>
-              <span className="text-3xl sm:text-4xl font-black tracking-tighter">
+              <span className="text-xl sm:text-2xl font-black tracking-tight">
                 {slotSel?.label || '—'}
               </span>
             </div>
@@ -1063,9 +1151,9 @@ export default function AnadirPaquete({ modoRapido = false, paquetes: propsPaque
           <button 
             type="submit" 
             disabled={loading || !puedeGuardar} 
-            className="w-full md:w-auto h-full min-h-[64px] px-8 bg-[#14B07E] hover:bg-[#129A6E] disabled:bg-zinc-100 disabled:text-zinc-400 text-white font-black text-base sm:text-lg rounded-xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 shrink-0 border border-transparent disabled:border-zinc-200"
+            className="w-full md:w-auto min-h-[48px] h-12 px-6 bg-zinc-950 hover:bg-zinc-800 disabled:bg-zinc-100 disabled:text-zinc-400 text-white font-bold text-sm sm:text-base rounded-xl shadow-sm transition-transform flex items-center justify-center gap-2 active:scale-[0.97] shrink-0 border border-transparent disabled:border-zinc-200"
           >
-            {loading ? <div className="w-5 h-5 border-4 border-zinc-400 border-t-[#14B07E] rounded-full animate-spin"/> : (activeTab==='single' ? 'Guardar paquete' : `Guardar ${multiCount}`)}
+            {loading ? <div className="w-4 h-4 border-2 border-zinc-400 border-t-white rounded-full animate-spin"/> : (activeTab==='single' ? 'Guardar paquete' : `Guardar ${multiCount} paquetes`)}
           </button>
         </div>
 

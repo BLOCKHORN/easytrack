@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { FaArrowRight, FaCheckCircle } from "react-icons/fa";
-import { supabase } from "../../utils/supabaseClient";
+import { authService } from "../../services/authService";
 
 const TypewriterLogo = ({ size = "text-4xl", dotColor = "text-brand-500", cursorColor = "bg-brand-500", textColor = "text-white" }) => {
   const text = "easytrack";
@@ -42,11 +42,8 @@ export default function Registro() {
     }
   }, []);
 
-  const handleGoogleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` }
-    });
+  const handleGoogleLogin = () => {
+    authService.loginWithGoogle('/dashboard');
   };
 
   const handleRegistro = async (e) => {
@@ -55,23 +52,22 @@ export default function Registro() {
     setError("");
     try {
       const refSlug = localStorage.getItem('et_referral_slug') || undefined;
-      
-      const { data, error: authErr } = await supabase.auth.signUp({
+      const res = await authService.register({
         email: formData.email,
         password: formData.password,
-        options: {
-          data: { 
-            full_name: formData.nombre_completo, 
-            nombre_empresa: formData.nombre_empresa,
-            referred_by: refSlug
-          },
-          emailRedirectTo: `${window.location.origin}/auth/email-confirmado`
-        }
+        nombre_empresa: formData.nombre_empresa,
+        full_name: formData.nombre_completo,
+        referral_slug: refSlug
       });
-      if (authErr) throw authErr;
-      if (data.user) navigate("/auth/email-confirmado?mode=check-email");
-    } catch (err) { setError(err.message || "Error al crear cuenta"); }
-    finally { setLoading(false); }
+
+      if (!res.ok) throw new Error(res.error);
+      const dest = res.tenant?.slug ? `/${res.tenant.slug}/dashboard` : '/dashboard';
+      navigate(dest, { replace: true });
+    } catch (err) { 
+      setError(err.message || "Error al crear cuenta"); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   return (

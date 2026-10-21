@@ -12,37 +12,37 @@ export default function Pricing() {
   const [isAnnual, setIsAnnual] = useState(false);
 
   return (
-    <section id="pricing" className="relative bg-white pt-24 pb-40 px-4 overflow-hidden border-t border-zinc-200 font-sans">
+    <section id="pricing" className="relative bg-white pt-16 sm:pt-24 pb-24 sm:pb-40 px-4 sm:px-6 lg:px-8 overflow-hidden border-t border-zinc-200 font-sans">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[500px] bg-[radial-gradient(circle,rgba(16,185,129,0.03)_0%,transparent_70%)] pointer-events-none" />
       
       <div className="relative max-w-5xl mx-auto z-10">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-zinc-950 tracking-tighter leading-[1.1] mb-8">
+        <div className="text-center mb-12 sm:mb-16">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-zinc-950 tracking-tighter leading-[1.1] mb-6 sm:mb-8 text-balance">
             Gestión logística.<br/>
             <span className="text-brand-600">Escala sin fricción.</span>
           </h2>
           
           <div className="flex bg-zinc-100 p-1.5 rounded-2xl border border-zinc-200 w-fit mx-auto shadow-inner">
-            <button onClick={() => setIsAnnual(false)} className={`px-6 py-2.5 md:px-8 md:py-3 rounded-xl text-sm font-bold transition-all ${!isAnnual ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-500 hover:text-zinc-800'}`}>Mensual</button>
-            <button onClick={() => setIsAnnual(true)} className={`px-6 py-2.5 md:px-8 md:py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${isAnnual ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-500 hover:text-zinc-800'}`}>
-              Anual <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-widest font-black">-16%</span>
+            <button onClick={() => setIsAnnual(false)} className={`px-4 sm:px-6 py-2 md:px-8 md:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${!isAnnual ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-500 hover:text-zinc-800'}`}>Mensual</button>
+            <button onClick={() => setIsAnnual(true)} className={`px-4 sm:px-6 py-2 md:px-8 md:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2 ${isAnnual ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-500 hover:text-zinc-800'}`}>
+              Anual <span className="bg-emerald-100 text-emerald-700 px-1.5 sm:px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] uppercase tracking-widest font-black">-16%</span>
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch mb-10">
-          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="bg-white p-8 md:p-10 rounded-[2rem] border border-zinc-200 flex flex-col hover:border-zinc-300 transition-colors shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 items-stretch mb-10">
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="bg-white p-6 sm:p-8 md:p-10 rounded-[2rem] border border-zinc-200 flex flex-col hover:border-zinc-300 transition-colors shadow-sm">
             <div className="flex-grow">
               <h3 className="text-xl font-black text-zinc-900 mb-2 tracking-tight">Freemium</h3>
-              <p className="text-zinc-500 font-medium mb-8 text-sm">Integra la herramienta en tu operativa diaria sin riesgo.</p>
-              <div className="mb-10 h-16 flex items-end gap-1"><span className="text-5xl font-black text-zinc-950 tracking-tighter">0€</span></div>
-              <div className="space-y-4">
+              <p className="text-zinc-500 font-medium mb-6 sm:mb-8 text-sm">Integra la herramienta en tu operativa diaria sin riesgo.</p>
+              <div className="mb-8 sm:mb-10 h-14 sm:h-16 flex items-end gap-1"><span className="text-4xl sm:text-5xl font-black text-zinc-950 tracking-tighter tabular-nums">0€</span></div>
+              <div className="space-y-3.5 sm:space-y-4">
                 <div className="flex items-start gap-3"><div className="mt-1 shrink-0"><IconCheck /></div><p className="font-bold text-zinc-700 text-sm">14 días de paquetes ILIMITADOS</p></div>
                 <div className="flex items-start gap-3"><div className="mt-1 shrink-0"><IconCheck /></div><p className="font-bold text-zinc-700 text-sm">Después, 250 paquetes / mes</p></div>
                 <div className="flex items-start gap-3"><div className="mt-1 shrink-0"><IconCheck /></div><p className="font-bold text-zinc-700 text-sm">Registro manual de entradas</p></div>
                 <div className="flex items-start gap-3"><div className="mt-1 shrink-0"><IconCheck /></div><p className="font-bold text-zinc-700 text-sm">Mapeo visual de estanterías</p></div>
                 
-                <div className="pt-4 mt-4 border-t border-zinc-100 space-y-4">
+                <div className="pt-4 mt-4 border-t border-zinc-100 space-y-3.5 sm:space-y-4">
                   <div className="flex items-start gap-3"><div className="mt-1 shrink-0 text-zinc-300"><IconLock /></div><p className="font-bold text-zinc-400 text-sm line-through">Escáner de etiquetas por IA</p></div>
                   <div className="flex items-start gap-3"><div className="mt-1 shrink-0 text-zinc-300"><IconLock /></div><p className="font-bold text-zinc-400 text-sm line-through">Avisos automáticos a clientes</p></div>
                   <div className="flex items-start gap-3"><div className="mt-1 shrink-0 text-zinc-300"><IconLock /></div><p className="font-bold text-zinc-400 text-sm line-through">Analítica y Auditoría de personal</p></div>
@@ -50,13 +50,13 @@ export default function Pricing() {
               </div>
             </div>
             <div className="mt-8 pt-8 border-t border-zinc-100">
-              <button onClick={() => navigate('/registro')} className="w-full px-6 py-4 bg-zinc-100 text-zinc-900 font-black rounded-xl hover:bg-zinc-200 transition-colors">
+              <button onClick={() => navigate('/registro')} className="w-full min-h-[48px] px-6 py-3.5 sm:py-4 bg-zinc-100 text-zinc-900 font-black rounded-xl hover:bg-zinc-200 transition-colors">
                 Crear cuenta gratis
               </button>
             </div>
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="bg-zinc-950 p-8 md:p-10 rounded-[2rem] border border-zinc-800 flex flex-col shadow-2xl">
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="bg-zinc-950 p-6 sm:p-8 md:p-10 rounded-[2rem] border border-zinc-800 flex flex-col shadow-2xl">
             <div className="flex-grow">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-xl font-black text-white tracking-tight">PRO</h3>
@@ -68,12 +68,12 @@ export default function Pricing() {
                   7 días gratis
                 </div>
               </div>
-              <p className="text-zinc-400 font-medium mb-8 text-sm">Automatización total. Cero cuellos de botella.</p>
-              <div className="mb-8 h-16 flex items-end gap-1">
-                <span className="text-5xl font-black text-white tracking-tighter leading-none">{isAnnual ? '299€' : '29,90€'}</span>
-                <span className="text-zinc-500 font-bold mb-1 pb-0.5">/ {isAnnual ? 'año' : 'mes'}</span>
+              <p className="text-zinc-400 font-medium mb-6 sm:mb-8 text-sm">Automatización total. Cero cuellos de botella.</p>
+              <div className="mb-6 sm:mb-8 h-14 sm:h-16 flex items-end gap-1">
+                <span className="text-4xl sm:text-5xl font-black text-white tracking-tighter leading-none tabular-nums">{isAnnual ? '299€' : '29,90€'}</span>
+                <span className="text-zinc-500 font-bold mb-1 pb-0.5 text-sm">/ {isAnnual ? 'año' : 'mes'}</span>
               </div>
-              <div className="space-y-6">
+              <div className="space-y-5 sm:space-y-6">
                 <div className="flex items-start gap-3">
                   <div className="mt-1 shrink-0"><IconSparkles /></div>
                   <div>
@@ -108,7 +108,7 @@ export default function Pricing() {
               </div>
             </div>
             <div className="mt-8 pt-8 border-t border-zinc-800">
-              <button onClick={() => navigate('/registro')} className="w-full px-6 py-4 bg-white text-zinc-950 font-black rounded-xl hover:bg-zinc-200 transition-colors shadow-lg shadow-white/10">
+              <button onClick={() => navigate('/registro')} className="w-full min-h-[48px] px-6 py-3.5 sm:py-4 bg-white text-zinc-950 font-black rounded-xl hover:bg-zinc-200 transition-colors shadow-lg shadow-white/10">
                 Probar PRO gratis
               </button>
             </div>

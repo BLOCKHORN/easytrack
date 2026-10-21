@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { FaCheckCircle, FaSpinner, FaExclamationTriangle, FaEnvelope } from "react-icons/fa";
-import { supabase } from "../../utils/supabaseClient";
+import { apiFetch } from "../../utils/fetcher";
 
 export default function EmailConfirmado() {
   const navigate = useNavigate();
@@ -10,26 +10,6 @@ export default function EmailConfirmado() {
   const [status, setStatus] = useState("loading");
 
   useEffect(() => {
-    const redirectUser = async (session) => {
-      try {
-        const isLocal = /^(localhost|127\.0\.0\.1|.*\.ngrok-free\.dev|.*\.devtunnels\.ms)$/.test(window.location.hostname);
-        const API_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
-        const API_BASE = isLocal ? '' : API_URL;
-
-        const r = await fetch(`${API_BASE}/api/tenants/me`, {
-          headers: { Authorization: `Bearer ${session.access_token}` }
-        });
-        if (r.ok) {
-          const tData = await r.json();
-          if (tData?.tenant?.slug) {
-            navigate(`/${tData.tenant.slug}/dashboard`);
-            return;
-          }
-        }
-      } catch (err) {}
-      navigate("/");
-    };
-
     const checkSession = async () => {
       const mode = searchParams.get("mode");
       if (mode === "check-email") {
@@ -37,23 +17,23 @@ export default function EmailConfirmado() {
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setStatus("success");
-        setTimeout(() => redirectUser(session), 2500);
-      } else {
-        const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
-          if (event === "SIGNED_IN" && newSession) {
-            setStatus("success");
-            setTimeout(() => redirectUser(newSession), 2500);
-          }
-        });
-        
-        setTimeout(() => {
-          setStatus((current) => current === "loading" ? "error" : current);
-        }, 5000);
-
-        return () => data?.subscription?.unsubscribe();
+      try {
+        const res = await apiFetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          setStatus("success");
+          setTimeout(() => {
+            if (data?.tenant?.slug) {
+              navigate(`/${data.tenant.slug}/dashboard`);
+            } else {
+              navigate("/dashboard");
+            }
+          }, 2000);
+        } else {
+          setStatus("check-email");
+        }
+      } catch {
+        setStatus("error");
       }
     };
     
